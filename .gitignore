@@ -1,0 +1,11 @@
+# Byte-compiled Python files
+__pycache__/
+
+# Environment variables
+.env
+
+# Database files
+*.db
+
+# Old Local Backups
+backup/
