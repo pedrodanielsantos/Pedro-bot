@@ -223,7 +223,7 @@ class ImagineCog(commands.Cog):
                 description="This bot can generate NSFW content. For safety reasons, the `/imagine` command can only be used in channels marked as NSFW.",
                 color=discord.Color.orange()
             )
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed)
             return
 
         # Global queue limit
