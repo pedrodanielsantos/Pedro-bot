@@ -220,7 +220,7 @@ class ImagineCog(commands.Cog):
             embed = discord.Embed(
                 title="⚠️ NSFW Restriction",
                 description="This bot can generate NSFW content. For safety reasons, the `/imagine` command can only be used in channels marked as NSFW.",
-                color=discord.Color.orange()
+                color=discord.Color(value=0xffcc4d)
             )
             embed.set_footer(text="This message will auto-delete in 10 seconds.")
             await interaction.response.send_message(embed=embed, delete_after=10)
