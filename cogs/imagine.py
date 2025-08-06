@@ -214,7 +214,6 @@ class ImagineCog(commands.Cog):
         height: Optional[int] = None,
         seed: Optional[int] = None,
     ):
-        await interaction.response.defer(ephemeral=False)
 
         # Restrict use to NSFW channels only
         if not (isinstance(interaction.channel, discord.TextChannel) and interaction.channel.is_nsfw()):
@@ -223,8 +222,11 @@ class ImagineCog(commands.Cog):
                 description="This bot can generate NSFW content. For safety reasons, the `/imagine` command can only be used in channels marked as NSFW.",
                 color=discord.Color.orange()
             )
-            await interaction.followup.send(embed=embed)
+            embed.set_footer(text="This message will auto-delete in 10 seconds.")
+            await interaction.response.send_message(embed=embed, delete_after=10)
             return
+
+        await interaction.response.defer(ephemeral=False)
 
         # Global queue limit
         if image_queue.qsize() >= 10:
