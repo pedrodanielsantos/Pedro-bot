@@ -72,7 +72,7 @@ class HelpCog(commands.Cog):
                     "**/cat**: Display a random image of a cat.\n"
                     "**/dog**: Display a random image of a dog.\n"
                     "**/8ball**: Ask the magic 8-ball a question.\n"
-                    "**/choice**: Chooses randomly from the given options (Up to 10 options)"
+                    "**/choice**: Chooses randomly from the given options (Max. 10 options)."
                 ),
                 inline=False,
             )
