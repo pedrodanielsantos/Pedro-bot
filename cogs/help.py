@@ -70,7 +70,19 @@ class HelpCog(commands.Cog):
                 name="Random Fun",
                 value=(
                     "**/cat**: Display a random image of a cat.\n"
-                    "**/dog**: Display a random image of a dog."
+                    "**/dog**: Display a random image of a dog.\n"
+                    "**/8ball**: Ask the magic 8-ball a question.\n"
+                    "**/choice**: Chooses randomly from the given options (Up to 10 options)"
+                ),
+                inline=False,
+            )
+            .add_field(
+                name="Utility",
+                value=(
+                    "**/ping**: Checks the bot's latency.\n"
+                    "**/avatar**: Displays the avatar of a user.\n"
+                    "**/userinfo**: Displays information about a user.\n"
+                    "**/serverinfo**: Displays server statistics."
                 ),
                 inline=False,
             )
