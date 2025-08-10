@@ -4,7 +4,7 @@ from discord.ext import commands
 class HelpCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.embed_color = discord.Color(value=0x1e1f22)  # Hex color for the embed
+        self.embed_color = discord.Color(value=0x2c2d32)  # Hex color for the embed
 
     @commands.command(name="help")
     async def help_command(self, ctx):
