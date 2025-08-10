@@ -9,6 +9,9 @@ from db.database import lobby_add, lobby_delete, lobbies_all, lobby_is_tracked
 CREATE_HEADER_NAME = "🔽 Create a Lobby 🔽"
 NEW_LOBBY_TRIGGER = "➕ New Lobby"
 USER_LOBBY_NAME   = "🎧 Lobby"
+VOICE_BITRATE = 128_000  # 128 kbps
+VOICE_VQM = discord.VideoQualityMode.full  # 720p
+VOICE_REGION = "us-east"  # Region Override
 
 @app_commands.default_permissions(administrator=True)
 class Setup(commands.GroupCog, name="setup"):
@@ -52,13 +55,25 @@ class Setup(commands.GroupCog, name="setup"):
         overwrites = {interaction.guild.default_role: discord.PermissionOverwrite(connect=False)}
         header = discord.utils.get(category.voice_channels, name=CREATE_HEADER_NAME)
         if header is None:
-            header = await category.create_voice_channel(CREATE_HEADER_NAME, overwrites=overwrites)
+            header = await category.create_voice_channel(
+            CREATE_HEADER_NAME,
+            overwrites=overwrites,
+            bitrate=VOICE_BITRATE,
+            video_quality_mode=VOICE_VQM,
+            rtc_region=VOICE_REGION,
+        )
 
         # 2) Trigger channel directly under header
         trigger = discord.utils.get(category.voice_channels, name=NEW_LOBBY_TRIGGER)
         if trigger is None:
-            trigger = await category.create_voice_channel(NEW_LOBBY_TRIGGER, position=header.position + 1)
-
+            trigger = await category.create_voice_channel(
+            NEW_LOBBY_TRIGGER,
+            position=header.position + 1,
+            bitrate=VOICE_BITRATE,
+            video_quality_mode=VOICE_VQM,
+            rtc_region=VOICE_REGION,
+        )
+        
         await interaction.response.send_message(
             f"Lobby system set in **{category.name}**:\n- {header.mention}\n- {trigger.mention}",
             ephemeral=True
@@ -77,7 +92,13 @@ class Setup(commands.GroupCog, name="setup"):
             cat: Optional[discord.CategoryChannel] = ch.category
             if cat and ch.name == NEW_LOBBY_TRIGGER:
                 # Create at bottom of category
-                new_ch = await cat.create_voice_channel(USER_LOBBY_NAME, position=len(cat.channels))
+                new_ch = await cat.create_voice_channel(
+                    USER_LOBBY_NAME,
+                    position=len(cat.channels),
+                    bitrate=VOICE_BITRATE,
+                    video_quality_mode=VOICE_VQM,
+                    rtc_region=VOICE_REGION,
+                )
                 lobby_add(member.guild.id, new_ch.id)
 
                 # Give the event loop a tick; then try to move the member.
