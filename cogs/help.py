@@ -59,9 +59,10 @@ class HelpCog(commands.Cog):
             .add_field(
                 name="Custom Roles",
                 value=(
-                    "**/customrole create**: Create or update your custom role with a HEX color.\n"
+                    "**/customrole create**: Create a custom role with a specific HEX color code.\n"
                     "**/customrole delete**: Delete your custom role.\n"
-                    "**/customrole deleteid**: (Admin Only) Delete a custom role by User ID."
+                    "**/customrole deleteid**: (Admin Only) Delete a custom role by User ID.\n"
+                    "**/customrole update**: Update your custom roles name or color."
                 ),
                 inline=False,
             )
