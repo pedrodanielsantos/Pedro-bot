@@ -36,7 +36,10 @@ async def load_cogs(bot):
         "cogs.userinfo",
         "cogs.serverinfo",
         "cogs.avatar",
-        "cogs.choice"
+        "cogs.choice",
+        "cogs.setup",
+        "cogs.rename",
+        "cogs.resize"
     ]
     for cog in COGS:
         try:

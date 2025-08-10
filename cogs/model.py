@@ -2,10 +2,10 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from imagine_models import models  # Import your models dictionary
-import sqlite3
+from db.database import db_connections
 
 # Connect to the SQLite database
-models_db_conn = sqlite3.connect("imagine_models.db")
+models_db_conn = db_connections["imagine_models"]
 models_db_cursor = models_db_conn.cursor()
 
 

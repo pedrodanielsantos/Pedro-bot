@@ -10,12 +10,13 @@ from typing import Optional
 from imagine_models import models
 import sqlite3
 import gc
+from db.database import db_connections
 
 # Define an asyncio queue for image generation jobs
 image_queue = asyncio.Queue()
 
 # Connect to the SQLite database
-models_db_conn = sqlite3.connect("imagine_models.db")
+models_db_conn = db_connections["imagine_models"]
 models_db_cursor = models_db_conn.cursor()
 
 class ImageControlView(discord.ui.View):
