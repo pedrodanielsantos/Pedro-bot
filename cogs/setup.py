@@ -6,7 +6,6 @@ from typing import Optional
 
 from db.database import lobby_add, lobby_delete, lobbies_all, lobby_is_tracked
 
-CREATE_HEADER_NAME = "🔽 Create a Lobby 🔽"
 NEW_LOBBY_TRIGGER = "➕ New Lobby"
 USER_LOBBY_NAME   = "🎧 Lobby"
 VOICE_BITRATE = 128_000  # 128 kbps
@@ -51,31 +50,19 @@ class Setup(commands.GroupCog, name="setup"):
             await interaction.response.send_message("That ID is not a category.", ephemeral=True)
             return
 
-        # 1) Header with connect disabled for @everyone
-        overwrites = {interaction.guild.default_role: discord.PermissionOverwrite(connect=False)}
-        header = discord.utils.get(category.voice_channels, name=CREATE_HEADER_NAME)
-        if header is None:
-            header = await category.create_voice_channel(
-            CREATE_HEADER_NAME,
-            overwrites=overwrites,
-            bitrate=VOICE_BITRATE,
-            video_quality_mode=VOICE_VQM,
-            rtc_region=VOICE_REGION,
-        )
-
-        # 2) Trigger channel directly under header
+        # Create trigger channel
         trigger = discord.utils.get(category.voice_channels, name=NEW_LOBBY_TRIGGER)
         if trigger is None:
             trigger = await category.create_voice_channel(
             NEW_LOBBY_TRIGGER,
-            position=header.position + 1,
+            position=0,
             bitrate=VOICE_BITRATE,
             video_quality_mode=VOICE_VQM,
             rtc_region=VOICE_REGION,
         )
         
         await interaction.response.send_message(
-            f"Lobby system set in **{category.name}**:\n- {header.mention}\n- {trigger.mention}",
+            f"Lobby system set in **{category.name}**:\n- {trigger.mention}",
             ephemeral=True
         )
 
