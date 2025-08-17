@@ -6,11 +6,14 @@ from typing import Optional
 
 from db.database import lobby_add, lobby_delete, lobbies_all, lobby_is_tracked
 
-NEW_LOBBY_TRIGGER = "➕ New Lobby"
-USER_LOBBY_NAME   = "🎧 Lobby"
-VOICE_BITRATE = 128_000  # 128 kbps
-VOICE_VQM = discord.VideoQualityMode.full  # 720p
-VOICE_REGION = "us-east"  # Region Override
+from config.constants import (
+    NEW_LOBBY_TRIGGER,
+    LOBBY_NAME,
+    LOBBY_EMOJI,
+    VOICE_BITRATE,
+    VOICE_VQM,
+    VOICE_REGION,
+)
 
 @app_commands.default_permissions(administrator=True)
 class Setup(commands.GroupCog, name="setup"):
@@ -57,7 +60,7 @@ class Setup(commands.GroupCog, name="setup"):
             NEW_LOBBY_TRIGGER,
             position=0,
             bitrate=VOICE_BITRATE,
-            video_quality_mode=VOICE_VQM,
+            video_quality_mode=discord.VideoQualityMode(VOICE_VQM),
             rtc_region=VOICE_REGION,
         )
         
@@ -80,10 +83,10 @@ class Setup(commands.GroupCog, name="setup"):
             if cat and ch.name == NEW_LOBBY_TRIGGER:
                 # Create at bottom of category
                 new_ch = await cat.create_voice_channel(
-                    USER_LOBBY_NAME,
+                    f"{LOBBY_EMOJI} {LOBBY_NAME}",
                     position=len(cat.channels),
                     bitrate=VOICE_BITRATE,
-                    video_quality_mode=VOICE_VQM,
+                    video_quality_mode=discord.VideoQualityMode(VOICE_VQM),
                     rtc_region=VOICE_REGION,
                 )
                 lobby_add(member.guild.id, new_ch.id)

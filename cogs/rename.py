@@ -2,8 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from db.database import lobby_is_tracked
-
-HEADPHONE = "🎧"
+from config.constants import LOBBY_EMOJI, LOBBY_NAME
 
 class Rename(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -22,10 +21,10 @@ class Rename(commands.Cog):
             return
 
         safe = new_name.strip()
-        if safe.startswith(HEADPHONE):
-            safe = safe.lstrip(HEADPHONE).strip()
+        if safe.startswith(LOBBY_EMOJI):
+            safe = safe.lstrip(LOBBY_EMOJI).strip()
 
-        final = f"{HEADPHONE} {safe}" if safe else f"{HEADPHONE} Lobby"
+        final = f"{LOBBY_EMOJI} {safe}" if safe else f"{LOBBY_EMOJI} Lobby"
         try:
             await ch.edit(name=final)
             await interaction.response.send_message(f"Lobby renamed to **{final}**.", ephemeral=True)
