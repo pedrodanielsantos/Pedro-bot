@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-from imagine_models import models  # Import your models dictionary
+from config.imagine_models import models
 from db.database import db_connections
 
 # Connect to the SQLite database

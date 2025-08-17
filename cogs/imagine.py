@@ -7,7 +7,7 @@ import io
 import json
 import asyncio
 from typing import Optional
-from imagine_models import models
+from config.imagine_models import models
 import sqlite3
 import gc
 from db.database import db_connections
