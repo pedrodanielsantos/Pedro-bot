@@ -23,8 +23,8 @@ class Rename(commands.Cog):
             await interaction.response.send_message("This channel isn’t a user-created lobby.", ephemeral=True)
             return
 
-        safe = new_name.strip()
-        final = safe if safe else f"{LOBBY_EMOJI} {LOBBY_NAME}"
+        name = new_name.strip()
+        final = f"{LOBBY_EMOJI} {name}"
 
         if len(final) > LOBBY_NAME_MAX_LENGTH:
             await interaction.followup.send(
@@ -34,7 +34,7 @@ class Rename(commands.Cog):
         
         try:
             await ch.edit(name=final, reason=f"Lobby rename by {interaction.user}")
-            await interaction.followup.send(f"Lobby renamed to **{final}**.", ephemeral=True)
+            await interaction.followup.send(f"Lobby renamed to **{name}**.", ephemeral=True)
 
         except discord.HTTPException as e:
             # Proper rate-limit surface (HTTP 429)
