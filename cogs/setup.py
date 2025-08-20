@@ -4,13 +4,12 @@ from discord import app_commands
 from discord.ext import commands, tasks
 from typing import Optional
 
-from db.database import lobby_add, lobby_delete, lobbies_all, lobby_is_tracked
+from db.database import lobby_add, lobby_delete, lobbies_all
 
 from config.constants import (
     NEW_LOBBY_TRIGGER,
     LOBBY_NAME,
     LOBBY_EMOJI,
-    VOICE_BITRATE,
     VOICE_VQM,
     VOICE_REGION,
 )
@@ -20,6 +19,11 @@ class Setup(commands.GroupCog, name="setup"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.cleanup_lobbies.start()
+
+    @staticmethod
+    def _max_bitrate(guild: discord.Guild) -> int:
+        # discord.py exposes the bitrate limit directly
+        return guild.bitrate_limit
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Gate all /setup subcommands to admins only."""
@@ -53,27 +57,53 @@ class Setup(commands.GroupCog, name="setup"):
             await interaction.response.send_message("That ID is not a category.", ephemeral=True)
             return
 
-        # Create trigger channel
-        trigger = discord.utils.get(category.voice_channels, name=NEW_LOBBY_TRIGGER)
-        if trigger is None:
-            trigger = await category.create_voice_channel(
-            NEW_LOBBY_TRIGGER,
-            position=0,
-            bitrate=VOICE_BITRATE,
-            video_quality_mode=discord.VideoQualityMode(VOICE_VQM),
-            rtc_region=VOICE_REGION,
-        )
-        
-        await interaction.response.send_message(
-            f"Lobby system set in **{category.name}**:\n- {trigger.mention}",
-            ephemeral=True
-        )
+        await interaction.response.defer(ephemeral=True)
+
+        try:
+            trigger = discord.utils.get(category.voice_channels, name=NEW_LOBBY_TRIGGER)
+            if trigger is None:
+                trigger = await category.create_voice_channel(
+                    NEW_LOBBY_TRIGGER,
+                    position=0,
+                    bitrate=self._max_bitrate(category.guild),
+                    video_quality_mode=discord.VideoQualityMode(VOICE_VQM),
+                    rtc_region=VOICE_REGION,
+                )
+
+            await interaction.followup.send(
+                f"Lobby system set in **{category.name}**:\n- {trigger.mention}",
+                ephemeral=True
+            )
+
+        except discord.Forbidden:
+            await interaction.followup.send(
+                "I’m missing **Manage Channels** in that category.", ephemeral=True
+            )
+        except discord.HTTPException as e:
+            if getattr(e, "status", None) == 429:
+                retry_after = None
+                try:
+                    retry_after_hdr = e.response.headers.get("Retry-After")
+                    if retry_after_hdr:
+                        retry_after = float(retry_after_hdr)
+                except Exception:
+                    pass
+                if retry_after is not None:
+                    await interaction.followup.send(
+                        f"Rate limited. Try again in ~{retry_after:.1f}s.", ephemeral=True
+                    )
+                else:
+                    await interaction.followup.send(
+                        "Rate limited. Please wait a moment and try again.", ephemeral=True
+                    )
+            else:
+                await interaction.followup.send(f"Failed to set up lobbies: {e}", ephemeral=True)
 
     @commands.Cog.listener()
     async def on_voice_state_update(
         self,
         member: discord.Member,
-        before: discord.VoiceState,
+        _before: discord.VoiceState,
         after: discord.VoiceState
     ):
         # When a user joins the trigger channel, create a new lobby and move them.
@@ -85,7 +115,7 @@ class Setup(commands.GroupCog, name="setup"):
                 new_ch = await cat.create_voice_channel(
                     f"{LOBBY_EMOJI} {LOBBY_NAME}",
                     position=len(cat.channels),
-                    bitrate=VOICE_BITRATE,
+                    bitrate=self._max_bitrate(cat.guild),
                     video_quality_mode=discord.VideoQualityMode(VOICE_VQM),
                     rtc_region=VOICE_REGION,
                 )
