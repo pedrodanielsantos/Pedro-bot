@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from db.database import lobby_is_tracked
-from config.constants import LOBBY_EMOJI, LOBBY_NAME, LOBBY_NAME_MAX_LENGTH
+from config.constants import LOBBY_EMOJI, VOICE_NAME_MAX_LENGTH
 
 class Rename(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -26,9 +26,9 @@ class Rename(commands.Cog):
         name = new_name.strip()
         final = f"{LOBBY_EMOJI} {name}"
 
-        if len(final) > LOBBY_NAME_MAX_LENGTH:
+        if len(final) > VOICE_NAME_MAX_LENGTH:
             await interaction.followup.send(
-                f"Name too long ({len(final)}/{LOBBY_NAME_MAX_LENGTH}).", ephemeral=True
+                f"Name too long ({len(final)}/{VOICE_NAME_MAX_LENGTH}).", ephemeral=True
             )
             return
         
