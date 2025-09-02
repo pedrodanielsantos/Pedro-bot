@@ -1,10 +1,10 @@
 import discord
 from discord.ext import commands
+from config.constants import EMBED_COLOR
 
 class HelpCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.embed_color = discord.Color(value=0x2c2d32)  # Hex color for the embed
 
     @commands.command(name="help")
     async def help_command(self, ctx):
@@ -17,7 +17,7 @@ class HelpCog(commands.Cog):
             discord.Embed(
                 title="Help (1/2)",
                 description="Welcome to the bot's help section!",
-                color=self.embed_color,
+                color=discord.Color(EMBED_COLOR),
             )
             .add_field(
                 name="Command Syntax",
@@ -54,7 +54,7 @@ class HelpCog(commands.Cog):
             discord.Embed(
                 title="Help (2/2)",
                 description="Welcome to the bot's help section!",
-                color=self.embed_color,
+                color=discord.Color(EMBED_COLOR),
             )
             .add_field(
                 name="Custom Roles",

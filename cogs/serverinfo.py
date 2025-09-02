@@ -1,6 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+from config.constants import EMBED_COLOR
 
 class ServerInfo(commands.Cog):
     def __init__(self, bot):
@@ -21,7 +22,10 @@ class ServerInfo(commands.Cog):
             ("Created On", guild.created_at.strftime('%Y-%m-%d %H:%M:%S'), False)
         ]
 
-        embed = discord.Embed(title="Server Info", color=discord.Color.from_str("#1e1f22"))
+        embed = discord.Embed(
+            title="Server Info",
+            color=discord.Color(EMBED_COLOR)
+            )
         embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
 
         for name, value, inline in fields:

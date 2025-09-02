@@ -1,6 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+from config.constants import EMBED_COLOR
 import random
 
 class Choice(commands.Cog):
@@ -39,8 +40,8 @@ class Choice(commands.Cog):
         # Create an embed to display the result
         embed = discord.Embed(
             title="Random Choice",
-            color=discord.Color.from_str("#1e1f22"),
-            description=f"Out of the provided options, the choice is:\n**{selected}**"
+            description=f"Out of the provided options, the choice is:\n**{selected}**",
+            color=discord.Color(EMBED_COLOR)
         )
         embed.add_field(name="Options Provided", value=", ".join(all_options), inline=False)
 

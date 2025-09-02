@@ -1,6 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+from config.constants import EMBED_COLOR
 import random
 
 class EightBall(commands.Cog):
@@ -29,7 +30,7 @@ class EightBall(commands.Cog):
         embed = discord.Embed(
             title="🎱 Magic 8-Ball",
             description=f"**Question:** {question}\n**Answer:** {answer}",
-            color=discord.Color.from_str("#1e1f22")  # Hex color
+            color=discord.Color(EMBED_COLOR)
         )
 
         # Send the embed response

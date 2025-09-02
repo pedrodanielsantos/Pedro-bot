@@ -11,6 +11,7 @@ from config.imagine_models import models
 import sqlite3
 import gc
 from db.database import db_connections
+from config.constants import EMBED_COLOR, EMBED_COLOR_WARNING
 
 # Define an asyncio queue for image generation jobs
 image_queue = asyncio.Queue()
@@ -171,6 +172,7 @@ class ImagineCog(commands.Cog):
                     embed = discord.Embed(
                         title="",
                         description="",
+                        color=discord.Color(EMBED_COLOR)
                     )
                     embed.add_field(name="Prompt", value=f"```{payload['prompt']}```", inline=False)
                     if payload["negative_prompt"]:
@@ -221,7 +223,7 @@ class ImagineCog(commands.Cog):
             embed = discord.Embed(
                 title="⚠️ NSFW Restriction",
                 description="This bot can generate NSFW content. For safety reasons, the `/imagine` command can only be used in channels marked as NSFW.",
-                color=discord.Color(value=0xffcc4d)
+                color=discord.Color(EMBED_COLOR_WARNING)
             )
             embed.set_footer(text="This message will auto-delete in 30 seconds.")
             await interaction.response.send_message(embed=embed, delete_after=30)

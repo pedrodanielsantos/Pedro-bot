@@ -1,6 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+from config.constants import EMBED_COLOR
 
 class UserInfo(commands.Cog):
     def __init__(self, bot):
@@ -17,7 +18,10 @@ class UserInfo(commands.Cog):
             ("Joined Server", member.joined_at.strftime('%Y-%m-%d %H:%M:%S'), False)
         ]
 
-        embed = discord.Embed(title="User Info", color=discord.Color.from_str("#1e1f22"))
+        embed = discord.Embed(
+            title="User Info",
+            color=discord.Color(EMBED_COLOR)
+            )
         embed.set_thumbnail(url=member.avatar.url)
 
         for name, value, inline in fields:

@@ -4,6 +4,7 @@ from discord.ext import commands
 import psutil
 from datetime import datetime
 import platform
+from config.constants import EMBED_COLOR
 
 class About(commands.Cog):
     def __init__(self, bot):
@@ -28,7 +29,10 @@ class About(commands.Cog):
             ("System", f"{platform.system()} {platform.release()}")
         ]
 
-        embed = discord.Embed(title="About the Bot", color=discord.Color.from_str("#1e1f22"))
+        embed = discord.Embed(
+            title="About the Bot",
+            color=discord.Color(EMBED_COLOR)
+            )
         for name, value in stats:
             embed.add_field(name=name, value=value, inline=True)
 

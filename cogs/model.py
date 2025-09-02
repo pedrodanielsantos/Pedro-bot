@@ -3,6 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 from config.imagine_models import models
 from db.database import db_connections
+from config.constants import EMBED_COLOR
 
 # Connect to the SQLite database
 models_db_conn = db_connections["imagine_models"]
@@ -71,7 +72,7 @@ class ModelCog(commands.GroupCog, name="model"):
         embed = discord.Embed(
             title="Model Selection",
             description=f"**Currently Selected Model:** {current_model_name}\n\nClick a button to select a model.",
-            color=discord.Color.blue(),
+            color=discord.Color(EMBED_COLOR)
         )
         for index, (key, model) in enumerate(models.items(), start=1):
             emoji = f"{index}\u20e3"
@@ -95,7 +96,7 @@ class ModelCog(commands.GroupCog, name="model"):
         embed = discord.Embed(
             title="Stable Diffusion Models Information",
             description=f"**Currently Selected Model:** {current_model_name}\n\nDetails about available models:",
-            color=discord.Color.green(),
+            color=discord.Color(EMBED_COLOR)
         )
         for key, model in models.items():
             embed.add_field(
