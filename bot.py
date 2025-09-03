@@ -39,7 +39,8 @@ async def load_cogs(bot):
         "cogs.choice",
         "cogs.setup",
         "cogs.rename",
-        "cogs.resize"
+        "cogs.resize",
+        "cogs.ask"
     ]
     for cog in COGS:
         try:
