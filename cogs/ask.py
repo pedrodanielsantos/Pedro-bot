@@ -10,14 +10,6 @@ OLLAMA_MODEL = "mistral:7b-instruct-q4_K_M"         # Change if you pulled a dif
 REQUEST_TIMEOUT = 120                                # seconds
 MAX_DISCORD_MSG_LEN = 2000
 
-# Optional: a short “system” instruction for consistent behavior.
-SYSTEM_PROMPT = (
-    "Take on the role of a small, blue, alien companion for Pedro's Discord server. "
-    "Be reliable and provide clear and professional answers, using formatting when needed."
-)
-
-
-
 class Ask(commands.Cog):
     """Ask a local LLM (via Ollama) a question."""
 
@@ -43,7 +35,6 @@ class Ask(commands.Cog):
         payload = {
             "model": OLLAMA_MODEL,
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
             ],
             "stream": False
