@@ -31,12 +31,22 @@ class HelpCog(commands.Cog):
                 value=("**.help**: Display this help message."),
                 inline=False
             )
+#           .add_field(
+#               name="Image Generation",
+#               value=(
+#                   "**/imagine**: Generate an image using Stable Diffusion.\n"
+#                   "**/model select**: Choose a Stable Diffusion model.\n"
+#                   "**/model info**: View detailed information about Stable Diffusion models."
+#               ),
+#               inline=False,
+#           )
             .add_field(
-                name="Image Generation",
+                name="Custom Roles",
                 value=(
-                    "**/imagine**: Generate an image using Stable Diffusion.\n"
-                    "**/model select**: Choose a Stable Diffusion model.\n"
-                    "**/model info**: View detailed information about Stable Diffusion models."
+                    "**/customrole create**: Create a custom role with a specific HEX color code.\n"
+                    "**/customrole delete**: Delete your custom role.\n"
+                    "**/customrole deleteid**: (Admin Only) Delete a custom role by User ID.\n"
+                    "**/customrole update**: Update your custom roles name or color."
                 ),
                 inline=False,
             )
@@ -55,16 +65,6 @@ class HelpCog(commands.Cog):
                 title="Help (2/2)",
                 description="Welcome to the bot's help section!",
                 color=discord.Color(EMBED_COLOR),
-            )
-            .add_field(
-                name="Custom Roles",
-                value=(
-                    "**/customrole create**: Create a custom role with a specific HEX color code.\n"
-                    "**/customrole delete**: Delete your custom role.\n"
-                    "**/customrole deleteid**: (Admin Only) Delete a custom role by User ID.\n"
-                    "**/customrole update**: Update your custom roles name or color."
-                ),
-                inline=False,
             )
             .add_field(
                 name="Random Fun",

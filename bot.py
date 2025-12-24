@@ -25,8 +25,8 @@ async def load_cogs(bot):
     COGS = [
         "cogs.customrole",
         "cogs.help",
-        "cogs.imagine",
-        "cogs.model",
+#       "cogs.imagine",
+#       "cogs.model",
         "cogs.image",
         "cogs.cat",
         "cogs.dog",
@@ -40,7 +40,7 @@ async def load_cogs(bot):
         "cogs.setup",
         "cogs.rename",
         "cogs.resize",
-        "cogs.ask"
+#       "cogs.ask"
     ]
     for cog in COGS:
         try:
