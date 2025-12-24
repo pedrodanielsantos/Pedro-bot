@@ -40,6 +40,7 @@ async def load_cogs(bot):
         "cogs.setup",
         "cogs.rename",
         "cogs.resize",
+        "cogs.rules",
 #       "cogs.ask"
     ]
     for cog in COGS:
