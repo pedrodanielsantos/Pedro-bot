@@ -4,7 +4,7 @@ from discord import app_commands
 from discord.ext import commands, tasks
 from typing import Optional
 
-from db.database import lobby_add, lobby_delete, lobbies_all
+from db.database import lobby_add, lobby_delete, lobbies_all, set_embed_color
 
 from config.constants import (
     NEW_LOBBY_TRIGGER,
@@ -13,6 +13,14 @@ from config.constants import (
     VOICE_VQM,
     VOICE_REGION,
 )
+
+def validate_hex_code(hex_code: str) -> discord.Color:
+    """Validate and convert a HEX code into a discord.Color object."""
+    if not hex_code.startswith("#"):
+        hex_code = f"#{hex_code}"
+    if len(hex_code) != 7 or not all(c in "0123456789ABCDEFabcdef#" for c in hex_code):
+        raise ValueError("Invalid HEX color code! Use a format like `#FF5733` or `FF5733`.")
+    return discord.Color(int(hex_code[1:], 16))
 
 @app_commands.default_permissions(administrator=True)
 class Setup(commands.GroupCog, name="setup"):
@@ -98,6 +106,22 @@ class Setup(commands.GroupCog, name="setup"):
                     )
             else:
                 await interaction.followup.send(f"Failed to set up lobbies: {e}", ephemeral=True)
+
+    @app_commands.command(name="embed_color", description="Set the server's embed color.")
+    @app_commands.describe(hex_code="The hex color code (e.g. #FF0000)")
+    async def embed_color(self, interaction: discord.Interaction, hex_code: str):
+        try:
+            color = validate_hex_code(hex_code)
+        except ValueError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+            return
+
+        # Save to Database without the #
+        clean_hex = hex_code.lstrip("#")
+        set_embed_color(interaction.guild_id, clean_hex, interaction.user.id)
+
+        embed = discord.Embed(description=f"✅ Embed color has been updated to `#{clean_hex}`.", color=color)
+        await interaction.response.send_message(embed=embed)
 
     @commands.Cog.listener()
     async def on_voice_state_update(

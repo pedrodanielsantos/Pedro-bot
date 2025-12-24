@@ -5,7 +5,8 @@ import os
 db_connections = {
     "imagine_models": None,
     "custom_roles": None,
-    "lobbies": None
+    "lobbies": None,
+    "server_settings": None,
 }
 
 # Base folder where DB files will be stored
@@ -43,6 +44,16 @@ def initialize_databases():
         CREATE TABLE IF NOT EXISTS lobbies (
             guild_id   INTEGER NOT NULL,
             channel_id INTEGER PRIMARY KEY
+        )
+    """)
+
+    db_connections["server_settings"] = sqlite3.connect(os.path.join(DB_FOLDER, "server_settings.db"))
+    cursor = db_connections["server_settings"].cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS server_settings (
+            guild_id INTEGER PRIMARY KEY,
+            embed_color TEXT,
+            updated_by INTEGER
         )
     """)
 
@@ -106,3 +117,22 @@ def lobby_is_tracked(channel_id: int) -> bool:
     cur = conn.cursor()
     cur.execute("SELECT 1 FROM lobbies WHERE channel_id = ? LIMIT 1", (channel_id,))
     return cur.fetchone() is not None
+
+def set_embed_color(guild_id: int, hex_code: str, user_id: int):
+    conn = db_connections["server_settings"]
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT OR REPLACE INTO server_settings (guild_id, embed_color, updated_by) VALUES (?, ?, ?)",
+        (guild_id, hex_code, user_id)
+    )
+    conn.commit()
+
+def get_embed_color(guild_id: int):
+    conn = db_connections["server_settings"]
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT embed_color FROM server_settings WHERE guild_id = ?",
+        (guild_id,)
+    )
+    result = cursor.fetchone()
+    return result[0] if result else None

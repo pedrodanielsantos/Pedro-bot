@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from config.imagine_models import models
-from db.database import db_connections
+from db.database import db_connections, get_embed_color
 from config.constants import EMBED_COLOR
 
 # Connect to the SQLite database
@@ -68,11 +68,17 @@ class ModelCog(commands.GroupCog, name="model"):
         current_model_key = result[0] if result else "default"
         current_model_name = models[current_model_key]["name"]
 
+        db_color = get_embed_color(interaction.guild_id)
+        if db_color:
+            color = discord.Color(int(db_color, 16))
+        else:
+            color = discord.Color(EMBED_COLOR)
+
         # Create an embed for model selection
         embed = discord.Embed(
             title="Model Selection",
             description=f"**Currently Selected Model:** {current_model_name}\n\nClick a button to select a model.",
-            color=discord.Color(EMBED_COLOR)
+            color=color
         )
         for index, (key, model) in enumerate(models.items(), start=1):
             emoji = f"{index}\u20e3"
@@ -92,11 +98,17 @@ class ModelCog(commands.GroupCog, name="model"):
         current_model_key = result[0] if result else "default"
         current_model_name = models[current_model_key]["name"]
 
+        db_color = get_embed_color(interaction.guild_id)
+        if db_color:
+            color = discord.Color(int(db_color, 16))
+        else:
+            color = discord.Color(EMBED_COLOR)
+
         # Create embed for model information
         embed = discord.Embed(
             title="Stable Diffusion Models Information",
             description=f"**Currently Selected Model:** {current_model_name}\n\nDetails about available models:",
-            color=discord.Color(EMBED_COLOR)
+            color=color
         )
         for key, model in models.items():
             embed.add_field(

@@ -10,7 +10,7 @@ from typing import Optional
 from config.imagine_models import models
 import sqlite3
 import gc
-from db.database import db_connections
+from db.database import db_connections, get_embed_color
 from config.constants import EMBED_COLOR, EMBED_COLOR_WARNING
 
 # Define an asyncio queue for image generation jobs
@@ -169,10 +169,16 @@ class ImagineCog(commands.Cog):
                     is_variation = "subseed" in payload
 
                     # Create embed for result
+                    db_color = get_embed_color(interaction.guild_id)
+                    if db_color:
+                        color = discord.Color(int(db_color, 16))
+                    else:
+                        color = discord.Color(EMBED_COLOR)
+
                     embed = discord.Embed(
                         title="",
                         description="",
-                        color=discord.Color(EMBED_COLOR)
+                        color=color
                     )
                     embed.add_field(name="Prompt", value=f"```{payload['prompt']}```", inline=False)
                     if payload["negative_prompt"]:

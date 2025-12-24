@@ -5,6 +5,7 @@ import psutil
 from datetime import datetime
 import platform
 from config.constants import EMBED_COLOR
+from db.database import get_embed_color
 
 class About(commands.Cog):
     def __init__(self, bot):
@@ -29,9 +30,15 @@ class About(commands.Cog):
             ("System", f"{platform.system()} {platform.release()}")
         ]
 
+        db_color = get_embed_color(interaction.guild_id)
+        if db_color:
+            color = discord.Color(int(db_color, 16))
+        else:
+            color = discord.Color(EMBED_COLOR)
+
         embed = discord.Embed(
             title="About the Bot",
-            color=discord.Color(EMBED_COLOR)
+            color=color
             )
         for name, value in stats:
             embed.add_field(name=name, value=value, inline=True)

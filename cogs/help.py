@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from config.constants import EMBED_COLOR
+from db.database import get_embed_color
 
 class HelpCog(commands.Cog):
     def __init__(self, bot):
@@ -8,16 +9,22 @@ class HelpCog(commands.Cog):
 
     @commands.command(name="help")
     async def help_command(self, ctx):
-        pages = self.get_help_pages()
+        pages = self.get_help_pages(ctx.guild.id if ctx.guild else None)
         view = self.create_help_view()
         await ctx.send(embed=pages[0], view=view)
 
-    def get_help_pages(self):
+    def get_help_pages(self, guild_id=None):
+        db_color = get_embed_color(guild_id) if guild_id else None
+        if db_color:
+            color = discord.Color(int(db_color, 16))
+        else:
+            color = discord.Color(EMBED_COLOR)
+
         return [
             discord.Embed(
                 title="Help (1/2)",
                 description="Welcome to the bot's help section!",
-                color=discord.Color(EMBED_COLOR),
+                color=color,
             )
             .add_field(
                 name="Command Syntax",
@@ -64,7 +71,7 @@ class HelpCog(commands.Cog):
             discord.Embed(
                 title="Help (2/2)",
                 description="Welcome to the bot's help section!",
-                color=discord.Color(EMBED_COLOR),
+                color=color,
             )
             .add_field(
                 name="Random Fun",
@@ -109,7 +116,7 @@ class HelpCog(commands.Cog):
                 await self.handle_help_interaction(interaction, custom_id)
 
     async def handle_help_interaction(self, interaction: discord.Interaction, custom_id: str):
-        pages = self.get_help_pages()
+        pages = self.get_help_pages(interaction.guild_id)
         current_page = self.extract_page_number(interaction.message.embeds[0].footer.text)
         if custom_id == "help:first":
             new_page = 1
