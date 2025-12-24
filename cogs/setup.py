@@ -12,6 +12,7 @@ from config.constants import (
     LOBBY_EMOJI,
     VOICE_VQM,
     VOICE_REGION,
+    EMBED_COLOR,
 )
 
 def validate_hex_code(hex_code: str) -> discord.Color:
@@ -107,9 +108,15 @@ class Setup(commands.GroupCog, name="setup"):
             else:
                 await interaction.followup.send(f"Failed to set up lobbies: {e}", ephemeral=True)
 
-    @app_commands.command(name="embed_color", description="Set the server's embed color.")
-    @app_commands.describe(hex_code="The hex color code (e.g. #FF0000)")
-    async def embed_color(self, interaction: discord.Interaction, hex_code: str):
+    @app_commands.command(name="embed_color", description="Set or reset the server's embed color.")
+    @app_commands.describe(hex_code="The hex color code (e.g. #FF0000). Input the command without argument to reset.")
+    async def embed_color(self, interaction: discord.Interaction, hex_code: Optional[str] = None):
+        if not hex_code:
+            set_embed_color(interaction.guild_id, None, interaction.user.id)
+            embed = discord.Embed(description="✅ Embed color has been reset to default.", color=discord.Color(EMBED_COLOR))
+            await interaction.response.send_message(embed=embed)
+            return
+
         try:
             color = validate_hex_code(hex_code)
         except ValueError as e:
