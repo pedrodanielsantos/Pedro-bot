@@ -42,7 +42,7 @@ async def load_cogs(bot):
         "cogs.resize",
         "cogs.rules",
         "cogs.embed",
-#       "cogs.ask"
+        "cogs.ask",
     ]
     for cog in COGS:
         try:
