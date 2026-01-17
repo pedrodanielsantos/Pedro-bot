@@ -55,7 +55,7 @@ async def load_cogs(bot):
 async def on_ready():
     """Event triggered when the bot is ready."""
     print(f"{bot.user.name} is ready and connected!")
-    await bot.change_presence(activity=discord.Game(name=".help"))
+    await bot.change_presence(activity=discord.CustomActivity(name=".help", state=".help"))
 
     # Sync slash commands
     try:
