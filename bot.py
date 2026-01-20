@@ -22,31 +22,16 @@ bot.remove_command("help")
 
 # Load cogs asynchronously
 async def load_cogs(bot):
-    COGS = [
-        "cogs.customrole",
-        "cogs.help",
-        "cogs.image",
-        "cogs.cat",
-        "cogs.dog",
-        "cogs.8ball",
-        "cogs.about",
-        "cogs.ping",
-        "cogs.userinfo",
-        "cogs.serverinfo",
-        "cogs.avatar",
-        "cogs.choice",
-        "cogs.setup",
-        "cogs.rename",
-        "cogs.resize",
-        "cogs.rules",
-        "cogs.embed",
-    ]
-    for cog in COGS:
-        try:
-            await bot.load_extension(cog)
-            print(f"Loaded cog: {cog}")
-        except Exception as e:
-            print(f"Failed to load cog {cog}: {e}")
+    cogs_dir = os.path.join(os.path.dirname(__file__), "cogs")
+    for filename in os.listdir(cogs_dir):
+        if filename.endswith(".py"):
+            cog_name = filename[:-3]
+            full_cog_path = f"cogs.{cog_name}"
+            try:
+                await bot.load_extension(full_cog_path)
+                print(f"Loaded cog: {full_cog_path}")
+            except Exception as e:
+                print(f"Failed to load cog {full_cog_path}: {e}")
 
 @bot.event
 async def on_ready():
