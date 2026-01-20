@@ -19,7 +19,7 @@ class Resize(commands.Cog):
             return
 
         ch: discord.VoiceChannel = interaction.user.voice.channel
-        if not lobby_is_tracked(ch.id):
+        if not await lobby_is_tracked(ch.id):
             await interaction.response.send_message("This channel isn’t a user-created lobby.", ephemeral=True)
             return
 

@@ -17,7 +17,7 @@ class RulesCog(commands.Cog):
             f"**#3 No Hate Speech** | For the love of all that is good, please\n{padding}"
         )
 
-        db_color = get_embed_color(interaction.guild_id)
+        db_color = await get_embed_color(interaction.guild_id)
         if db_color:
             color = discord.Color(int(db_color, 16))
         else:

@@ -49,7 +49,7 @@ async def on_ready():
 if __name__ == "__main__":
     async def main():
         # Initialize database connections
-        initialize_databases()
+        await initialize_databases()
 
         # Set up signal handlers for clean shutdown
         setup_signal_handlers(bot)
@@ -70,7 +70,7 @@ if __name__ == "__main__":
                     print(f"Failed to unload extension {extension}: {e}")
 
             # Close all databases
-            close_all_databases()
+            await close_all_databases()
 
             # Add a short delay to ensure all tasks and cleanup complete
             await asyncio.sleep(2)

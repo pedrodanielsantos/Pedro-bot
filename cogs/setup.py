@@ -112,7 +112,7 @@ class Setup(commands.GroupCog, name="setup"):
     @app_commands.describe(hex_code="The hex color code (e.g. #FF0000). Input the command without argument to reset.")
     async def embed_color(self, interaction: discord.Interaction, hex_code: Optional[str] = None):
         if not hex_code:
-            set_embed_color(interaction.guild_id, None, interaction.user.id)
+            await set_embed_color(interaction.guild_id, None, interaction.user.id)
             embed = discord.Embed(description="✅ Embed color has been reset to default.", color=discord.Color(EMBED_COLOR))
             await interaction.response.send_message(embed=embed)
             return
@@ -125,7 +125,7 @@ class Setup(commands.GroupCog, name="setup"):
 
         # Save to Database without the #
         clean_hex = hex_code.lstrip("#")
-        set_embed_color(interaction.guild_id, clean_hex, interaction.user.id)
+        await set_embed_color(interaction.guild_id, clean_hex, interaction.user.id)
 
         embed = discord.Embed(description=f"✅ Embed color has been updated to `#{clean_hex}`.", color=color)
         await interaction.response.send_message(embed=embed)
@@ -150,7 +150,7 @@ class Setup(commands.GroupCog, name="setup"):
                     video_quality_mode=discord.VideoQualityMode(VOICE_VQM),
                     rtc_region=VOICE_REGION,
                 )
-                lobby_add(member.guild.id, new_ch.id)
+                await lobby_add(member.guild.id, new_ch.id)
 
                 # Give the event loop a tick; then try to move the member.
                 # (Helps with timing right after creation on some guilds.)
@@ -167,22 +167,22 @@ class Setup(commands.GroupCog, name="setup"):
     async def cleanup_lobbies(self):
         """Every minute: delete any tracked lobby that is empty.
            Also cleans up stale DB rows for missing channels/guilds."""
-        for guild_id, channel_id in list(lobbies_all()):
+        for guild_id, channel_id in await lobbies_all():
             guild = self.bot.get_guild(guild_id)
             if not guild:
-                lobby_delete(channel_id)
+                await lobby_delete(channel_id)
                 continue
 
             ch = guild.get_channel(channel_id)
             if not isinstance(ch, discord.VoiceChannel):
-                lobby_delete(channel_id)
+                await lobby_delete(channel_id)
                 continue
 
             if len(ch.members) == 0:
                 try:
                     await ch.delete(reason="Empty user lobby (periodic cleanup)")
                 finally:
-                    lobby_delete(channel_id)
+                    await lobby_delete(channel_id)
 
     @cleanup_lobbies.before_loop
     async def before_cleanup(self):

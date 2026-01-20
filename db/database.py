@@ -1,25 +1,19 @@
-import sqlite3
+import aiosqlite
 import os
 
-# Keep track of connections
-db_connections = {
-    "custom_roles": None,
-    "lobbies": None,
-    "server_settings": None,
-}
+# Global database connection
+db = None
 
-# Base folder where DB files will be stored
-DB_FOLDER = os.path.dirname(__file__)  # This is the /db folder
+DB_FILE = os.path.join(os.path.dirname(__file__), "database.db")
 
-def initialize_databases():
-    global db_connections
-
-    os.makedirs(DB_FOLDER, exist_ok=True)
+async def initialize_databases():
+    global db
+    os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
     
-    # Initialize database connections
-    db_connections["custom_roles"] = sqlite3.connect(os.path.join(DB_FOLDER, "custom_roles.db"))
-    cursor = db_connections["custom_roles"].cursor()
-    cursor.execute("""
+    db = await aiosqlite.connect(DB_FILE)
+    
+    # Create tables in the single database file
+    await db.execute("""
         CREATE TABLE IF NOT EXISTS user_roles (
             guild_id INTEGER,
             user_id INTEGER,
@@ -28,101 +22,75 @@ def initialize_databases():
         )
     """)
 
-    db_connections["lobbies"] = sqlite3.connect(os.path.join(DB_FOLDER, "lobbies.db"))
-    cursor = db_connections["lobbies"].cursor()
-    cursor.execute("""
+    await db.execute("""
         CREATE TABLE IF NOT EXISTS lobbies (
             guild_id   INTEGER NOT NULL,
             channel_id INTEGER PRIMARY KEY
         )
     """)
 
-    db_connections["server_settings"] = sqlite3.connect(os.path.join(DB_FOLDER, "server_settings.db"))
-    cursor = db_connections["server_settings"].cursor()
-    cursor.execute("""
+    await db.execute("""
         CREATE TABLE IF NOT EXISTS server_settings (
             guild_id INTEGER PRIMARY KEY,
             embed_color TEXT,
             updated_by INTEGER
         )
     """)
+    await db.commit()
 
-def close_all_databases():
-    """Closes all database connections gracefully."""
-    global db_connections
+async def close_all_databases():
+    """Closes the database connection gracefully."""
+    global db
+    if db:
+        await db.close()
+        print("Database connection closed.")
 
-    for name, connection in db_connections.items():
-        if connection:
-            connection.close()
-            print(f"{name} database connection closed.")
-
-def store_user_role(guild_id: int, user_id: int, role_id: int):
-    conn = db_connections["custom_roles"]
-    cursor = conn.cursor()
-    cursor.execute(
+async def store_user_role(guild_id: int, user_id: int, role_id: int):
+    await db.execute(
         "INSERT OR REPLACE INTO user_roles (guild_id, user_id, role_id) VALUES (?, ?, ?)",
         (guild_id, user_id, role_id)
     )
-    conn.commit()
+    await db.commit()
 
-def remove_user_role(guild_id: int, user_id: int):
-    conn = db_connections["custom_roles"]
-    cursor = conn.cursor()
-    cursor.execute(
+async def remove_user_role(guild_id: int, user_id: int):
+    await db.execute(
         "DELETE FROM user_roles WHERE guild_id = ? AND user_id = ?",
         (guild_id, user_id)
     )
-    conn.commit()
+    await db.commit()
 
-def get_user_role(guild_id: int, user_id: int):
-    conn = db_connections["custom_roles"]
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT role_id FROM user_roles WHERE guild_id = ? AND user_id = ?",
+async def get_user_role(guild_id: int, user_id: int):
+    async with db.execute(
+        "SELECT role_id FROM user_roles WHERE guild_id = ? AND user_id = ?", 
         (guild_id, user_id)
-    )
-    result = cursor.fetchone()
-    return result[0] if result else None
+    ) as cursor:
+        result = await cursor.fetchone()
+        return result[0] if result else None
 
-def lobby_add(guild_id: int, channel_id: int):
-    conn = db_connections["lobbies"]
-    cur = conn.cursor()
-    cur.execute("INSERT OR REPLACE INTO lobbies (guild_id, channel_id) VALUES (?, ?)", (guild_id, channel_id))
-    conn.commit()
+async def lobby_add(guild_id: int, channel_id: int):
+    await db.execute("INSERT OR REPLACE INTO lobbies (guild_id, channel_id) VALUES (?, ?)", (guild_id, channel_id))
+    await db.commit()
 
-def lobby_delete(channel_id: int):
-    conn = db_connections["lobbies"]
-    cur = conn.cursor()
-    cur.execute("DELETE FROM lobbies WHERE channel_id = ?", (channel_id,))
-    conn.commit()
+async def lobby_delete(channel_id: int):
+    await db.execute("DELETE FROM lobbies WHERE channel_id = ?", (channel_id,))
+    await db.commit()
 
-def lobbies_all():
-    conn = db_connections["lobbies"]
-    cur = conn.cursor()
-    cur.execute("SELECT guild_id, channel_id FROM lobbies")
-    return cur.fetchall()
+async def lobbies_all():
+    async with db.execute("SELECT guild_id, channel_id FROM lobbies") as cursor:
+        return await cursor.fetchall()
 
-def lobby_is_tracked(channel_id: int) -> bool:
-    conn = db_connections["lobbies"]
-    cur = conn.cursor()
-    cur.execute("SELECT 1 FROM lobbies WHERE channel_id = ? LIMIT 1", (channel_id,))
-    return cur.fetchone() is not None
+async def lobby_is_tracked(channel_id: int) -> bool:
+    async with db.execute("SELECT 1 FROM lobbies WHERE channel_id = ? LIMIT 1", (channel_id,)) as cursor:
+        return await cursor.fetchone() is not None
 
-def set_embed_color(guild_id: int, hex_code: str, user_id: int):
-    conn = db_connections["server_settings"]
-    cursor = conn.cursor()
-    cursor.execute(
+async def set_embed_color(guild_id: int, hex_code: str, user_id: int):
+    await db.execute(
         "INSERT OR REPLACE INTO server_settings (guild_id, embed_color, updated_by) VALUES (?, ?, ?)",
         (guild_id, hex_code, user_id)
     )
-    conn.commit()
+    await db.commit()
 
-def get_embed_color(guild_id: int):
-    conn = db_connections["server_settings"]
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT embed_color FROM server_settings WHERE guild_id = ?",
-        (guild_id,)
-    )
-    result = cursor.fetchone()
-    return result[0] if result else None
+async def get_embed_color(guild_id: int):
+    async with db.execute("SELECT embed_color FROM server_settings WHERE guild_id = ?", (guild_id,)) as cursor:
+        result = await cursor.fetchone()
+        return result[0] if result else None

@@ -34,7 +34,7 @@ class CustomRole(commands.GroupCog, name="customrole"):
         user = interaction.user
 
         # Check if user already has a custom role
-        role_id = get_user_role(guild.id, user.id)
+        role_id = await get_user_role(guild.id, user.id)
         role = guild.get_role(role_id) if role_id else None
 
         if role:
@@ -58,7 +58,7 @@ class CustomRole(commands.GroupCog, name="customrole"):
 
         # Assign the role to the user
         await user.add_roles(role)
-        store_user_role(guild.id, user.id, role.id)
+        await store_user_role(guild.id, user.id, role.id)
         await interaction.followup.send(f"Role **{name}** created with color **{hex_code}** and assigned to you!")
 
     @app_commands.command(name="update", description="Update your custom role's name or color.")
@@ -71,7 +71,7 @@ class CustomRole(commands.GroupCog, name="customrole"):
         user = interaction.user
 
         # Check if user has a custom role
-        role_id = get_user_role(guild.id, user.id)
+        role_id = await get_user_role(guild.id, user.id)
         role = guild.get_role(role_id) if role_id else None
 
         if not role:
@@ -105,12 +105,12 @@ class CustomRole(commands.GroupCog, name="customrole"):
         user = interaction.user
 
         # Check if user has a custom role
-        role_id = get_user_role(guild.id, user.id)
+        role_id = await get_user_role(guild.id, user.id)
         role = guild.get_role(role_id) if role_id else None
 
         if role:
             await role.delete(reason="User deleted their custom role")
-            remove_user_role(guild.id, user.id)
+            await remove_user_role(guild.id, user.id)
             await interaction.followup.send("Your custom role has been successfully deleted.")
         else:
             await interaction.followup.send("You do not have a custom role to delete.")
@@ -130,12 +130,12 @@ class CustomRole(commands.GroupCog, name="customrole"):
             await interaction.followup.send("Invalid User ID! Please provide a valid numeric User ID.")
             return
 
-        role_id = get_user_role(guild.id, user_id)
+        role_id = await get_user_role(guild.id, user_id)
         role = guild.get_role(role_id) if role_id else None
 
         if role:
             await role.delete(reason="Deleted by administrator")
-            remove_user_role(guild.id, user_id)
+            await remove_user_role(guild.id, user_id)
             await interaction.followup.send(f"Role for user ID `{user_id}` has been successfully deleted.")
         else:
             await interaction.followup.send(f"No custom role found for user ID `{user_id}`.")
