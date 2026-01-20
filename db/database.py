@@ -3,7 +3,6 @@ import os
 
 # Keep track of connections
 db_connections = {
-    "imagine_models": None,
     "custom_roles": None,
     "lobbies": None,
     "server_settings": None,
@@ -18,15 +17,6 @@ def initialize_databases():
     os.makedirs(DB_FOLDER, exist_ok=True)
     
     # Initialize database connections
-    db_connections["imagine_models"] = sqlite3.connect(os.path.join(DB_FOLDER, "imagine_models.db"))
-    cursor = db_connections["imagine_models"].cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS user_models (
-            user_id INTEGER PRIMARY KEY,
-            model_name TEXT NOT NULL
-        )
-    """)
-
     db_connections["custom_roles"] = sqlite3.connect(os.path.join(DB_FOLDER, "custom_roles.db"))
     cursor = db_connections["custom_roles"].cursor()
     cursor.execute("""
