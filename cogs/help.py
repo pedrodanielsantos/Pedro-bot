@@ -9,12 +9,12 @@ class HelpCog(commands.Cog):
 
     @commands.command(name="help")
     async def help_command(self, ctx):
-        pages = self.get_help_pages(ctx.guild.id if ctx.guild else None)
+        pages = await self.get_help_pages(ctx.guild.id if ctx.guild else None)
         view = self.create_help_view()
         await ctx.send(embed=pages[0], view=view)
 
-    def get_help_pages(self, guild_id=None):
-        db_color = get_embed_color(guild_id) if guild_id else None
+    async def get_help_pages(self, guild_id=None):
+        db_color = await get_embed_color(guild_id) if guild_id else None
         if db_color:
             color = discord.Color(int(db_color, 16))
         else:
@@ -116,7 +116,7 @@ class HelpCog(commands.Cog):
                 await self.handle_help_interaction(interaction, custom_id)
 
     async def handle_help_interaction(self, interaction: discord.Interaction, custom_id: str):
-        pages = self.get_help_pages(interaction.guild_id)
+        pages = await self.get_help_pages(interaction.guild_id)
         current_page = self.extract_page_number(interaction.message.embeds[0].footer.text)
         if custom_id == "help:first":
             new_page = 1

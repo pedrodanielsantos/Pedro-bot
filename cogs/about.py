@@ -30,7 +30,7 @@ class About(commands.Cog):
             ("System", f"{platform.system()} {platform.release()}")
         ]
 
-        db_color = get_embed_color(interaction.guild_id)
+        db_color = await get_embed_color(interaction.guild_id)
         if db_color:
             color = discord.Color(int(db_color, 16))
         else:

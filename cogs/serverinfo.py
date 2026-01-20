@@ -23,7 +23,7 @@ class ServerInfo(commands.Cog):
             ("Created On", guild.created_at.strftime('%Y-%m-%d %H:%M:%S'), False)
         ]
 
-        db_color = get_embed_color(interaction.guild_id)
+        db_color = await get_embed_color(interaction.guild_id)
         if db_color:
             color = discord.Color(int(db_color, 16))
         else:

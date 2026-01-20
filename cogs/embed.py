@@ -44,7 +44,7 @@ class Embed(commands.GroupCog, name="embed"):
         json_output = json.dumps(embed_data, indent=4)
 
         # Determine the embed color
-        db_color = get_embed_color(interaction.guild_id)
+        db_color = await get_embed_color(interaction.guild_id)
         if db_color:
             color = discord.Color(int(db_color, 16))
         else:

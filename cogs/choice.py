@@ -38,7 +38,7 @@ class Choice(commands.Cog):
         # Select a random option
         selected = random.choice(all_options)
 
-        db_color = get_embed_color(interaction.guild_id)
+        db_color = await get_embed_color(interaction.guild_id)
         if db_color:
             color = discord.Color(int(db_color, 16))
         else:

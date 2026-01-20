@@ -12,7 +12,7 @@ class Avatar(commands.Cog):
     async def avatar(self, interaction: discord.Interaction, member: discord.Member = None):
         """Shows the avatar of the user."""
         member = member or interaction.user  # Default to the command user if no member is mentioned
-        db_color = get_embed_color(interaction.guild_id)
+        db_color = await get_embed_color(interaction.guild_id)
         if db_color:
             color = discord.Color(int(db_color, 16))
         else:

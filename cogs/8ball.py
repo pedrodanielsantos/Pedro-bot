@@ -27,7 +27,7 @@ class EightBall(commands.Cog):
         # Randomly select an answer
         answer = random.choice(self.answers)
 
-        db_color = get_embed_color(interaction.guild_id)
+        db_color = await get_embed_color(interaction.guild_id)
         if db_color:
             color = discord.Color(int(db_color, 16))
         else:
