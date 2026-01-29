@@ -4,7 +4,7 @@ from discord import app_commands
 from discord.ext import commands, tasks
 from typing import Optional
 
-from db.database import lobby_add, lobby_delete, lobbies_all, set_embed_color
+from db.database import lobby_add, lobby_delete, lobbies_all, set_embed_color, lobby_is_tracked
 
 from config.constants import (
     NEW_LOBBY_TRIGGER,
@@ -134,9 +134,20 @@ class Setup(commands.GroupCog, name="setup"):
     async def on_voice_state_update(
         self,
         member: discord.Member,
-        _before: discord.VoiceState,
+        before: discord.VoiceState,
         after: discord.VoiceState
     ):
+        # Check if a user left a voice channel
+        if before.channel and (not after.channel or before.channel.id != after.channel.id):
+            if len(before.channel.members) == 0:
+                if await lobby_is_tracked(before.channel.id):
+                    try:
+                        await before.channel.delete(reason="Empty user lobby")
+                    except (discord.NotFound, discord.HTTPException):
+                        pass
+                    finally:
+                        await lobby_delete(before.channel.id)
+
         # When a user joins the trigger channel, create a new lobby and move them.
         if after and after.channel and isinstance(after.channel, discord.VoiceChannel):
             ch = after.channel
