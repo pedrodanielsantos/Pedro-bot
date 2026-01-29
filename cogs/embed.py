@@ -7,8 +7,8 @@ from db.database import get_embed_color
 
 class Embed(commands.GroupCog, name="embed"):
     def __init__(self, bot: commands.Bot):
-        self.bot = bot
         super().__init__()
+        self.bot = bot
 
     @app_commands.command(name="source", description="Get the JSON source of an embed.")
     @app_commands.describe(message_id="The ID of the message containing the embed.")

@@ -1,17 +1,65 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
 from config.constants import EMBED_COLOR
 from db.database import get_embed_color
+
+COG_GROUPS = {
+    "General": ["HelpCog", "RulesCog"],
+    "Setup": ["setup"],
+    "Lobbies": ["Resize", "Rename"],
+    "Image Manipulation": ["image"],
+    "Random Fun": ["Dog", "Cat", "EightBall", "Choice"],
+    "Utility": ["Ping", "Avatar", "UserInfo", "ServerInfo", "About", "embed"]
+}
+
+class HelpView(discord.ui.View):
+    def __init__(self, pages):
+        super().__init__(timeout=None)
+        self.pages = pages
+        self.current_page = 0
+        self.update_buttons()
+
+    def update_buttons(self):
+        self.first_page.disabled = (self.current_page == 0)
+        self.prev_page.disabled = (self.current_page == 0)
+        self.next_page.disabled = (self.current_page == len(self.pages) - 1)
+        self.last_page.disabled = (self.current_page == len(self.pages) - 1)
+
+    @discord.ui.button(label="<<", style=discord.ButtonStyle.secondary)
+    async def first_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page = 0
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
+
+    @discord.ui.button(label="<", style=discord.ButtonStyle.secondary)
+    async def prev_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page = max(0, self.current_page - 1)
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
+
+    @discord.ui.button(label=">", style=discord.ButtonStyle.secondary)
+    async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page = min(len(self.pages) - 1, self.current_page + 1)
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
+
+    @discord.ui.button(label=">>", style=discord.ButtonStyle.secondary)
+    async def last_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page = len(self.pages) - 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
 
 class HelpCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="help")
-    async def help_command(self, ctx):
-        pages = await self.get_help_pages(ctx.guild.id if ctx.guild else None)
-        view = self.create_help_view()
-        await ctx.send(embed=pages[0], view=view)
+    @app_commands.command(name="help", description="Displays the help message with all available commands.")
+    async def help_command(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        pages = await self.get_help_pages(interaction.guild_id)
+        view = HelpView(pages)
+        await interaction.followup.send(embed=pages[0], view=view)
 
     async def get_help_pages(self, guild_id=None):
         db_color = await get_embed_color(guild_id) if guild_id else None
@@ -20,124 +68,59 @@ class HelpCog(commands.Cog):
         else:
             color = discord.Color(EMBED_COLOR)
 
-        return [
-            discord.Embed(
-                title="Help (1/2)",
-                description="Welcome to the bot's help section!",
-                color=color,
-            )
-            .add_field(
-                name="Command Syntax",
-                value=(
-                    "**Slash Commands**: Start with `/` and must be typed without a prefix.\n"
-                    "**Prefix Commands**: Start with a `.` (e.g., `.help`)."
-                ),
-            )
-            .add_field(
-                name="General Commands",
-                value=("**.help**: Display this help message."),
-                inline=False
-            )
-#           .add_field(
-#               name="Image Generation",
-#               value=(
-#                   "**/imagine**: Generate an image using Stable Diffusion.\n"
-#                   "**/model select**: Choose a Stable Diffusion model.\n"
-#                   "**/model info**: View detailed information about Stable Diffusion models."
-#               ),
-#               inline=False,
-#           )
-            .add_field(
-                name="Custom Roles",
-                value=(
-                    "**/customrole create**: Create a custom role with a specific HEX color code.\n"
-                    "**/customrole delete**: Delete your custom role.\n"
-                    "**/customrole deleteid**: (Admin Only) Delete a custom role by User ID.\n"
-                    "**/customrole update**: Update your custom roles name or color."
-                ),
-                inline=False,
-            )
-            .add_field(
-                name="Image Manipulation",
-                value=(
-                    "**/image petpet**: Generate a petpet GIF from an image source.\n"
-                    "**/image heartlocket**: Generate a heart locket GIF from one or two image sources.\n"
-                    "**/image explode**: Generate an exploding GIF from an image source."
-                ),
-                inline=False,
-            )
-            .set_footer(text="Page 1 of 2"),
+        pages = []
+        current_embed = discord.Embed(
+            title="Help",
+            description="Welcome to the bot's help section!",
+            color=color,
+        )
 
-            discord.Embed(
-                title="Help (2/2)",
-                description="Welcome to the bot's help section!",
-                color=color,
-            )
-            .add_field(
-                name="Random Fun",
-                value=(
-                    "**/cat**: Display a random image of a cat.\n"
-                    "**/dog**: Display a random image of a dog.\n"
-                    "**/8ball**: Ask the magic 8-ball a question.\n"
-                    "**/choice**: Chooses randomly from the given options (Max. 10 options)."
-                ),
-                inline=False,
-            )
-            .add_field(
-                name="Utility",
-                value=(
-                    "**/ping**: Checks the bot's latency.\n"
-                    "**/avatar**: Displays the avatar of a user.\n"
-                    "**/userinfo**: Displays information about a user.\n"
-                    "**/serverinfo**: Displays server statistics."
-                ),
-                inline=False,
-            )
-            .set_footer(text="Page 2 of 2"),
-        ]
+        for category, cog_names in COG_GROUPS.items():
+            field_value = ""
+            for cog_name in cog_names:
+                cog = self.bot.get_cog(cog_name)
+                if cog:
+                    if isinstance(cog, commands.GroupCog):
+                        root_group = cog.app_command
+                        for sub in root_group.commands:
+                            desc = sub.description or "No description provided."
+                            full_name = f"{root_group.name} {sub.name}"
+                            field_value += f"**/{full_name}**: {desc}\n"
+                    else:
+                        for cmd in cog.get_app_commands():
+                            if isinstance(cmd, app_commands.Group):
+                                for sub in cmd.commands:
+                                    desc = sub.description or "No description provided."
+                                    full_name = f"{cmd.name} {sub.name}"
+                                    field_value += f"**/{full_name}**: {desc}\n"
+                            else:
+                                desc = cmd.description or "No description provided."
+                                field_value += f"**/{cmd.name}**: {desc}\n"
+            
+            if field_value:
+                # Calculate current size to check against Discord limits (6000 chars total, 25 fields)
+                current_size = len(current_embed.title or "") + len(current_embed.description or "")
+                for f in current_embed.fields:
+                    current_size += len(f.name) + len(f.value)
+                
+                # If adding this field exceeds safe limit (5000) or field count (25), start new page
+                if (current_size + len(category) + len(field_value) > 5000) or (len(current_embed.fields) >= 25):
+                    pages.append(current_embed)
+                    current_embed = discord.Embed(
+                        title="Help",
+                        description="Welcome to the bot's help section!",
+                        color=color,
+                    )
+                
+                current_embed.add_field(name=category, value=field_value, inline=False)
 
-    def create_help_view(self):
-        view = discord.ui.View()
-        buttons = [
-            {"label": "<<", "style": discord.ButtonStyle.secondary, "custom_id": "help:first"},
-            {"label": "<", "style": discord.ButtonStyle.secondary, "custom_id": "help:previous"},
-            {"label": ">", "style": discord.ButtonStyle.secondary, "custom_id": "help:next"},
-            {"label": ">>", "style": discord.ButtonStyle.secondary, "custom_id": "help:last"},
-        ]
-        for button in buttons:
-            view.add_item(discord.ui.Button(**button))
-        return view
+        pages.append(current_embed)
 
-    @commands.Cog.listener()
-    async def on_interaction(self, interaction: discord.Interaction):
-        if interaction.type == discord.InteractionType.component:
-            custom_id = interaction.data.get("custom_id", "")
-            if custom_id.startswith("help:"):
-                await self.handle_help_interaction(interaction, custom_id)
+        total_pages = len(pages)
+        for i, page in enumerate(pages):
+            page.set_footer(text=f"Page {i + 1} of {total_pages}")
 
-    async def handle_help_interaction(self, interaction: discord.Interaction, custom_id: str):
-        pages = await self.get_help_pages(interaction.guild_id)
-        current_page = self.extract_page_number(interaction.message.embeds[0].footer.text)
-        if custom_id == "help:first":
-            new_page = 1
-        elif custom_id == "help:previous":
-            new_page = max(1, current_page - 1)
-        elif custom_id == "help:next":
-            new_page = min(len(pages), current_page + 1)
-        elif custom_id == "help:last":
-            new_page = len(pages)
-        else:
-            return  # Unknown custom_id; do nothing
-
-        new_embed = pages[new_page - 1]
-        await interaction.response.edit_message(embed=new_embed)
-
-    def extract_page_number(self, footer_text: str) -> int:
-        # Assumes footer text is in the format "Page X of Y"
-        try:
-            return int(footer_text.split()[1])
-        except (IndexError, ValueError):
-            return 1  # Default to page 1 if parsing fails
+        return pages
 
 async def setup(bot):
     await bot.add_cog(HelpCog(bot))

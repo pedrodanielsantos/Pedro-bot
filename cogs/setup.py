@@ -26,6 +26,7 @@ def validate_hex_code(hex_code: str) -> discord.Color:
 @app_commands.default_permissions(administrator=True)
 class Setup(commands.GroupCog, name="setup"):
     def __init__(self, bot: commands.Bot):
+        super().__init__()
         self.bot = bot
         self.cleanup_lobbies.start()
 
