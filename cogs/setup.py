@@ -164,9 +164,6 @@ class Setup(commands.GroupCog, name="setup"):
                 )
                 await lobby_add(member.guild.id, new_ch.id)
 
-                # Give the event loop a tick; then try to move the member.
-                # (Helps with timing right after creation on some guilds.)
-                await asyncio.sleep(0.1)
                 try:
                     await member.move_to(new_ch, reason="Auto-created user lobby")
                 except discord.Forbidden:
