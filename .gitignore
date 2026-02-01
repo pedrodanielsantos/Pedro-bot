@@ -6,6 +6,3 @@ __pycache__/
 
 # Database files
 *.db
-
-# Old Local Backups
-backup/
