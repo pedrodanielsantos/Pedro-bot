@@ -10,7 +10,7 @@ COG_GROUPS = {
     "Lobbies": ["Lobbies", "Resize", "Rename"],
     "Image Manipulation": ["image"],
     "Random Fun": ["Dog", "Cat", "EightBall", "Choice"],
-    "Utility": ["Ping", "Avatar", "UserInfo", "ServerInfo", "About", "embed"]
+    "Utility": ["Ping", "Avatar", "UserInfo", "ServerInfo", "Stats", "embed"]
 }
 
 class HelpView(discord.ui.View):
