@@ -26,6 +26,27 @@ class Lobby(commands.GroupCog, group_name="lobby"):
         # discord.py exposes the bitrate limit directly
         return guild.bitrate_limit
 
+    async def _handle_http_exception(self, interaction: discord.Interaction, e: discord.HTTPException, action: str, forbidden_msg: Optional[str] = None):
+        if e.status == 429:
+            retry_after = None
+            try:
+                retry_after = float(e.response.headers.get("Retry-After"))
+            except (ValueError, TypeError, AttributeError):
+                pass
+
+            if retry_after:
+                await interaction.followup.send(f"Rate limited. Please try again in ~{retry_after:.1f}s.", ephemeral=True)
+            else:
+                await interaction.followup.send("Rate limited. Please wait a moment and try again.", ephemeral=True)
+            return
+
+        if isinstance(e, discord.Forbidden):
+            msg = forbidden_msg or f"I don’t have permission to {action}."
+            await interaction.followup.send(msg, ephemeral=True)
+            return
+
+        await interaction.followup.send(f"Failed to {action}: {e}", ephemeral=True)
+
     def cog_unload(self):
         self.cleanup_lobbies.cancel()
 
@@ -54,66 +75,47 @@ class Lobby(commands.GroupCog, group_name="lobby"):
                 ephemeral=True
             )
 
-        except discord.Forbidden:
-            await interaction.followup.send(
-                "I’m missing **Manage Channels** in that category.", ephemeral=True
-            )
         except discord.HTTPException as e:
-            if getattr(e, "status", None) == 429:
-                retry_after = None
-                try:
-                    retry_after_hdr = e.response.headers.get("Retry-After")
-                    if retry_after_hdr:
-                        retry_after = float(retry_after_hdr)
-                except Exception:
-                    pass
-                if retry_after is not None:
-                    await interaction.followup.send(
-                        f"Rate limited. Try again in ~{retry_after:.1f}s.", ephemeral=True
-                    )
-                else:
-                    await interaction.followup.send(
-                        "Rate limited. Please wait a moment and try again.", ephemeral=True
-                    )
-            else:
-                await interaction.followup.send(f"Failed to set up lobbies: {e}", ephemeral=True)
+            await self._handle_http_exception(interaction, e, "setup lobby voice-chat system", "I’m missing **Manage Channels** permission in that category.")
 
-    @app_commands.command(name="resize", description="Set max users for your current user-created lobby.")
-    @app_commands.describe(max_users="0 for unlimited (Discord max typically 99)")
+    @app_commands.command(name="resize", description="Resize your current lobby.")
+    @app_commands.describe(max_users="Must be between 0 (unlimited) and 99.")
     async def resize(self, interaction: discord.Interaction, max_users: int):
+        await interaction.response.defer(ephemeral=True)
+
         if max_users < 0 or max_users > 99:
-            await interaction.response.send_message("Max users must be between **0** and **99**.", ephemeral=True)
+            await interaction.followup.send("Maximum users must be between **0** (unlimited) and **99**.", ephemeral=True)
             return
 
         if not interaction.user.voice or not interaction.user.voice.channel:
-            await interaction.response.send_message("You must be connected to a lobby voice channel.", ephemeral=True)
+            await interaction.followup.send("You must be connected to a lobby voice-channel.", ephemeral=True)
             return
 
         ch: discord.VoiceChannel = interaction.user.voice.channel
         if not await lobby_is_tracked(ch.id):
-            await interaction.response.send_message("This channel isn’t a user-created lobby.", ephemeral=True)
+            await interaction.followup.send("This channel isn’t a lobby voice-channel.", ephemeral=True)
             return
 
         try:
             await ch.edit(user_limit=max_users)
             label = "unlimited" if max_users == 0 else str(max_users)
-            await interaction.response.send_message(f"Lobby size set to **{label}**.", ephemeral=True)
+            await interaction.followup.send(f"Lobby resized to **{label}** maximum users.", ephemeral=True)
         except discord.HTTPException as e:
-            await interaction.response.send_message(f"Failed to resize: {e}", ephemeral=True)
+            await self._handle_http_exception(interaction, e, "resize lobby")
 
-    @app_commands.command(name="rename", description="Rename your current lobby.")
+    @app_commands.command(name="rename", description="Rename your current lobby voice-channel.")
     @app_commands.describe(new_name="New name for the lobby.")
     async def rename(self, interaction: discord.Interaction, new_name: str):
         
         await interaction.response.defer(ephemeral=True)
 
         if not interaction.user.voice or not interaction.user.voice.channel:
-            await interaction.response.send_message("You must be connected to a lobby.", ephemeral=True)
+            await interaction.followup.send("You must be connected to a lobby voice-channel.", ephemeral=True)
             return
 
         ch: discord.VoiceChannel = interaction.user.voice.channel
         if not await lobby_is_tracked(ch.id):
-            await interaction.response.send_message("This channel isn’t a user-created lobby.", ephemeral=True)
+            await interaction.followup.send("This channel isn’t a lobby voice-channel.", ephemeral=True)
             return
 
         name = new_name.strip()
@@ -130,31 +132,7 @@ class Lobby(commands.GroupCog, group_name="lobby"):
             await interaction.followup.send(f"Lobby renamed to **{name}**.", ephemeral=True)
 
         except discord.HTTPException as e:
-            # Proper rate-limit surface (HTTP 429)
-            if getattr(e, "status", None) == 429:
-                retry_after_hdr = None
-                try:
-                    retry_after_hdr = e.response.headers.get("Retry-After")
-                except Exception:
-                    pass
-
-                if retry_after_hdr:
-                    retry_after = float(retry_after_hdr)
-                    await interaction.followup.send(
-                        f"Rate limited. Please try again in ~{retry_after:.1f}s.",
-                        ephemeral=True
-                    )
-                else:
-                    await interaction.followup.send(
-                        "Rate limited. Please wait a moment and try again.",
-                        ephemeral=True
-                    )
-                return
-
-            if isinstance(e, discord.Forbidden):
-                await interaction.followup.send("I don’t have permission to rename this channel.", ephemeral=True)
-            else:
-                await interaction.followup.send(f"Failed to rename: {e}", ephemeral=True)
+            await self._handle_http_exception(interaction, e, "rename lobby")
 
     @commands.Cog.listener()
     async def on_voice_state_update(
