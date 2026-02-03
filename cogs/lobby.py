@@ -15,7 +15,7 @@ from config.constants import (
 )
 
 @app_commands.default_permissions(administrator=True)
-class Lobbies(commands.GroupCog, group_name="lobbies"):
+class Lobby(commands.GroupCog, group_name="lobby"):
     def __init__(self, bot: commands.Bot):
         super().__init__()
         self.bot = bot
@@ -27,12 +27,12 @@ class Lobbies(commands.GroupCog, group_name="lobbies"):
         return guild.bitrate_limit
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Gate all /lobbies subcommands to admins only."""
+        """Gate all /lobby subcommands to admins only."""
         if interaction.user.guild_permissions.administrator:
             return True
         # must respond to the interaction or it errors
         await interaction.response.send_message(
-            "You must be an **administrator** to use `/lobbies` commands.",
+            "You must be an **administrator** to use `/lobby` commands.",
             ephemeral=True
         )
         return False
@@ -40,7 +40,7 @@ class Lobbies(commands.GroupCog, group_name="lobbies"):
     def cog_unload(self):
         self.cleanup_lobbies.cancel()
 
-    @app_commands.command(name="setup", description="Setup temporary lobby voice-chat system.")
+    @app_commands.command(name="setup", description="Setup temporary voice-chat system with user-created lobbies.")
     @app_commands.describe(category="The category where lobby channels will be created.")
     async def setup(self, interaction: discord.Interaction, category: discord.CategoryChannel):
         if not interaction.user.guild_permissions.manage_channels:
@@ -157,4 +157,4 @@ class Lobbies(commands.GroupCog, group_name="lobbies"):
 
 async def setup(bot: commands.Bot):
     # Load the Lobbies cog
-    await bot.add_cog(Lobbies(bot))
+    await bot.add_cog(Lobby(bot))
