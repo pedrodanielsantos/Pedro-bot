@@ -12,9 +12,9 @@ from config.constants import (
     LOBBY_EMOJI,
     VOICE_VQM,
     VOICE_REGION,
+    VOICE_NAME_MAX_LENGTH,
 )
 
-@app_commands.default_permissions(administrator=True)
 class Lobby(commands.GroupCog, group_name="lobby"):
     def __init__(self, bot: commands.Bot):
         super().__init__()
@@ -26,17 +26,6 @@ class Lobby(commands.GroupCog, group_name="lobby"):
         # discord.py exposes the bitrate limit directly
         return guild.bitrate_limit
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Gate all /lobby subcommands to admins only."""
-        if interaction.user.guild_permissions.administrator:
-            return True
-        # must respond to the interaction or it errors
-        await interaction.response.send_message(
-            "You must be an **administrator** to use `/lobby` commands.",
-            ephemeral=True
-        )
-        return False
-
     def cog_unload(self):
         self.cleanup_lobbies.cancel()
 
@@ -44,7 +33,7 @@ class Lobby(commands.GroupCog, group_name="lobby"):
     @app_commands.describe(category="The category where lobby channels will be created.")
     async def setup(self, interaction: discord.Interaction, category: discord.CategoryChannel):
         if not interaction.user.guild_permissions.manage_channels:
-            await interaction.response.send_message("You need **Manage Channels** to run this.", ephemeral=True)
+            await interaction.response.send_message("You need **Manage Channels** permission to run this command.", ephemeral=True)
             return
 
         await interaction.response.defer(ephemeral=True)
@@ -88,6 +77,84 @@ class Lobby(commands.GroupCog, group_name="lobby"):
                     )
             else:
                 await interaction.followup.send(f"Failed to set up lobbies: {e}", ephemeral=True)
+
+    @app_commands.command(name="resize", description="Set max users for your current user-created lobby.")
+    @app_commands.describe(max_users="0 for unlimited (Discord max typically 99)")
+    async def resize(self, interaction: discord.Interaction, max_users: int):
+        if max_users < 0 or max_users > 99:
+            await interaction.response.send_message("Max users must be between **0** and **99**.", ephemeral=True)
+            return
+
+        if not interaction.user.voice or not interaction.user.voice.channel:
+            await interaction.response.send_message("You must be connected to a lobby voice channel.", ephemeral=True)
+            return
+
+        ch: discord.VoiceChannel = interaction.user.voice.channel
+        if not await lobby_is_tracked(ch.id):
+            await interaction.response.send_message("This channel isn’t a user-created lobby.", ephemeral=True)
+            return
+
+        try:
+            await ch.edit(user_limit=max_users)
+            label = "unlimited" if max_users == 0 else str(max_users)
+            await interaction.response.send_message(f"Lobby size set to **{label}**.", ephemeral=True)
+        except discord.HTTPException as e:
+            await interaction.response.send_message(f"Failed to resize: {e}", ephemeral=True)
+
+    @app_commands.command(name="rename", description="Rename your current lobby.")
+    @app_commands.describe(new_name="New name for the lobby.")
+    async def rename(self, interaction: discord.Interaction, new_name: str):
+        
+        await interaction.response.defer(ephemeral=True)
+
+        if not interaction.user.voice or not interaction.user.voice.channel:
+            await interaction.response.send_message("You must be connected to a lobby.", ephemeral=True)
+            return
+
+        ch: discord.VoiceChannel = interaction.user.voice.channel
+        if not await lobby_is_tracked(ch.id):
+            await interaction.response.send_message("This channel isn’t a user-created lobby.", ephemeral=True)
+            return
+
+        name = new_name.strip()
+        final = f"{LOBBY_EMOJI} {name}"
+
+        if len(final) > VOICE_NAME_MAX_LENGTH:
+            await interaction.followup.send(
+                f"Name too long ({len(final)}/{VOICE_NAME_MAX_LENGTH}).", ephemeral=True
+            )
+            return
+        
+        try:
+            await ch.edit(name=final, reason=f"Lobby rename by {interaction.user}")
+            await interaction.followup.send(f"Lobby renamed to **{name}**.", ephemeral=True)
+
+        except discord.HTTPException as e:
+            # Proper rate-limit surface (HTTP 429)
+            if getattr(e, "status", None) == 429:
+                retry_after_hdr = None
+                try:
+                    retry_after_hdr = e.response.headers.get("Retry-After")
+                except Exception:
+                    pass
+
+                if retry_after_hdr:
+                    retry_after = float(retry_after_hdr)
+                    await interaction.followup.send(
+                        f"Rate limited. Please try again in ~{retry_after:.1f}s.",
+                        ephemeral=True
+                    )
+                else:
+                    await interaction.followup.send(
+                        "Rate limited. Please wait a moment and try again.",
+                        ephemeral=True
+                    )
+                return
+
+            if isinstance(e, discord.Forbidden):
+                await interaction.followup.send("I don’t have permission to rename this channel.", ephemeral=True)
+            else:
+                await interaction.followup.send(f"Failed to rename: {e}", ephemeral=True)
 
     @commands.Cog.listener()
     async def on_voice_state_update(

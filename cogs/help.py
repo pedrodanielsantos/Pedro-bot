@@ -7,7 +7,7 @@ from db.database import get_embed_color
 COG_GROUPS = {
     "General": ["HelpCog", "RulesCog"],
     "Setup": ["setup"],
-    "Lobbies": ["Lobby", "Resize", "Rename"],
+    "Lobbies": ["Lobby"],
     "Image Manipulation": ["image"],
     "Random Fun": ["Dog", "Cat", "EightBall", "Choice"],
     "Utility": ["Ping", "Avatar", "UserInfo", "ServerInfo", "Stats", "embed"]
