@@ -128,8 +128,15 @@ class Lobby(commands.GroupCog, group_name="lobby"):
             return
         
         try:
-            await ch.edit(name=final, reason=f"Lobby rename by {interaction.user}")
+            # Use wait_for to prevent hanging on 429 retries (channel rename limit is 10m)
+            await asyncio.wait_for(
+                ch.edit(name=final, reason=f"Lobby rename by {interaction.user}"),
+                timeout=5.0
+            )
             await interaction.followup.send(f"Lobby renamed to **{name}**.", ephemeral=True)
+
+        except asyncio.TimeoutError:
+            await interaction.followup.send("Rate limited. Discord limits channel renames to **2 per 10 minutes**, try again later.", ephemeral=True)
 
         except discord.HTTPException as e:
             await self._handle_http_exception(interaction, e, "rename lobby")
