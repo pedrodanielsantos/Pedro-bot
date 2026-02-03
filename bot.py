@@ -15,7 +15,7 @@ intents = discord.Intents.default()
 intents.members = True
 intents.guilds = True
 intents.message_content = True
-bot = commands.Bot(command_prefix=".", intents=intents)
+bot = commands.Bot(command_prefix="ç!", intents=intents)
 
 # Remove default help command to replace with a custom one
 bot.remove_command("help")
@@ -37,6 +37,7 @@ async def load_cogs(bot):
 async def on_ready():
     """Event triggered when the bot is ready."""
     print(f"{bot.user.name} is ready and connected!")
+    print(f"Command prefix: {bot.command_prefix}")
     await bot.change_presence(activity=discord.CustomActivity(name="/help", state="/help"))
 
     # Sync slash commands
