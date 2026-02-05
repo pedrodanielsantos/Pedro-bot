@@ -84,11 +84,16 @@ class Developer(commands.Cog):
         Usage:
         ç!sync       -> Global sync
         ç!sync .     -> Sync to current guild (instant)
+        ç!sync ^     -> Clear commands from current guild
         """
         if spec == "." and ctx.guild:
             self.bot.tree.copy_global_to(guild=ctx.guild)
             target = ctx.guild
             target_desc = "to current guild"
+        elif spec == "^" and ctx.guild:
+            self.bot.tree.clear_commands(guild=ctx.guild)
+            target = ctx.guild
+            target_desc = "by clearing guild commands"
         else:
             target = None
             target_desc = "globally"
