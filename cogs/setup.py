@@ -13,23 +13,11 @@ from config.constants import (
     VOICE_REGION,
 )
 
-@app_commands.default_permissions(administrator=True)
 class Setup(commands.GroupCog, group_name="setup"):
     def __init__(self, bot: commands.Bot):
         super().__init__()
         self.bot = bot
         self.cleanup_lobbies.start()
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Gate all /setup subcommands to admins only."""
-        if interaction.user.guild_permissions.administrator:
-            return True
-        # must respond to the interaction or it errors
-        await interaction.response.send_message(
-            "You must be an **administrator** to use `/setup` commands.",
-            ephemeral=True
-        )
-        return False
 
     def cog_unload(self):
         self.cleanup_lobbies.cancel()
@@ -62,6 +50,10 @@ class Setup(commands.GroupCog, group_name="setup"):
     @app_commands.command(name="lobbies", description="Setup temporary voice-chat system with user-created lobbies.")
     @app_commands.describe(category="The category where lobby channels will be created.")
     async def lobbies(self, interaction: discord.Interaction, category: discord.CategoryChannel):
+        if not interaction.user.guild_permissions.manage_channels:
+            await interaction.response.send_message("You need **Manage Channels** permission to use this command.", ephemeral=True)
+            return
+
         await interaction.response.defer(ephemeral=True)
 
         try:
