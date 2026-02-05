@@ -15,7 +15,7 @@ def validate_hex_code(hex_code: str) -> discord.Color:
     return discord.Color(int(hex_code[1:], 16))
 
 @app_commands.default_permissions(administrator=True)
-class Set(commands.GroupCog, name="set"):
+class Set(commands.GroupCog, group_name="set"):
     def __init__(self, bot: commands.Bot):
         super().__init__()
         self.bot = bot
