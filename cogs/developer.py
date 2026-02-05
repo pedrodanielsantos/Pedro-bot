@@ -78,17 +78,25 @@ class Developer(commands.Cog):
             print(f"Failed to unload extension {extension}: {e}")
 
     @commands.command(name="sync", hidden=True)
-    async def sync(self, ctx: commands.Context):
+    async def sync(self, ctx: commands.Context, spec: str = None):
         """
-        Syncs the slash command tree globally.
-        Usage: ç!sync
+        Syncs the slash command tree.
+        Usage:
+        ç!sync       -> Global sync
+        ç!sync .     -> Sync to current guild (instant)
         """
-        msg = await ctx.reply("Syncing command tree...")
-        print("Syncing command tree...")
+        if spec == "." and ctx.guild:
+            self.bot.tree.copy_global_to(guild=ctx.guild)
+            target = ctx.guild
+            target_desc = "to current guild"
+        else:
+            target = None
+            target_desc = "globally"
+
+        msg = await ctx.reply(f"Syncing command tree {target_desc}...")
         try:
-            synced = await self.bot.tree.sync()
-            await msg.edit(content=f"✅ Synced {len(synced)} commands.")
-            print(f"Synced {len(synced)} commands.")
+            synced = await self.bot.tree.sync(guild=target)
+            await msg.edit(content=f"✅ Synced {len(synced)} commands {target_desc}.")
         except Exception as e:
             await msg.edit(content=f"❌ Sync failed: {e}")
             print(f"Sync failed: {e}")
