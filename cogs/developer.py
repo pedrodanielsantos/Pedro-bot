@@ -112,7 +112,7 @@ class Developer(commands.Cog):
         Shows available developer commands.
         Usage: ç!devhelp
         """
-        embed = discord.Embed(title="🛠️ Developer Tools", color=discord.Color.dark_grey())
+        embed = discord.Embed(title="Developer Tools", color=discord.Color(0x33cbbe))
         for cmd in self.get_commands():
             desc = cmd.help or "No description provided."
             embed.add_field(name=f"ç!{cmd.name}", value=f"```{desc}```", inline=False)
