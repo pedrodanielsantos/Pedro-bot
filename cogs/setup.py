@@ -26,27 +26,6 @@ class Setup(commands.GroupCog, group_name="setup"):
     def _max_bitrate(guild: discord.Guild) -> int:
         return guild.bitrate_limit
 
-    async def _handle_http_exception(self, interaction: discord.Interaction, e: discord.HTTPException, action: str, forbidden_msg: Optional[str] = None):
-        if e.status == 429:
-            retry_after = None
-            try:
-                retry_after = float(e.response.headers.get("Retry-After"))
-            except (ValueError, TypeError, AttributeError):
-                pass
-
-            if retry_after:
-                await interaction.followup.send(f"Rate limited. Please try again in ~{retry_after:.1f}s.", ephemeral=True)
-            else:
-                await interaction.followup.send("Rate limited. Please wait a moment and try again.", ephemeral=True)
-            return
-
-        if isinstance(e, discord.Forbidden):
-            msg = forbidden_msg or f"I don’t have permission to {action}."
-            await interaction.followup.send(msg, ephemeral=True)
-            return
-
-        await interaction.followup.send(f"Failed to {action}: {e}", ephemeral=True)
-
     @app_commands.command(name="lobbies", description="Setup temporary voice-chat system with user-created lobbies.")
     @app_commands.describe(category="The category where lobby channels will be created.")
     async def lobbies(self, interaction: discord.Interaction, category: discord.CategoryChannel):
@@ -56,24 +35,20 @@ class Setup(commands.GroupCog, group_name="setup"):
 
         await interaction.response.defer(ephemeral=True)
 
-        try:
-            trigger = discord.utils.get(category.voice_channels, name=NEW_LOBBY_TRIGGER)
-            if trigger is None:
-                trigger = await category.create_voice_channel(
-                    NEW_LOBBY_TRIGGER,
-                    position=0,
-                    bitrate=self._max_bitrate(category.guild),
-                    video_quality_mode=discord.VideoQualityMode(VOICE_VQM),
-                    rtc_region=VOICE_REGION,
-                )
-
-            await interaction.followup.send(
-                f"Lobby system set in **{category.name}**:\n- {trigger.mention}",
-                ephemeral=True
+        trigger = discord.utils.get(category.voice_channels, name=NEW_LOBBY_TRIGGER)
+        if trigger is None:
+            trigger = await category.create_voice_channel(
+                NEW_LOBBY_TRIGGER,
+                position=0,
+                bitrate=self._max_bitrate(category.guild),
+                video_quality_mode=discord.VideoQualityMode(VOICE_VQM),
+                rtc_region=VOICE_REGION,
             )
 
-        except discord.HTTPException as e:
-            await self._handle_http_exception(interaction, e, "setup lobby voice-chat system", "I’m missing **Manage Channels** permission in that category.")
+        await interaction.followup.send(
+            f"Lobby system set in **{category.name}**:\n- {trigger.mention}",
+            ephemeral=True
+        )
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):

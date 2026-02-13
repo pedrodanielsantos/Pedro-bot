@@ -11,27 +11,6 @@ class Rename(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    async def _handle_http_exception(self, interaction: discord.Interaction, e: discord.HTTPException, action: str, forbidden_msg: Optional[str] = None):
-        if e.status == 429:
-            retry_after = None
-            try:
-                retry_after = float(e.response.headers.get("Retry-After"))
-            except (ValueError, TypeError, AttributeError):
-                pass
-
-            if retry_after:
-                await interaction.followup.send(f"Rate limited. Please try again in ~{retry_after:.1f}s.", ephemeral=True)
-            else:
-                await interaction.followup.send("Rate limited. Please wait a moment and try again.", ephemeral=True)
-            return
-
-        if isinstance(e, discord.Forbidden):
-            msg = forbidden_msg or f"I don’t have permission to {action}."
-            await interaction.followup.send(msg, ephemeral=True)
-            return
-
-        await interaction.followup.send(f"Failed to {action}: {e}", ephemeral=True)
-
     @app_commands.command(name="rename", description="Rename your current lobby voice-channel.")
     @app_commands.describe(new_name="New name for the lobby.")
     async def rename(self, interaction: discord.Interaction, new_name: str):
@@ -58,8 +37,6 @@ class Rename(commands.Cog):
             await interaction.followup.send(f"Lobby renamed to **{name}**.", ephemeral=True)
         except asyncio.TimeoutError:
             await interaction.followup.send("Rate limited. Discord limits channel renames to **2 per 10 minutes**, try again later.", ephemeral=True)
-        except discord.HTTPException as e:
-            await self._handle_http_exception(interaction, e, "rename lobby")
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Rename(bot))

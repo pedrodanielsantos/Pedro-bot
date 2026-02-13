@@ -5,14 +5,7 @@ from typing import Optional
 
 from db.database import set_embed_color
 from config.constants import EMBED_COLOR
-
-def validate_hex_code(hex_code: str) -> discord.Color:
-    """Validate and convert a HEX code into a discord.Color object."""
-    if not hex_code.startswith("#"):
-        hex_code = f"#{hex_code}"
-    if len(hex_code) != 7 or not all(c in "0123456789ABCDEFabcdef#" for c in hex_code):
-        raise ValueError("Invalid HEX color code! Use a format like `#FF5733` or `FF5733`.")
-    return discord.Color(int(hex_code[1:], 16))
+from utils.transformers import HexColorTransformer
 
 @app_commands.default_permissions(administrator=True)
 class Set(commands.GroupCog, group_name="set"):
@@ -33,21 +26,16 @@ class Set(commands.GroupCog, group_name="set"):
 
     @app_commands.command(name="embedcolor", description="Set or reset the server's embed color.")
     @app_commands.describe(hex_code="The hex color code (e.g. #FF0000). Input the command without argument to reset.")
-    async def embed_color(self, interaction: discord.Interaction, hex_code: Optional[str] = None):
+    async def embed_color(self, interaction: discord.Interaction, hex_code: app_commands.Transform[discord.Color, HexColorTransformer] = None):
         if not hex_code:
             await set_embed_color(interaction.guild_id, None, interaction.user.id)
             embed = discord.Embed(description="✅ Embed color has been reset to default.", color=discord.Color(EMBED_COLOR))
             await interaction.response.send_message(embed=embed)
             return
 
-        try:
-            color = validate_hex_code(hex_code)
-        except ValueError as e:
-            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
-            return
-
         # Save to Database without the #
-        clean_hex = hex_code.lstrip("#")
+        color = hex_code
+        clean_hex = f"{color.value:06X}"
         await set_embed_color(interaction.guild_id, clean_hex, interaction.user.id)
 
         embed = discord.Embed(description=f"✅ Embed color has been updated to `#{clean_hex}`.", color=color)
