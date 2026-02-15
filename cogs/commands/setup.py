@@ -4,13 +4,17 @@ from discord.ext import commands, tasks
 import asyncio
 from typing import Optional
 
-from db.database import lobby_add, lobby_delete, lobbies_all, lobby_is_tracked
+from db.database import (
+    lobby_add, lobby_delete, lobbies_all, lobby_is_tracked,
+    set_welcome_channel, get_welcome_channel, get_embed_color
+)
 from config.constants import (
     NEW_LOBBY_TRIGGER,
     LOBBY_NAME,
     LOBBY_EMOJI,
     VOICE_VQM,
     VOICE_REGION,
+    EMBED_COLOR,
 )
 
 class Setup(commands.GroupCog, group_name="setup"):
@@ -49,6 +53,51 @@ class Setup(commands.GroupCog, group_name="setup"):
             f"Lobby system set in **{category.name}**:\n- {trigger.mention}",
             ephemeral=True
         )
+
+    @app_commands.command(name="welcome", description="Setup or disable the welcome message channel.")
+    @app_commands.describe(channel="The channel to send welcome messages in. Leave empty to disable.")
+    async def welcome(self, interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("You need **Administrator** permission to use this command.", ephemeral=True)
+            return
+
+        if channel is None:
+            await set_welcome_channel(interaction.guild_id, None)
+            await interaction.response.send_message("✅ Welcome messages have been disabled.", ephemeral=True)
+        else:
+            await set_welcome_channel(interaction.guild_id, channel.id)
+            await interaction.response.send_message(f"✅ Welcome messages will now be sent in {channel.mention}.", ephemeral=True)
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        channel_id = await get_welcome_channel(member.guild.id)
+        if not channel_id:
+            return
+
+        channel = member.guild.get_channel(channel_id)
+        if not channel:
+            return
+
+        db_color = await get_embed_color(member.guild.id)
+        if db_color:
+            color = discord.Color(int(db_color, 16))
+        else:
+            color = discord.Color(EMBED_COLOR)
+
+        description = (
+            f"Hey! {member.mention}\n\n"
+            "Read the https://discord.com/channels/1240063556217733141/1240063556289040449 and assign your "
+            "https://discord.com/channels/1240063556217733141/1240063556289040450 to get started."
+        )
+
+        embed = discord.Embed(description=description, color=color)
+        embed.set_author(name="Welcome to Pedro's!", icon_url=member.guild.icon.url if member.guild.icon else None)
+        embed.set_thumbnail(url=member.display_avatar.with_size(1024).url)
+
+        try:
+            await channel.send(embed=embed)
+        except (discord.Forbidden, discord.HTTPException):
+            pass
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):

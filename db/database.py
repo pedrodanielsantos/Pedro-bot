@@ -33,9 +33,16 @@ async def initialize_databases():
         CREATE TABLE IF NOT EXISTS server_settings (
             guild_id INTEGER PRIMARY KEY,
             embed_color TEXT,
-            updated_by INTEGER
+            updated_by INTEGER,
+            welcome_channel_id INTEGER
         )
     """)
+
+    try:
+        await db.execute("ALTER TABLE server_settings ADD COLUMN welcome_channel_id INTEGER")
+    except Exception:
+        pass
+
     await db.commit()
 
 async def close_all_databases():
@@ -85,12 +92,30 @@ async def lobby_is_tracked(channel_id: int) -> bool:
 
 async def set_embed_color(guild_id: int, hex_code: str, user_id: int):
     await db.execute(
-        "INSERT OR REPLACE INTO server_settings (guild_id, embed_color, updated_by) VALUES (?, ?, ?)",
+        """
+        INSERT INTO server_settings (guild_id, embed_color, updated_by) VALUES (?, ?, ?)
+        ON CONFLICT(guild_id) DO UPDATE SET embed_color=excluded.embed_color, updated_by=excluded.updated_by
+        """,
         (guild_id, hex_code, user_id)
     )
     await db.commit()
 
 async def get_embed_color(guild_id: int):
     async with db.execute("SELECT embed_color FROM server_settings WHERE guild_id = ?", (guild_id,)) as cursor:
+        result = await cursor.fetchone()
+        return result[0] if result else None
+
+async def set_welcome_channel(guild_id: int, channel_id: int | None):
+    await db.execute(
+        """
+        INSERT INTO server_settings (guild_id, welcome_channel_id) VALUES (?, ?)
+        ON CONFLICT(guild_id) DO UPDATE SET welcome_channel_id=excluded.welcome_channel_id
+        """,
+        (guild_id, channel_id)
+    )
+    await db.commit()
+
+async def get_welcome_channel(guild_id: int):
+    async with db.execute("SELECT welcome_channel_id FROM server_settings WHERE guild_id = ?", (guild_id,)) as cursor:
         result = await cursor.fetchone()
         return result[0] if result else None
