@@ -1,17 +1,21 @@
 import discord
 from discord.ext import commands
+import os
 
-class Developer(commands.Cog):
+class DeveloperTools(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
         if isinstance(error, commands.CheckFailure):
-            await ctx.reply("❌ You are not authorized to use this command.", delete_after=5)
+            embed = discord.Embed(description="You are not authorized to use this command.", color=0xf41921)
+            await ctx.reply(embed=embed, delete_after=5)
         elif isinstance(error, commands.MissingRequiredArgument):
-            await ctx.reply(f"❌ Missing required argument: `{error.param.name}`")
+            embed = discord.Embed(description=f"Missing required argument: `{error.param.name}`", color=0xf41921)
+            await ctx.reply(embed=embed)
         else:
-            await ctx.reply(f"❌ An error occurred: {error}")
+            embed = discord.Embed(description=f"An error occurred: {error}", color=0xf41921)
+            await ctx.reply(embed=embed)
             print(f"Error in developer command: {error}")
 
     async def cog_check(self, ctx: commands.Context) -> bool:
@@ -19,24 +23,61 @@ class Developer(commands.Cog):
         # It ensures only the bot owner can run these commands.
         return await self.bot.is_owner(ctx.author)
 
+    def find_extension(self, query: str) -> str | None:
+        """
+        Resolves a partial cog name (e.g., 'image') to its full module path (e.g., 'cogs.commands.image').
+        Searches both loaded extensions and the file system.
+        """
+        # 1. Check if it's a direct match in loaded extensions
+        if query in self.bot.extensions:
+            return query
+        
+        # 2. Check if it's a suffix match in loaded extensions (e.g. "image" -> "cogs.commands.image")
+        matches = [ext for ext in self.bot.extensions if ext.endswith(f".{query}")]
+        if len(matches) == 1:
+            return matches[0]
+        
+        # 3. Search the filesystem (useful for 'load' command where extension isn't loaded yet)
+        # Current file is in cogs/core/, so we go up two levels to find the 'cogs' root
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        cogs_dir = os.path.dirname(current_dir) # y:\cogs
+        bot_root = os.path.dirname(cogs_dir)    # y:\
+
+        for root, _, files in os.walk(cogs_dir):
+            for file in files:
+                if file.endswith(".py") and not file.startswith("__"):
+                    full_path = os.path.join(root, file)
+                    rel_path = os.path.relpath(full_path, bot_root)
+                    module_path = rel_path.replace(os.sep, ".")[:-3]
+                    
+                    # Check for exact filename match (e.g. "image" matches "image.py")
+                    if file == f"{query}.py":
+                        return module_path
+                    # Check for module path suffix match (e.g. "commands.image" matches "cogs.commands.image")
+                    if module_path.endswith(query):
+                        return module_path
+        return None
+
     @commands.command(name="reload", hidden=True)
     async def reload(self, ctx: commands.Context, cog: str):
         """
         Reloads a specific cog.
         Usage: ç!reload lobby
         """
-        # Handle shorthand input (e.g., "lobby" -> "cogs.lobby")
-        if not cog.startswith("cogs."):
-            extension = f"cogs.{cog}"
-        else:
-            extension = cog
+        extension = self.find_extension(cog)
+
+        if not extension:
+            embed = discord.Embed(description=f"Could not find extension matching `{cog}`.", color=0xf41921)
+            await ctx.reply(embed=embed)
+            return
 
         try:
             await self.bot.reload_extension(extension)
             await ctx.reply(f"✅ Reloaded `{extension}`")
             print(f"Reloaded extension: {extension}")
         except Exception as e:
-            await ctx.reply(f"❌ Failed to reload `{extension}`:\n```py\n{e}\n```")
+            embed = discord.Embed(description=f"Failed to reload `{extension}`:\n```py\n{e}\n```", color=0xf41921)
+            await ctx.reply(embed=embed)
             print(f"Failed to reload extension {extension}: {e}")
 
     @commands.command(name="load", hidden=True)
@@ -45,17 +86,20 @@ class Developer(commands.Cog):
         Loads a specific cog.
         Usage: ç!load lobby
         """
-        if not cog.startswith("cogs."):
-            extension = f"cogs.{cog}"
-        else:
-            extension = cog
+        extension = self.find_extension(cog)
+
+        if not extension:
+            embed = discord.Embed(description=f"Could not find extension matching `{cog}`.", color=0xf41921)
+            await ctx.reply(embed=embed)
+            return
 
         try:
             await self.bot.load_extension(extension)
             await ctx.reply(f"✅ Loaded `{extension}`")
             print(f"Loaded extension: {extension}")
         except Exception as e:
-            await ctx.reply(f"❌ Failed to load `{extension}`:\n```py\n{e}\n```")
+            embed = discord.Embed(description=f"Failed to load `{extension}`:\n```py\n{e}\n```", color=0xf41921)
+            await ctx.reply(embed=embed)
             print(f"Failed to load extension {extension}: {e}")
 
     @commands.command(name="unload", hidden=True)
@@ -64,17 +108,20 @@ class Developer(commands.Cog):
         Unloads a specific cog.
         Usage: ç!unload lobby
         """
-        if not cog.startswith("cogs."):
-            extension = f"cogs.{cog}"
-        else:
-            extension = cog
+        extension = self.find_extension(cog)
+
+        if not extension:
+            embed = discord.Embed(description=f"Could not find extension matching `{cog}`.", color=0xf41921)
+            await ctx.reply(embed=embed)
+            return
 
         try:
             await self.bot.unload_extension(extension)
             await ctx.reply(f"✅ Unloaded `{extension}`")
             print(f"Unloaded extension: {extension}")
         except Exception as e:
-            await ctx.reply(f"❌ Failed to unload `{extension}`:\n```py\n{e}\n```")
+            embed = discord.Embed(description=f"Failed to unload `{extension}`:\n```py\n{e}\n```", color=0xf41921)
+            await ctx.reply(embed=embed)
             print(f"Failed to unload extension {extension}: {e}")
 
     @commands.command(name="sync", hidden=True)
@@ -103,7 +150,8 @@ class Developer(commands.Cog):
             synced = await self.bot.tree.sync(guild=target)
             await msg.edit(content=f"✅ Synced {len(synced)} commands {target_desc}.")
         except Exception as e:
-            await msg.edit(content=f"❌ Sync failed: {e}")
+            embed = discord.Embed(description=f"Sync failed: {e}", color=0xf41921)
+            await msg.edit(content=None, embed=embed)
             print(f"Sync failed: {e}")
 
     @commands.command(name="devhelp", hidden=True)
@@ -129,11 +177,14 @@ class Developer(commands.Cog):
             await msg.delete()
             print(f"Deleted message {message_id}")
         except discord.NotFound:
-            await ctx.reply(f"❌ Message `{message_id}` not found.", delete_after=5)
+            embed = discord.Embed(description=f"Message `{message_id}` not found.", color=0xf41921)
+            await ctx.reply(embed=embed, delete_after=5)
         except discord.Forbidden:
-            await ctx.reply("❌ I cannot delete that message (I can only delete my own messages in DMs).", delete_after=5)
+            embed = discord.Embed(description="I cannot delete that message (I can only delete my own messages in DMs).", color=0xf41921)
+            await ctx.reply(embed=embed, delete_after=5)
         except Exception as e:
-            await ctx.reply(f"❌ Error: {e}", delete_after=5)
+            embed = discord.Embed(description=f"Error: {e}", color=0xf41921)
+            await ctx.reply(embed=embed, delete_after=5)
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(Developer(bot))
+    await bot.add_cog(DeveloperTools(bot))
