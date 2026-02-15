@@ -22,37 +22,39 @@ class ErrorHandler(commands.Cog):
         # Handle Transformer Errors (Validation failures like invalid Hex codes)
         if isinstance(error, app_commands.TransformerError):
             # The original ValueError is stored in error.__cause__
-            message = f"❌ {error.__cause__}" if error.__cause__ else "❌ Invalid input provided."
+            message = f"{error.__cause__}" if error.__cause__ else "Invalid input provided."
         elif isinstance(error, discord.Forbidden):
-            message = "❌ I do not have permission to perform this action. Please check my roles and channel permissions."
+            message = "I do not have permission to perform this action."
         elif isinstance(error, discord.NotFound):
-            message = "❌ The target resource was not found."
+            message = "The target resource was not found."
         elif isinstance(error, asyncio.TimeoutError):
-            message = "❌ Operation timed out."
+            message = "Operation timed out."
         elif isinstance(error, discord.HTTPException):
             if error.status == 429:
                 retry_after = error.response.headers.get("Retry-After")
                 if retry_after:
                     try:
                         retry_float = float(retry_after)
-                        message = f"❌ Rate limited. Please try again in ~{retry_float:.1f}s."
+                        message = f"Rate limited. Please try again in ~{retry_float:.1f}s."
                     except ValueError:
-                        message = "❌ Rate limited. Please wait a moment and try again."
+                        message = "Rate limited. Please wait a moment and try again."
                 else:
-                    message = "❌ Rate limited. Please wait a moment and try again."
+                    message = "Rate limited. Please wait a moment and try again."
             else:
-                message = f"❌ HTTP Error: {error.status}"
+                message = f"HTTP Error: {error.status}"
         else:
             # Log unexpected errors to console so you can debug them
             print(f"Ignoring exception in command {interaction.command}:")
             traceback.print_exception(type(error), error, error.__traceback__)
-            message = f"❌ An unexpected error occurred: {error}"
+            message = f"An unexpected error occurred: {error}"
+
+        embed = discord.Embed(description=message, color=0xf41921)
 
         # Send the error message to the user
         if not interaction.response.is_done():
-            await interaction.response.send_message(message, ephemeral=True)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
         else:
-            await interaction.followup.send(message, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(ErrorHandler(bot))
