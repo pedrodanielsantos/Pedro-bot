@@ -3,7 +3,7 @@ from discord.ext import commands
 from config.constants import EMBED_COLOR
 from db.database import get_embed_color
 
-class RulesCog(commands.Cog):
+class Rules(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
@@ -36,4 +36,4 @@ class RulesCog(commands.Cog):
         await ctx.send(embed=embed)
 
 async def setup(bot):
-    await bot.add_cog(RulesCog(bot))
+    await bot.add_cog(Rules(bot))

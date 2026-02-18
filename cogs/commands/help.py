@@ -5,7 +5,7 @@ from config.constants import EMBED_COLOR
 from db.database import get_embed_color
 
 COG_GROUPS = {
-    "General": ["HelpCog", "RulesCog"],
+    "General": ["HelpCog", "Rules"],
     "Settings": ["Set"],
     "Lobbies": ["Setup", "Rename", "Resize"],
     "Image Manipulation": ["image"],
@@ -94,6 +94,12 @@ class HelpCog(commands.Cog):
                                     full_name = f"{cmd.name} {sub.name}"
                                     field_value += f"**/{full_name}**: {desc}\n"
                             else:
+                                desc = cmd.description or "No description provided."
+                                field_value += f"**/{cmd.name}**: {desc}\n"
+
+                        # Also check for hybrid commands (which are stored as text commands)
+                        for cmd in cog.get_commands():
+                            if isinstance(cmd, commands.HybridCommand):
                                 desc = cmd.description or "No description provided."
                                 field_value += f"**/{cmd.name}**: {desc}\n"
             
