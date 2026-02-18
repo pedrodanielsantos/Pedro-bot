@@ -10,33 +10,22 @@ class Embed(commands.GroupCog, name="embed"):
         super().__init__()
         self.bot = bot
 
-    @app_commands.command(name="source", description="Get the JSON source of an embed.")
-    @app_commands.describe(message_id="The ID of the message containing the embed.")
-    async def source(self, interaction: discord.Interaction, message_id: str):
+    @app_commands.command(name="json", description="Get the JSON source of an embed.")
+    @app_commands.describe(message_id="The ID of the message containing the embed.", channel="The channel the message is in (optional).")
+    async def json(self, interaction: discord.Interaction, message_id: str, channel: discord.TextChannel = None):
         try:
             msg_id = int(message_id)
         except ValueError:
-            await interaction.response.send_message("Invalid Message ID. Please enter a numeric ID.", ephemeral=True)
+            embed = discord.Embed(description="Invalid Message ID. Please enter a numeric ID.", color=0xf41921)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
-        if not interaction.channel:
-            await interaction.response.send_message("Cannot fetch messages in this context.", ephemeral=True)
-            return
-
-        try:
-            message = await interaction.channel.fetch_message(msg_id)
-        except discord.NotFound:
-            await interaction.response.send_message("Message not found in this channel.", ephemeral=True)
-            return
-        except discord.Forbidden:
-            await interaction.response.send_message("I don't have permission to read messages in this channel.", ephemeral=True)
-            return
-        except discord.HTTPException:
-            await interaction.response.send_message("Failed to fetch the message.", ephemeral=True)
-            return
+        target_channel = channel or interaction.channel
+        message = await target_channel.fetch_message(msg_id)
 
         if not message.embeds:
-            await interaction.response.send_message("The specified message does not contain an embed.", ephemeral=True)
+            embed = discord.Embed(description="The specified message does not contain an embed.", color=0xf41921)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
         # Parse the first embed into JSON
@@ -58,6 +47,56 @@ class Embed(commands.GroupCog, name="embed"):
         )
 
         await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="createjson", description="Create an embed using raw JSON.")
+    @app_commands.describe(data="The JSON data for the embed.", channel="The channel to send the embed to (optional).")
+    async def createjson(self, interaction: discord.Interaction, data: str, channel: discord.TextChannel = None):
+        try:
+            embed_data = json.loads(data)
+            embed = discord.Embed.from_dict(embed_data)
+        except json.JSONDecodeError:
+            embed = discord.Embed(description="Invalid JSON format.", color=0xf41921)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        except Exception as e:
+            embed = discord.Embed(description=f"Error creating embed: {e}", color=0xf41921)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        target_channel = channel or interaction.channel
+        
+        await target_channel.send(embed=embed)
+        await interaction.response.send_message(f"Embed sent to {target_channel.mention}.", ephemeral=True)
+
+    @app_commands.command(name="editjson", description="Edit an existing embed using raw JSON.")
+    @app_commands.describe(message_id="The ID of the message to edit.", data="The new JSON data for the embed.", channel="The channel the message is in (optional).")
+    async def editjson(self, interaction: discord.Interaction, message_id: str, data: str, channel: discord.TextChannel = None):
+        try:
+            msg_id = int(message_id)
+        except ValueError:
+            embed = discord.Embed(description="Invalid Message ID. Please enter a numeric ID.", color=0xf41921)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        target_channel = channel or interaction.channel
+        
+        message = await target_channel.fetch_message(msg_id)
+
+        if message.author != self.bot.user:
+            embed = discord.Embed(description="I can only edit my own messages.", color=0xf41921)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        try:
+            embed_data = json.loads(data)
+            embed = discord.Embed.from_dict(embed_data)
+        except Exception as e:
+            embed = discord.Embed(description=f"Invalid JSON or Embed data: {e}", color=0xf41921)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        await message.edit(embed=embed)
+        await interaction.response.send_message(f"Message {message_id} updated.", ephemeral=True)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Embed(bot))
