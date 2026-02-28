@@ -11,29 +11,24 @@ class Choice(commands.Cog):
 
     @app_commands.command(
         name="choice",
-        description="Chooses randomly from the given options."
+        description="Chooses randomly from the given options (separated by commas)."
     )
+    @app_commands.describe(options="The options to choose from, separated by commas.")
     async def choice(
         self, 
         interaction: discord.Interaction,
-        option1: str, 
-        option2: str,
-        option3: str = None, 
-        option4: str = None, 
-        option5: str = None, 
-        option6: str = None, 
-        option7: str = None, 
-        option8: str = None, 
-        option9: str = None, 
-        option10: str = None
+        options: str
     ):
         """
         Randomly selects one of the provided options.
-        - Requires at least two options.
-        - Supports up to 10 options total.
+        - Separate options with commas.
         """
-        # Gather all non-None options into a list
-        all_options = [option for option in [option1, option2, option3, option4, option5, option6, option7, option8, option9, option10] if option]
+        # Split by comma and strip whitespace
+        all_options = [opt.strip() for opt in options.split(",") if opt.strip()]
+
+        if len(all_options) < 2:
+            await interaction.response.send_message("Please provide at least two options separated by commas.", ephemeral=True)
+            return
         
         # Select a random option
         selected = random.choice(all_options)
@@ -50,7 +45,11 @@ class Choice(commands.Cog):
             description=f"Out of the provided options, the choice is:\n**{selected}**",
             color=color
         )
-        embed.add_field(name="Options Provided", value=", ".join(all_options), inline=False)
+
+        options_str = ", ".join(all_options)
+        if len(options_str) > 1024:
+            options_str = options_str[:1021] + "..."
+        embed.add_field(name="Options Provided", value=options_str, inline=False)
 
         await interaction.response.send_message(embed=embed)
 
