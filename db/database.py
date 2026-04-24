@@ -38,6 +38,14 @@ async def initialize_databases():
         )
     """)
 
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS autoroles (
+            guild_id INTEGER,
+            role_id INTEGER,
+            PRIMARY KEY (guild_id, role_id)
+        )
+    """)
+
     try:
         await db.execute("ALTER TABLE server_settings ADD COLUMN welcome_channel_id INTEGER")
     except Exception:
@@ -119,3 +127,25 @@ async def get_welcome_channel(guild_id: int):
     async with db.execute("SELECT welcome_channel_id FROM server_settings WHERE guild_id = ?", (guild_id,)) as cursor:
         result = await cursor.fetchone()
         return result[0] if result else None
+
+async def add_autorole(guild_id: int, role_id: int):
+    await db.execute(
+        "INSERT OR IGNORE INTO autoroles (guild_id, role_id) VALUES (?, ?)",
+        (guild_id, role_id)
+    )
+    await db.commit()
+
+async def remove_autorole(guild_id: int, role_id: int):
+    await db.execute(
+        "DELETE FROM autoroles WHERE guild_id = ? AND role_id = ?",
+        (guild_id, role_id)
+    )
+    await db.commit()
+
+async def get_autoroles(guild_id: int) -> list[int]:
+    async with db.execute(
+        "SELECT role_id FROM autoroles WHERE guild_id = ?",
+        (guild_id,)
+    ) as cursor:
+        rows = await cursor.fetchall()
+        return [row[0] for row in rows]
