@@ -33,6 +33,9 @@ class Autorole(commands.GroupCog, group_name="autorole"):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         """Automatically assigns configured autoroles to new members."""
+        if member.bot:
+            return
+            
         role_ids = await get_autoroles(member.guild.id)
         if not role_ids:
             return
