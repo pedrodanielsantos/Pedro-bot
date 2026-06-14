@@ -48,7 +48,7 @@ class ErrorHandler(commands.Cog):
             traceback.print_exception(type(error), error, error.__traceback__)
             message = f"An unexpected error occurred: {error}"
 
-        embed = discord.Embed(description=message, color=0xf41921)
+        embed = discord.Embed(description=message, color=0xdd2e44)
 
         # Send the error message to the user
         if not interaction.response.is_done():

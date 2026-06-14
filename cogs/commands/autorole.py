@@ -86,7 +86,7 @@ class Autorole(commands.GroupCog, group_name="autorole"):
         if not role_ids:
             embed = discord.Embed(
                 description="There are currently no autoroles configured for this server.",
-                color=0xdf2e43
+                color=0xdd2e44
             )
             return await interaction.response.send_message(embed=embed)
 
