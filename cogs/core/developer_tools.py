@@ -59,11 +59,30 @@ class DeveloperTools(commands.Cog):
         return None
 
     @commands.command(name="reload", hidden=True)
-    async def reload(self, ctx: commands.Context, cog: str):
+    async def reload(self, ctx: commands.Context, cog: str = None):
         """
-        Reloads a specific cog.
+        Reloads a specific cog, or all loaded cogs if none is given.
         Usage: ç!reload lobby
+               ç!reload
         """
+        if cog is None:
+            failed = []
+            for extension in list(self.bot.extensions):
+                try:
+                    await self.bot.reload_extension(extension)
+                    print(f"Reloaded extension: {extension}")
+                except Exception as e:
+                    failed.append((extension, e))
+                    print(f"Failed to reload extension {extension}: {e}")
+
+            if failed:
+                details = "\n".join(f"`{ext}`: {e}" for ext, e in failed)
+                embed = discord.Embed(description=f"Reloaded all extensions, but {len(failed)} failed:\n```py\n{details}\n```", color=0xf41921)
+                await ctx.reply(embed=embed)
+            else:
+                await ctx.reply(f"✅ Reloaded all `{len(self.bot.extensions)}` extensions")
+            return
+
         extension = self.find_extension(cog)
 
         if not extension:
