@@ -23,7 +23,7 @@ class Cat(commands.Cog):
             
         gc.collect()
 
-    @app_commands.command(name="cat", description="Fetch a random cat image.")
+    @app_commands.command(name="cat", description="Fetch a random cat image")
     async def fetch_cat(self, interaction: discord.Interaction):
         api_url = "https://api.thecatapi.com/v1/images/search"
         headers = {"x-api-key": CAT_API_KEY}

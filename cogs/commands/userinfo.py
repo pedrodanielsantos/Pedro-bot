@@ -8,7 +8,7 @@ class UserInfo(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="userinfo", description="Displays information about a user.")
+    @app_commands.command(name="userinfo", description="Displays information about a user")
     async def userinfo(self, interaction: discord.Interaction, member: discord.Member = None):
         """Shows user information."""
         member = member or interaction.user  # Default to the command user if no member is mentioned

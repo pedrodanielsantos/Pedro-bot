@@ -24,8 +24,8 @@ class Set(commands.GroupCog, group_name="set"):
         )
         return False
 
-    @app_commands.command(name="embedcolor", description="Set or reset the server's embed color.")
-    @app_commands.describe(hex_code="The hex color code (e.g. #FF0000). Input the command without argument to reset.")
+    @app_commands.command(name="embedcolor", description="Set or reset the server's embed color")
+    @app_commands.describe(hex_code="The hex color code (leave empty to reset)")
     async def embed_color(self, interaction: discord.Interaction, hex_code: app_commands.Transform[discord.Color, HexColorTransformer] = None):
         if not hex_code:
             await set_embed_color(interaction.guild_id, None, interaction.user.id)

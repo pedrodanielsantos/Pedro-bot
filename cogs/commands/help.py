@@ -54,7 +54,7 @@ class HelpCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="help", description="Displays the help message with all available commands.")
+    @app_commands.command(name="help", description="Displays the help message with all available commands")
     async def help_command(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         pages = await self.get_help_pages(interaction.guild_id)

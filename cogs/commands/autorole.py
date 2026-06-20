@@ -52,7 +52,7 @@ class Autorole(commands.GroupCog, group_name="autorole"):
             except discord.HTTPException:
                 pass
 
-    @app_commands.command(name="add", description="Adds a role to be automatically given to new members.")
+    @app_commands.command(name="add", description="Adds a role to be automatically given to new members")
     @app_commands.describe(role="The role to add to the autorole list")
     async def add(self, interaction: discord.Interaction, role: discord.Role):
         """Adds an autorole to the database."""
@@ -64,7 +64,7 @@ class Autorole(commands.GroupCog, group_name="autorole"):
         )
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="remove", description="Removes a role from the autorole list.")
+    @app_commands.command(name="remove", description="Removes a role from the autorole list")
     @app_commands.describe(role="The role to remove from the autorole list")
     async def remove(self, interaction: discord.Interaction, role: discord.Role):
         """Removes an autorole from the database."""
@@ -76,7 +76,7 @@ class Autorole(commands.GroupCog, group_name="autorole"):
         )
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="list", description="Lists all currently configured autoroles.")
+    @app_commands.command(name="list", description="Lists all currently configured autoroles")
     async def list(self, interaction: discord.Interaction):
         """Lists all configured autoroles for the guild."""
         role_ids = await get_autoroles(interaction.guild_id)

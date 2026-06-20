@@ -21,7 +21,7 @@ class EightBall(commands.Cog):
             "It’s not looking good."
         ]
 
-    @app_commands.command(name="8ball", description="Ask the magic 8-ball a question!")
+    @app_commands.command(name="8ball", description="Ask the magic 8-ball a question")
     async def eight_ball(self, interaction: discord.Interaction, question: str):
         """Responds to a user's question with a random answer."""
         # Randomly select an answer

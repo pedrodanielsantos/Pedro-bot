@@ -8,7 +8,7 @@ class ServerInfo(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="serverinfo", description="Displays server statistics.")
+    @app_commands.command(name="serverinfo", description="Displays server statistics")
     async def serverinfo(self, interaction: discord.Interaction):
         """Shows server information."""
         guild = interaction.guild

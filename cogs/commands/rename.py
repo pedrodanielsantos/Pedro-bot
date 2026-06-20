@@ -11,8 +11,8 @@ class Rename(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="rename", description="Rename your current lobby voice-channel.")
-    @app_commands.describe(new_name="New name for the lobby.")
+    @app_commands.command(name="rename", description="Rename your current lobby voice-channel")
+    @app_commands.describe(new_name="New name for the lobby")
     async def rename(self, interaction: discord.Interaction, new_name: str):
         await interaction.response.defer(ephemeral=True)
 

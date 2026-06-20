@@ -7,7 +7,7 @@ class Rules(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.hybrid_command(name="rules", description="Displays the server rules.")
+    @commands.hybrid_command(name="rules", description="Displays the server rules")
     async def rules(self, ctx: commands.Context):
         padding = "‎"
         rules_text = (

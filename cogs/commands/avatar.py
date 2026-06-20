@@ -8,7 +8,7 @@ class Avatar(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="avatar", description="Displays the avatar of a user.")
+    @app_commands.command(name="avatar", description="Displays the avatar of a user")
     async def avatar(self, interaction: discord.Interaction, member: discord.Member = None):
         """Shows the avatar of the user."""
         member = member or interaction.user  # Default to the command user if no member is mentioned

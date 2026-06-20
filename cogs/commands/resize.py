@@ -9,8 +9,8 @@ class Resize(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="resize", description="Resize your current lobby.")
-    @app_commands.describe(max_users="Must be between 0 (unlimited) and 99.")
+    @app_commands.command(name="resize", description="Resize your current lobby")
+    @app_commands.describe(max_users="Must be between 0 (unlimited) and 99")
     async def resize(self, interaction: discord.Interaction, max_users: int):
         await interaction.response.defer(ephemeral=True)
 

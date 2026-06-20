@@ -10,7 +10,7 @@ class Stats(commands.Cog):
         self.bot = bot
         self.start_time = datetime.utcnow()
 
-    @app_commands.command(name="stats", description="Shows technical information about the bot.")
+    @app_commands.command(name="stats", description="Shows technical information about the bot")
     async def stats(self, interaction: discord.Interaction):
         """Displays technical information about the bot."""
         uptime = datetime.utcnow() - self.start_time

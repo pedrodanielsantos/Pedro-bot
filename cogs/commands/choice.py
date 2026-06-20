@@ -11,9 +11,9 @@ class Choice(commands.Cog):
 
     @app_commands.command(
         name="choice",
-        description="Chooses randomly from the given options (separated by commas)."
+        description="Chooses randomly from the given options (separated by commas)"
     )
-    @app_commands.describe(options="The options to choose from, separated by commas.")
+    @app_commands.describe(options="The options to choose from, separated by commas")
     async def choice(
         self, 
         interaction: discord.Interaction,

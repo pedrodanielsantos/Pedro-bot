@@ -48,8 +48,8 @@ class Embed(commands.GroupCog, name="embed"):
 
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="createjson", description="Create an embed using raw JSON.")
-    @app_commands.describe(data="The JSON data for the embed.", channel="The channel to send the embed to (optional).")
+    @app_commands.command(name="createjson", description="Create an embed using raw JSON")
+    @app_commands.describe(data="The JSON data for the embed.", channel="The channel to send the embed to (optional)")
     async def createjson(self, interaction: discord.Interaction, data: str, channel: discord.TextChannel = None):
         try:
             embed_data = json.loads(data)
@@ -68,8 +68,8 @@ class Embed(commands.GroupCog, name="embed"):
         await target_channel.send(embed=embed)
         await interaction.response.send_message(f"Embed sent to {target_channel.mention}.", ephemeral=True)
 
-    @app_commands.command(name="editjson", description="Edit an existing embed using raw JSON.")
-    @app_commands.describe(message_id="The ID of the message to edit.", data="The new JSON data for the embed.", channel="The channel the message is in (optional).")
+    @app_commands.command(name="editjson", description="Edit an existing embed using raw JSON")
+    @app_commands.describe(message_id="The ID of the message to edit", data="The new JSON data for the embed", channel="The channel the message is in (optional)")
     async def editjson(self, interaction: discord.Interaction, message_id: str, data: str, channel: discord.TextChannel = None):
         try:
             msg_id = int(message_id)

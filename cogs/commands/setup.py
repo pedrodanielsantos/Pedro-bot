@@ -30,8 +30,8 @@ class Setup(commands.GroupCog, group_name="setup"):
     def _max_bitrate(guild: discord.Guild) -> int:
         return guild.bitrate_limit
 
-    @app_commands.command(name="lobbies", description="Setup temporary voice-chat system with user-created lobbies.")
-    @app_commands.describe(category="The category where lobby channels will be created.")
+    @app_commands.command(name="lobbies", description="Setup temporary voice-chat system with user-created lobbies")
+    @app_commands.describe(category="The category where lobby channels will be created")
     async def lobbies(self, interaction: discord.Interaction, category: discord.CategoryChannel):
         if not interaction.user.guild_permissions.manage_channels:
             await interaction.response.send_message("You need **Manage Channels** permission to use this command.", ephemeral=True)
@@ -54,8 +54,8 @@ class Setup(commands.GroupCog, group_name="setup"):
             ephemeral=True
         )
 
-    @app_commands.command(name="welcome", description="Setup or disable the welcome message channel.")
-    @app_commands.describe(channel="The channel to send welcome messages in. Leave empty to disable.")
+    @app_commands.command(name="welcome", description="Setup or disable the welcome message channel")
+    @app_commands.describe(channel="The channel to send welcome messages in (leave empty to disable)")
     async def welcome(self, interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
         if not interaction.user.guild_permissions.administrator:
             await interaction.response.send_message("You need **Administrator** permission to use this command.", ephemeral=True)

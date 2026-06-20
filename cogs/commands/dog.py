@@ -23,7 +23,7 @@ class Dog(commands.Cog):
             
         gc.collect()
 
-    @app_commands.command(name="dog", description="Fetch a random dog image.")
+    @app_commands.command(name="dog", description="Fetch a random dog image")
     async def fetch_dog(self, interaction: discord.Interaction):
         api_url = "https://api.thedogapi.com/v1/images/search"
         headers = {"x-api-key": DOG_API_KEY}

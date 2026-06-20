@@ -7,7 +7,7 @@ class Test(commands.GroupCog, group_name="test"):
         super().__init__()
         self.bot = bot
 
-    @app_commands.command(name="welcome", description="Simulate a member joining to test the welcome message.")
+    @app_commands.command(name="welcome", description="Simulate a member joining to test the welcome message")
     async def welcome(self, interaction: discord.Interaction):
         if not interaction.guild:
             embed = discord.Embed(description="This command can only be used in a server.", color=0xdd2e44)

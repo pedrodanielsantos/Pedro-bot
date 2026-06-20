@@ -32,12 +32,12 @@ class image(commands.GroupCog):
 
     @app_commands.command(
         name="petpet",
-        description="Generate a patpat gif from an avatar, image URL, or attachment."
+        description="Generate a patpat gif from an avatar, image URL, or attachment"
     )
     @app_commands.describe(
-        user="User whose avatar to use as image.",
-        url="URL to fetch image from.",
-        image="Image attachment to use."
+        user="User whose avatar to use as image",
+        url="URL to fetch image from",
+        image="Image attachment to use"
     )
     async def petpet(
         self,
@@ -107,15 +107,15 @@ class image(commands.GroupCog):
 
     @app_commands.command(
         name="heartlocket",
-        description="Generate a heart locket image from one or two image sources."
+        description="Generate a heart locket image from one or two image sources"
     )
     @app_commands.describe(
-        user1="First user whose avatar to use as image.",
-        user2="Second user whose avatar to use as image (optional).",
-        url1="First URL to fetch image from.",
-        url2="Second URL to fetch image from (optional).",
-        image1="First image attachment to use.",
-        image2="Second image attachment to use (optional)."
+        user1="First user whose avatar to use as image",
+        user2="Second user whose avatar to use as image (optional)",
+        url1="First URL to fetch image from",
+        url2="Second URL to fetch image from (optional)",
+        image1="First image attachment to use",
+        image2="Second image attachment to use (optional)"
     )
     async def heartlocket(
         self,
@@ -199,12 +199,12 @@ class image(commands.GroupCog):
 
     @app_commands.command(
         name="explode",
-        description="Generate an exploding image effect from a user avatar, image URL, or attachment."
+        description="Generate an exploding image effect from a user avatar, image URL, or attachment"
     )
     @app_commands.describe(
-        user="User whose avatar to use as image.",
-        url="URL to fetch image from.",
-        image="Image attachment to use."
+        user="User whose avatar to use as image",
+        url="URL to fetch image from",
+        image="Image attachment to use"
     )
     async def explode(
         self,
