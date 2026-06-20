@@ -18,10 +18,11 @@ class Set(commands.GroupCog, group_name="set"):
         if interaction.user.guild_permissions.administrator:
             return True
         # must respond to the interaction or it errors
-        await interaction.response.send_message(
-            "You must be an **administrator** to use `/set` commands.",
-            ephemeral=True
+        embed = discord.Embed(
+            description="You must be an **administrator** to use `/set` commands.",
+            color=0xdd2e44
         )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return False
 
     @app_commands.command(name="embedcolor", description="Set or reset the server's embed color")
@@ -29,7 +30,7 @@ class Set(commands.GroupCog, group_name="set"):
     async def embed_color(self, interaction: discord.Interaction, hex_code: app_commands.Transform[discord.Color, HexColorTransformer] = None):
         if not hex_code:
             await set_embed_color(interaction.guild_id, None, interaction.user.id)
-            embed = discord.Embed(description="✅ Embed color has been reset to default.", color=discord.Color(EMBED_COLOR))
+            embed = discord.Embed(description="Embed color has been reset to default.", color=discord.Color(EMBED_COLOR))
             await interaction.response.send_message(embed=embed)
             return
 
@@ -38,7 +39,7 @@ class Set(commands.GroupCog, group_name="set"):
         clean_hex = f"{color.value:06X}"
         await set_embed_color(interaction.guild_id, clean_hex, interaction.user.id)
 
-        embed = discord.Embed(description=f"✅ Embed color has been updated to `#{clean_hex}`.", color=color)
+        embed = discord.Embed(description=f"Embed color has been updated to `#{clean_hex}`.", color=color)
         await interaction.response.send_message(embed=embed)
 
 async def setup(bot: commands.Bot):
