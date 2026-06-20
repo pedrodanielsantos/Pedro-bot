@@ -13,3 +13,5 @@ VOICE_NAME_MAX_LENGTH = 100    # 100 is the maximum discord will display (tested
 # Embed settings
 EMBED_COLOR = 0x4c4c54
 EMBED_COLOR_WARNING = 0xffcc4d
+SUCCESS_COLOR = 0x77b255
+ERROR_COLOR = 0xdd2e44

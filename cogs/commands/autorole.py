@@ -1,7 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from config.constants import EMBED_COLOR
+from config.constants import EMBED_COLOR, SUCCESS_COLOR, ERROR_COLOR
 from db.database import get_embed_color, add_autorole, remove_autorole, get_autoroles
 
 @app_commands.default_permissions(manage_roles=True)
@@ -18,7 +18,7 @@ class Autorole(commands.GroupCog, group_name="autorole"):
         # must respond to the interaction or it errors
         embed = discord.Embed(
             description="You must have the **Manage Roles** permission to use `/autorole` commands.",
-            color=0xdf2e43
+            color=ERROR_COLOR
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return False
@@ -60,7 +60,7 @@ class Autorole(commands.GroupCog, group_name="autorole"):
         
         embed = discord.Embed(
             description=f"Successfully added {role.mention} to the autorole list.",
-            color=0x77b255
+            color=SUCCESS_COLOR
         )
         await interaction.response.send_message(embed=embed)
 
@@ -72,7 +72,7 @@ class Autorole(commands.GroupCog, group_name="autorole"):
         
         embed = discord.Embed(
             description=f"Successfully removed {role.mention} from the autorole list.",
-            color=0x77b255
+            color=SUCCESS_COLOR
         )
         await interaction.response.send_message(embed=embed)
 
@@ -86,7 +86,7 @@ class Autorole(commands.GroupCog, group_name="autorole"):
         if not role_ids:
             embed = discord.Embed(
                 description="There are currently no autoroles configured for this server.",
-                color=0xdd2e44
+                color=ERROR_COLOR
             )
             return await interaction.response.send_message(embed=embed)
 

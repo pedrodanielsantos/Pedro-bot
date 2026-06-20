@@ -5,6 +5,7 @@ from discord import app_commands
 import aiohttp
 import gc
 from dotenv import load_dotenv
+from config.constants import ERROR_COLOR
 
 # Load environment variables
 load_dotenv()
@@ -32,9 +33,8 @@ class Cat(commands.Cog):
         try:
             async with self.session.get(api_url, headers=headers) as response:
                 if response.status != 200:
-                    await interaction.followup.send(
-                        f"API request failed with status code {response.status}."
-                    )
+                    embed = discord.Embed(description=f"API request failed with status code {response.status}.", color=ERROR_COLOR)
+                    await interaction.followup.send(embed=embed)
                     return
 
                 data = await response.json()
@@ -42,9 +42,11 @@ class Cat(commands.Cog):
                     image_url = data[0]["url"]
                     await interaction.followup.send(image_url)
                 else:
-                    await interaction.followup.send("No image found.")
+                    embed = discord.Embed(description="No image found.", color=ERROR_COLOR)
+                    await interaction.followup.send(embed=embed)
         except aiohttp.ClientError as e:
-            await interaction.followup.send(f"An error occurred: {e}")
+            embed = discord.Embed(description=f"An error occurred: {e}", color=ERROR_COLOR)
+            await interaction.followup.send(embed=embed)
 
 
 async def setup(bot: commands.Bot):

@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import os
+from config.constants import SUCCESS_COLOR, ERROR_COLOR
 
 class DeveloperTools(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -8,13 +9,13 @@ class DeveloperTools(commands.Cog):
 
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
         if isinstance(error, commands.CheckFailure):
-            embed = discord.Embed(description="You are not authorized to use this command.", color=0xf41921)
+            embed = discord.Embed(description="You are not authorized to use this command.", color=ERROR_COLOR)
             await ctx.reply(embed=embed, delete_after=5)
         elif isinstance(error, commands.MissingRequiredArgument):
-            embed = discord.Embed(description=f"Missing required argument: `{error.param.name}`", color=0xf41921)
+            embed = discord.Embed(description=f"Missing required argument: `{error.param.name}`", color=ERROR_COLOR)
             await ctx.reply(embed=embed)
         else:
-            embed = discord.Embed(description=f"An error occurred: {error}", color=0xf41921)
+            embed = discord.Embed(description=f"An error occurred: {error}", color=ERROR_COLOR)
             await ctx.reply(embed=embed)
             print(f"Error in developer command: {error}")
 
@@ -77,25 +78,27 @@ class DeveloperTools(commands.Cog):
 
             if failed:
                 details = "\n".join(f"`{ext}`: {e}" for ext, e in failed)
-                embed = discord.Embed(description=f"Reloaded all extensions, but {len(failed)} failed:\n```py\n{details}\n```", color=0xf41921)
+                embed = discord.Embed(description=f"Reloaded all extensions, but {len(failed)} failed:\n```py\n{details}\n```", color=ERROR_COLOR)
                 await ctx.reply(embed=embed)
             else:
-                await ctx.reply(f"✅ Reloaded all `{len(self.bot.extensions)}` extensions")
+                embed = discord.Embed(description=f"Reloaded all `{len(self.bot.extensions)}` extensions", color=SUCCESS_COLOR)
+                await ctx.reply(embed=embed)
             return
 
         extension = self.find_extension(cog)
 
         if not extension:
-            embed = discord.Embed(description=f"Could not find extension matching `{cog}`.", color=0xf41921)
+            embed = discord.Embed(description=f"Could not find extension matching `{cog}`.", color=ERROR_COLOR)
             await ctx.reply(embed=embed)
             return
 
         try:
             await self.bot.reload_extension(extension)
-            await ctx.reply(f"✅ Reloaded `{extension}`")
+            embed = discord.Embed(description=f"Reloaded `{extension}`", color=SUCCESS_COLOR)
+            await ctx.reply(embed=embed)
             print(f"Reloaded extension: {extension}")
         except Exception as e:
-            embed = discord.Embed(description=f"Failed to reload `{extension}`:\n```py\n{e}\n```", color=0xf41921)
+            embed = discord.Embed(description=f"Failed to reload `{extension}`:\n```py\n{e}\n```", color=ERROR_COLOR)
             await ctx.reply(embed=embed)
             print(f"Failed to reload extension {extension}: {e}")
 
@@ -108,16 +111,17 @@ class DeveloperTools(commands.Cog):
         extension = self.find_extension(cog)
 
         if not extension:
-            embed = discord.Embed(description=f"Could not find extension matching `{cog}`.", color=0xf41921)
+            embed = discord.Embed(description=f"Could not find extension matching `{cog}`.", color=ERROR_COLOR)
             await ctx.reply(embed=embed)
             return
 
         try:
             await self.bot.load_extension(extension)
-            await ctx.reply(f"✅ Loaded `{extension}`")
+            embed = discord.Embed(description=f"Loaded `{extension}`", color=SUCCESS_COLOR)
+            await ctx.reply(embed=embed)
             print(f"Loaded extension: {extension}")
         except Exception as e:
-            embed = discord.Embed(description=f"Failed to load `{extension}`:\n```py\n{e}\n```", color=0xf41921)
+            embed = discord.Embed(description=f"Failed to load `{extension}`:\n```py\n{e}\n```", color=ERROR_COLOR)
             await ctx.reply(embed=embed)
             print(f"Failed to load extension {extension}: {e}")
 
@@ -130,16 +134,17 @@ class DeveloperTools(commands.Cog):
         extension = self.find_extension(cog)
 
         if not extension:
-            embed = discord.Embed(description=f"Could not find extension matching `{cog}`.", color=0xf41921)
+            embed = discord.Embed(description=f"Could not find extension matching `{cog}`.", color=ERROR_COLOR)
             await ctx.reply(embed=embed)
             return
 
         try:
             await self.bot.unload_extension(extension)
-            await ctx.reply(f"✅ Unloaded `{extension}`")
+            embed = discord.Embed(description=f"Unloaded `{extension}`", color=SUCCESS_COLOR)
+            await ctx.reply(embed=embed)
             print(f"Unloaded extension: {extension}")
         except Exception as e:
-            embed = discord.Embed(description=f"Failed to unload `{extension}`:\n```py\n{e}\n```", color=0xf41921)
+            embed = discord.Embed(description=f"Failed to unload `{extension}`:\n```py\n{e}\n```", color=ERROR_COLOR)
             await ctx.reply(embed=embed)
             print(f"Failed to unload extension {extension}: {e}")
 
@@ -164,13 +169,13 @@ class DeveloperTools(commands.Cog):
             target = None
             target_desc = "globally"
 
-        msg = await ctx.reply(f"Syncing command tree {target_desc}...")
         try:
             synced = await self.bot.tree.sync(guild=target)
-            await msg.edit(content=f"✅ Synced {len(synced)} commands {target_desc}.")
+            embed = discord.Embed(description=f"Synced {len(synced)} commands {target_desc}.", color=SUCCESS_COLOR)
+            await ctx.reply(embed=embed)
         except Exception as e:
-            embed = discord.Embed(description=f"Sync failed: {e}", color=0xf41921)
-            await msg.edit(content=None, embed=embed)
+            embed = discord.Embed(description=f"Sync failed: {e}", color=ERROR_COLOR)
+            await ctx.reply(embed=embed)
             print(f"Sync failed: {e}")
 
     @commands.command(name="devhelp", hidden=True)
@@ -196,13 +201,13 @@ class DeveloperTools(commands.Cog):
             await msg.delete()
             print(f"Deleted message {message_id}")
         except discord.NotFound:
-            embed = discord.Embed(description=f"Message `{message_id}` not found.", color=0xf41921)
+            embed = discord.Embed(description=f"Message `{message_id}` not found.", color=ERROR_COLOR)
             await ctx.reply(embed=embed, delete_after=5)
         except discord.Forbidden:
-            embed = discord.Embed(description="I cannot delete that message (I can only delete my own messages in DMs).", color=0xf41921)
+            embed = discord.Embed(description="I cannot delete that message (I can only delete my own messages in DMs).", color=ERROR_COLOR)
             await ctx.reply(embed=embed, delete_after=5)
         except Exception as e:
-            embed = discord.Embed(description=f"Error: {e}", color=0xf41921)
+            embed = discord.Embed(description=f"Error: {e}", color=ERROR_COLOR)
             await ctx.reply(embed=embed, delete_after=5)
 
 async def setup(bot: commands.Bot):

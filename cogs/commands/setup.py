@@ -15,6 +15,8 @@ from config.constants import (
     VOICE_VQM,
     VOICE_REGION,
     EMBED_COLOR,
+    SUCCESS_COLOR,
+    ERROR_COLOR,
 )
 
 class Setup(commands.GroupCog, group_name="setup"):
@@ -34,7 +36,8 @@ class Setup(commands.GroupCog, group_name="setup"):
     @app_commands.describe(category="The category where lobby channels will be created")
     async def lobbies(self, interaction: discord.Interaction, category: discord.CategoryChannel):
         if not interaction.user.guild_permissions.manage_channels:
-            await interaction.response.send_message("You need **Manage Channels** permission to use this command.", ephemeral=True)
+            embed = discord.Embed(description="You need **Manage Channels** permission to use this command.", color=ERROR_COLOR)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
         await interaction.response.defer(ephemeral=True)
@@ -49,24 +52,28 @@ class Setup(commands.GroupCog, group_name="setup"):
                 rtc_region=VOICE_REGION,
             )
 
-        await interaction.followup.send(
-            f"Lobby system set in **{category.name}**:\n- {trigger.mention}",
-            ephemeral=True
+        embed = discord.Embed(
+            description=f"Lobby system set in **{category.name}**:\n- {trigger.mention}",
+            color=SUCCESS_COLOR
         )
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="welcome", description="Setup or disable the welcome message channel")
     @app_commands.describe(channel="The channel to send welcome messages in (leave empty to disable)")
     async def welcome(self, interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
         if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("You need **Administrator** permission to use this command.", ephemeral=True)
+            embed = discord.Embed(description="You need **Administrator** permission to use this command.", color=ERROR_COLOR)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
         if channel is None:
             await set_welcome_channel(interaction.guild_id, None)
-            await interaction.response.send_message("✅ Welcome messages have been disabled.", ephemeral=True)
+            embed = discord.Embed(description="Welcome messages have been disabled.", color=SUCCESS_COLOR)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
         else:
             await set_welcome_channel(interaction.guild_id, channel.id)
-            await interaction.response.send_message(f"✅ Welcome messages will now be sent in {channel.mention}.", ephemeral=True)
+            embed = discord.Embed(description=f"Welcome messages will now be sent in {channel.mention}.", color=SUCCESS_COLOR)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):

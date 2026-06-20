@@ -1,7 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from config.constants import EMBED_COLOR
+from config.constants import EMBED_COLOR, ERROR_COLOR
 from db.database import get_embed_color
 import random
 
@@ -27,7 +27,8 @@ class Choice(commands.Cog):
         all_options = [opt.strip() for opt in options.split(",") if opt.strip()]
 
         if len(all_options) < 2:
-            await interaction.response.send_message("Please provide at least two options separated by commas.", ephemeral=True)
+            embed = discord.Embed(description="Please provide at least two options separated by commas.", color=ERROR_COLOR)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return
         
         # Select a random option

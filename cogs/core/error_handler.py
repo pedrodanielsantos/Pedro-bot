@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import traceback
 import asyncio
+from config.constants import ERROR_COLOR
 
 class ErrorHandler(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -48,7 +49,7 @@ class ErrorHandler(commands.Cog):
             traceback.print_exception(type(error), error, error.__traceback__)
             message = f"An unexpected error occurred: {error}"
 
-        embed = discord.Embed(description=message, color=0xdd2e44)
+        embed = discord.Embed(description=message, color=ERROR_COLOR)
 
         # Send the error message to the user
         if not interaction.response.is_done():

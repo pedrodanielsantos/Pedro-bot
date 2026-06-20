@@ -5,7 +5,7 @@ import asyncio
 from typing import Optional
 
 from db.database import lobby_is_tracked
-from config.constants import LOBBY_EMOJI, VOICE_NAME_MAX_LENGTH
+from config.constants import LOBBY_EMOJI, VOICE_NAME_MAX_LENGTH, SUCCESS_COLOR, ERROR_COLOR
 
 class Rename(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -17,26 +17,31 @@ class Rename(commands.Cog):
         await interaction.response.defer(ephemeral=True)
 
         if not interaction.user.voice or not interaction.user.voice.channel:
-            await interaction.followup.send("You must be connected to a lobby voice-channel.", ephemeral=True)
+            embed = discord.Embed(description="You must be connected to a lobby voice-channel.", color=ERROR_COLOR)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
         ch: discord.VoiceChannel = interaction.user.voice.channel
         if not await lobby_is_tracked(ch.id):
-            await interaction.followup.send("This channel isn’t a lobby voice-channel.", ephemeral=True)
+            embed = discord.Embed(description="This channel isn’t a lobby voice-channel.", color=ERROR_COLOR)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
         name = new_name.strip()
         final = f"{LOBBY_EMOJI} {name}"
 
         if len(final) > VOICE_NAME_MAX_LENGTH:
-            await interaction.followup.send(f"Name too long ({len(final)}/{VOICE_NAME_MAX_LENGTH}).", ephemeral=True)
+            embed = discord.Embed(description=f"Name too long ({len(final)}/{VOICE_NAME_MAX_LENGTH}).", color=ERROR_COLOR)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             return
-        
+
         try:
             await asyncio.wait_for(ch.edit(name=final, reason=f"Lobby rename by {interaction.user}"), timeout=5.0)
-            await interaction.followup.send(f"Lobby renamed to **{name}**.", ephemeral=True)
+            embed = discord.Embed(description=f"Lobby renamed to **{name}**.", color=SUCCESS_COLOR)
+            await interaction.followup.send(embed=embed, ephemeral=True)
         except asyncio.TimeoutError:
-            await interaction.followup.send("Rate limited. Discord limits channel renames to **2 per 10 minutes**, try again later.", ephemeral=True)
+            embed = discord.Embed(description="Rate limited. Discord limits channel renames to **2 per 10 minutes**, try again later.", color=ERROR_COLOR)
+            await interaction.followup.send(embed=embed, ephemeral=True)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Rename(bot))
