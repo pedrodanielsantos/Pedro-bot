@@ -10,7 +10,7 @@ class Embed(commands.GroupCog, group_name="embed"):
         super().__init__()
         self.bot = bot
 
-    @app_commands.command(name="json", description="Get the JSON source of an embed.")
+    @app_commands.command(name="json", description="Get the JSON source of an embed")
     @app_commands.describe(message_id="The ID of the message containing the embed.", channel="The channel the message is in (optional).")
     async def json(self, interaction: discord.Interaction, message_id: str, channel: discord.TextChannel = None):
         try:
