@@ -15,7 +15,7 @@ load_dotenv()
 JEYY_API_KEY = os.getenv("JEYY_API_KEY")
 
 
-class image(commands.GroupCog):
+class image(commands.GroupCog, group_name="image"):
     def __init__(self, bot: commands.Bot):
         super().__init__()
         self.bot = bot

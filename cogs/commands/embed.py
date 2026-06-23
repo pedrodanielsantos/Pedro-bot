@@ -5,7 +5,7 @@ import json
 from config.constants import EMBED_COLOR, SUCCESS_COLOR, ERROR_COLOR
 from db.database import get_embed_color
 
-class Embed(commands.GroupCog, name="embed"):
+class Embed(commands.GroupCog, group_name="embed"):
     def __init__(self, bot: commands.Bot):
         super().__init__()
         self.bot = bot
