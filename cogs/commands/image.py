@@ -7,6 +7,7 @@ from typing import Optional
 from dotenv import load_dotenv
 import os
 import gc
+from config.constants import ERROR_COLOR
 
 # Load environment variables
 load_dotenv()
@@ -50,18 +51,14 @@ class image(commands.GroupCog, group_name="image"):
         # Ensure only one image source is provided
         image_sources = [bool(user), bool(url), bool(image)]
         if sum(image_sources) > 1:
-            await interaction.response.send_message(
-                "Please provide only one image source: user, URL, or attachment.",
-                ephemeral=True
-            )
+            embed = discord.Embed(description="Please provide only one image source: user, URL, or attachment.", color=ERROR_COLOR)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
         # Ensure at least one image source is provided
         if not any(image_sources):
-            await interaction.response.send_message(
-                "No image specified. Please provide a user, URL, or attachment.",
-                ephemeral=True
-            )
+            embed = discord.Embed(description="No image specified. Please provide a user, URL, or attachment.", color=ERROR_COLOR)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
         # Defer the interaction response
@@ -81,26 +78,16 @@ class image(commands.GroupCog, group_name="image"):
         headers = {"Authorization": f"Bearer {JEYY_API_KEY}"}
         params = {"image_url": image_url}
 
-        try:
-            # Send the request to the API
-            async with self.session.get(api_url, params=params, headers=headers) as response:
-                if response.status != 200:
-                    await interaction.followup.send(
-                        f"API request failed with status code {response.status}.",
-                    )
-                    return
+        # Send the request to the API
+        async with self.session.get(api_url, params=params, headers=headers) as response:
+            response.raise_for_status()
 
-                # Read the response as binary (GIF)
-                gif_data = await response.read()
+            # Read the response as binary (GIF)
+            gif_data = await response.read()
 
-                # Send the gif back to the user
-                await interaction.followup.send(
-                    file=discord.File(io.BytesIO(gif_data), filename="patpat.gif")
-                )
-        except aiohttp.ClientError as e:
-            # Handle errors with the API request
+            # Send the gif back to the user
             await interaction.followup.send(
-                f"An error occurred while fetching the image: {e}",
+                file=discord.File(io.BytesIO(gif_data), filename="patpat.gif")
             )
 
 # ------------------------------------------------------------------------------------------- heartlocket Command -------------------------------------------------------------------------------------------
@@ -149,10 +136,8 @@ class image(commands.GroupCog, group_name="image"):
 
         # Ensure at least one image source for image_url
         if not image_url_candidates:
-            await interaction.response.send_message(
-                "No image specified for the first image. Please provide a user, URL, or attachment.",
-                ephemeral=True
-            )
+            embed = discord.Embed(description="No image specified for the first image. Please provide a user, URL, or attachment.", color=ERROR_COLOR)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
         # Assign image_url and image_url_2
@@ -173,26 +158,16 @@ class image(commands.GroupCog, group_name="image"):
         if image_url_2:
             params["image_url_2"] = image_url_2
 
-        try:
-            # Send the request to the API
-            async with self.session.get(api_url, params=params, headers=headers) as response:
-                if response.status != 200:
-                    await interaction.followup.send(
-                        f"API request failed with status code {response.status}.",
-                    )
-                    return
+        # Send the request to the API
+        async with self.session.get(api_url, params=params, headers=headers) as response:
+            response.raise_for_status()
 
-                # Read the response as binary (image file)
-                img_data = await response.read()
+            # Read the response as binary (image file)
+            img_data = await response.read()
 
-                # Send the image back to the user
-                await interaction.followup.send(
-                    file=discord.File(io.BytesIO(img_data), filename="heart_locket.gif")
-                )
-        except aiohttp.ClientError as e:
-            # Handle errors with the API request
+            # Send the image back to the user
             await interaction.followup.send(
-                f"An error occurred while fetching the image: {e}",
+                file=discord.File(io.BytesIO(img_data), filename="heart_locket.gif")
             )
 
 # ------------------------------------------------------------------------------------------- explode Command -------------------------------------------------------------------------------------------
@@ -216,18 +191,14 @@ class image(commands.GroupCog, group_name="image"):
         # Ensure only one image source is provided
         image_sources = [bool(user), bool(url), bool(image)]
         if sum(image_sources) > 1:
-            await interaction.response.send_message(
-                "Please provide only one image source: user, URL, or attachment.",
-                ephemeral=True
-            )
+            embed = discord.Embed(description="Please provide only one image source: user, URL, or attachment.", color=ERROR_COLOR)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
         # Ensure at least one image source is provided
         if not any(image_sources):
-            await interaction.response.send_message(
-                "No image specified. Please provide a user, URL, or attachment.",
-                ephemeral=True
-            )
+            embed = discord.Embed(description="No image specified. Please provide a user, URL, or attachment.", color=ERROR_COLOR)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
         # Defer the interaction response
@@ -247,26 +218,16 @@ class image(commands.GroupCog, group_name="image"):
         headers = {"Authorization": f"Bearer {JEYY_API_KEY}"}
         params = {"image_url": image_url}
 
-        try:
-            # Send the request to the API
-            async with self.session.get(api_url, params=params, headers=headers) as response:
-                if response.status != 200:
-                    await interaction.followup.send(
-                        f"API request failed with status code {response.status}.",
-                    )
-                    return
+        # Send the request to the API
+        async with self.session.get(api_url, params=params, headers=headers) as response:
+            response.raise_for_status()
 
-                # Read the response as binary (image file)
-                img_data = await response.read()
+            # Read the response as binary (image file)
+            img_data = await response.read()
 
-                # Send the image back to the user
-                await interaction.followup.send(
-                    file=discord.File(io.BytesIO(img_data), filename="explode.gif")
-                )
-        except aiohttp.ClientError as e:
-            # Handle errors with the API request
+            # Send the image back to the user
             await interaction.followup.send(
-                f"An error occurred while fetching the image: {e}",
+                file=discord.File(io.BytesIO(img_data), filename="explode.gif")
             )
 
 async def setup(bot: commands.Bot):

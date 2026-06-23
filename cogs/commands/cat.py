@@ -30,23 +30,16 @@ class Cat(commands.Cog):
         headers = {"x-api-key": CAT_API_KEY}
 
         await interaction.response.defer(thinking=True)
-        try:
-            async with self.session.get(api_url, headers=headers) as response:
-                if response.status != 200:
-                    embed = discord.Embed(description=f"API request failed with status code {response.status}.", color=ERROR_COLOR)
-                    await interaction.followup.send(embed=embed)
-                    return
+        async with self.session.get(api_url, headers=headers) as response:
+            response.raise_for_status()
 
-                data = await response.json()
-                if data:
-                    image_url = data[0]["url"]
-                    await interaction.followup.send(image_url)
-                else:
-                    embed = discord.Embed(description="No image found.", color=ERROR_COLOR)
-                    await interaction.followup.send(embed=embed)
-        except aiohttp.ClientError as e:
-            embed = discord.Embed(description=f"An error occurred: {e}", color=ERROR_COLOR)
-            await interaction.followup.send(embed=embed)
+            data = await response.json()
+            if data:
+                image_url = data[0]["url"]
+                await interaction.followup.send(image_url)
+            else:
+                embed = discord.Embed(description="No image found.", color=ERROR_COLOR)
+                await interaction.followup.send(embed=embed)
 
 
 async def setup(bot: commands.Bot):

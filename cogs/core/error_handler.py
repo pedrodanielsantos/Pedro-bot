@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import traceback
 import asyncio
+import aiohttp
 from config.constants import ERROR_COLOR
 
 class ErrorHandler(commands.Cog):
@@ -30,17 +31,19 @@ class ErrorHandler(commands.Cog):
             message = "The target resource was not found."
         elif isinstance(error, asyncio.TimeoutError):
             message = "Operation timed out."
+        elif isinstance(error, aiohttp.ClientResponseError):
+            message = f"API request failed with status code {error.status}."
+        elif isinstance(error, aiohttp.ClientError):
+            message = f"An error occurred while contacting the API: {error}"
         elif isinstance(error, discord.HTTPException):
             if error.status == 429:
-                retry_after = error.response.headers.get("Retry-After")
+                message = "Rate limited. Please wait a moment and try again."
+                retry_after = error.response.headers.get("Retry-After") if error.response else None
                 if retry_after:
                     try:
-                        retry_float = float(retry_after)
-                        message = f"Rate limited. Please try again in ~{retry_float:.1f}s."
+                        message = f"Rate limited. Please try again in ~{float(retry_after):.1f}s."
                     except ValueError:
-                        message = "Rate limited. Please wait a moment and try again."
-                else:
-                    message = "Rate limited. Please wait a moment and try again."
+                        pass
             else:
                 message = f"HTTP Error: {error.status}"
         else:
