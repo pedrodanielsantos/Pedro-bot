@@ -14,7 +14,10 @@ class Stats(commands.Cog):
     async def stats(self, interaction: discord.Interaction):
         """Displays technical information about the bot."""
         uptime = datetime.utcnow() - self.start_time
-        uptime_str = str(uptime).split(".")[0]
+        days, remainder = divmod(int(uptime.total_seconds()), 86400)
+        hours, remainder = divmod(remainder, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        uptime_str = f"{days}d {hours}h {minutes}m {seconds}s"
 
         server_count = len(self.bot.guilds)
         member_count = sum(g.member_count for g in self.bot.guilds if g.member_count)
