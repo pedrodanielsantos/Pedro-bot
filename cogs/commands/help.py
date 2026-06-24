@@ -4,14 +4,50 @@ from discord.ext import commands
 from config.constants import EMBED_COLOR
 from db.database import get_embed_color
 
-COG_GROUPS = {
-    "General": ["HelpCog", "Rules"],
-    "Settings": ["Set"],
-    "Lobbies": ["Setup", "Rename", "Resize"],
-    "Image Manipulation": ["Image"],
-    "Random Fun": ["Dog", "Cat", "EightBall", "Choice"],
-    "Utility": ["Ping", "Avatar", "UserInfo", "ServerInfo", "Stats", "Embed"]
+# Commands are categorized by their qualified name. A key may be a whole
+# group (e.g. "image") or a single subcommand (e.g. "setup welcome"); the
+# more specific subcommand entry wins over its group's entry. Anything not
+# listed here falls into DEFAULT_CATEGORY so it can never silently vanish.
+COMMAND_CATEGORIES = {
+    # General
+    "help": "General",
+    "rules": "General",
+    # Settings
+    "set": "Settings",
+    "autorole": "Settings",
+    "setup welcome": "Settings",
+    # Lobbies
+    "setup lobbies": "Lobbies",
+    "rename": "Lobbies",
+    "resize": "Lobbies",
+    # Image Manipulation
+    "image": "Image Manipulation",
+    # Random Fun
+    "dog": "Random Fun",
+    "cat": "Random Fun",
+    "8ball": "Random Fun",
+    "choice": "Random Fun",
+    # Utility
+    "ping": "Utility",
+    "avatar": "Utility",
+    "userinfo": "Utility",
+    "serverinfo": "Utility",
+    "stats": "Utility",
+    "embed": "Utility",
 }
+
+# Order in which categories are rendered. Categories produced at runtime but
+# not listed here (including DEFAULT_CATEGORY) are appended afterwards.
+CATEGORY_ORDER = [
+    "General",
+    "Settings",
+    "Lobbies",
+    "Image Manipulation",
+    "Random Fun",
+    "Utility",
+]
+
+DEFAULT_CATEGORY = "Other"
 
 class HelpView(discord.ui.View):
     def __init__(self, pages):
@@ -61,6 +97,30 @@ class HelpCog(commands.Cog):
         view = HelpView(pages)
         await interaction.followup.send(embed=pages[0], view=view)
 
+    @staticmethod
+    def _category_for(qualified_name: str) -> str:
+        # Prefer an exact subcommand match, then fall back to the group name.
+        if qualified_name in COMMAND_CATEGORIES:
+            return COMMAND_CATEGORIES[qualified_name]
+        root = qualified_name.split(" ", 1)[0]
+        return COMMAND_CATEGORIES.get(root, DEFAULT_CATEGORY)
+
+    def _collect_commands(self):
+        """Bucket every registered slash command by category, keyed leaf-first."""
+        categorized: dict[str, list[str]] = {}
+        for cmd in self.bot.tree.walk_commands():
+            if not isinstance(cmd, app_commands.Command):
+                continue  # skip Group containers; their leaves are walked too
+            category = self._category_for(cmd.qualified_name)
+            desc = cmd.description or "No description provided."
+            line = f"**/{cmd.qualified_name}**: {desc}\n"
+            categorized.setdefault(category, []).append(line)
+
+        # Render known categories first (in declared order), then any extras.
+        ordered = [c for c in CATEGORY_ORDER if c in categorized]
+        ordered += [c for c in categorized if c not in CATEGORY_ORDER]
+        return [(c, "".join(sorted(categorized[c]))) for c in ordered]
+
     async def get_help_pages(self, guild_id=None):
         db_color = await get_embed_color(guild_id) if guild_id else None
         if db_color:
@@ -69,56 +129,23 @@ class HelpCog(commands.Cog):
             color = discord.Color(EMBED_COLOR)
 
         pages = []
-        current_embed = discord.Embed(
-            title="Help",
-            description="Welcome to the bot's help section!",
-            color=color,
-        )
+        current_embed = discord.Embed(title="Help", color=color)
 
-        for category, cog_names in COG_GROUPS.items():
-            field_value = ""
-            for cog_name in cog_names:
-                cog = self.bot.get_cog(cog_name)
-                if cog:
-                    if isinstance(cog, commands.GroupCog):
-                        root_group = cog.app_command
-                        for sub in root_group.commands:
-                            desc = sub.description or "No description provided."
-                            full_name = f"{root_group.name} {sub.name}"
-                            field_value += f"**/{full_name}**: {desc}\n"
-                    else:
-                        for cmd in cog.get_app_commands():
-                            if isinstance(cmd, app_commands.Group):
-                                for sub in cmd.commands:
-                                    desc = sub.description or "No description provided."
-                                    full_name = f"{cmd.name} {sub.name}"
-                                    field_value += f"**/{full_name}**: {desc}\n"
-                            else:
-                                desc = cmd.description or "No description provided."
-                                field_value += f"**/{cmd.name}**: {desc}\n"
+        for category, field_value in self._collect_commands():
+            if not field_value:
+                continue
 
-                        # Also check for hybrid commands (which are stored as text commands)
-                        for cmd in cog.get_commands():
-                            if isinstance(cmd, commands.HybridCommand):
-                                desc = cmd.description or "No description provided."
-                                field_value += f"**/{cmd.name}**: {desc}\n"
-            
-            if field_value:
-                # Calculate current size to check against Discord limits (6000 chars total, 25 fields)
-                current_size = len(current_embed.title or "") + len(current_embed.description or "")
-                for f in current_embed.fields:
-                    current_size += len(f.name) + len(f.value)
-                
-                # If adding this field exceeds safe limit (5000) or field count (25), start new page
-                if (current_size + len(category) + len(field_value) > 5000) or (len(current_embed.fields) >= 25):
-                    pages.append(current_embed)
-                    current_embed = discord.Embed(
-                        title="Help",
-                        description="Welcome to the bot's help section!",
-                        color=color,
-                    )
-                
-                current_embed.add_field(name=category, value=field_value, inline=False)
+            # Calculate current size to check against Discord limits (6000 chars total, 25 fields)
+            current_size = len(current_embed.title or "") + len(current_embed.description or "")
+            for f in current_embed.fields:
+                current_size += len(f.name) + len(f.value)
+
+            # If adding this field exceeds safe limit (5000) or field count (25), start new page
+            if (current_size + len(category) + len(field_value) > 5000) or (len(current_embed.fields) >= 25):
+                pages.append(current_embed)
+                current_embed = discord.Embed(title="Help", color=color)
+
+            current_embed.add_field(name=category, value=field_value, inline=False)
 
         pages.append(current_embed)
 
