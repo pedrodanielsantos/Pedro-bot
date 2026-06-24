@@ -1,9 +1,9 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+import io
 import json
-from config.constants import EMBED_COLOR, SUCCESS_COLOR, ERROR_COLOR
-from db.database import get_embed_color
+from config.constants import SUCCESS_COLOR, ERROR_COLOR
 
 class Embed(commands.GroupCog, group_name="embed"):
     def __init__(self, bot: commands.Bot):
@@ -32,27 +32,19 @@ class Embed(commands.GroupCog, group_name="embed"):
         embed_data = message.embeds[0].to_dict()
         json_output = json.dumps(embed_data, indent=4)
 
-        # Determine the embed color
-        db_color = await get_embed_color(interaction.guild_id)
-        if db_color:
-            color = discord.Color(int(db_color, 16))
-        else:
-            color = discord.Color(EMBED_COLOR)
-
-        # Create the response embed
-        embed = discord.Embed(
-            title="Embed Source",
-            description=f"```json\n{json_output}\n```",
-            color=color
+        # Send the source as a file attachment to avoid the embed description
+        # length limit, code-block breakouts, and line-break escaping issues.
+        file = discord.File(
+            io.BytesIO(json_output.encode("utf-8")),
+            filename=f"{msg_id}.json"
         )
-
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(file=file)
 
     @app_commands.command(name="createjson", description="Create an embed using raw JSON")
     @app_commands.describe(data="The JSON data for the embed.", channel="The channel to send the embed to (optional)")
     async def createjson(self, interaction: discord.Interaction, data: str, channel: discord.TextChannel = None):
         try:
-            embed_data = json.loads(data)
+            embed_data = json.loads(data, strict=False)
             embed = discord.Embed.from_dict(embed_data)
         except json.JSONDecodeError:
             embed = discord.Embed(description="Invalid JSON format.", color=ERROR_COLOR)
@@ -89,7 +81,7 @@ class Embed(commands.GroupCog, group_name="embed"):
             return
 
         try:
-            embed_data = json.loads(data)
+            embed_data = json.loads(data, strict=False)
             embed = discord.Embed.from_dict(embed_data)
         except Exception as e:
             embed = discord.Embed(description=f"Invalid JSON or Embed data: {e}", color=ERROR_COLOR)
