@@ -35,6 +35,8 @@ class Stats(commands.Cog):
         )
         embed.add_field(name="🌎 Servers", value=f"`{server_count}`", inline=True)
         embed.add_field(name="👥 Members", value=f"`{member_count}`", inline=True)
+        latency = round(self.bot.latency * 1000)
+        embed.add_field(name="📶 Latency", value=f"`{latency}ms`", inline=True)
         embed.add_field(name="💠 Shards", value=f"`{shard_count}`", inline=True)
         embed.add_field(name="⏱️ Uptime", value=f"`{uptime_str}`", inline=True)
 
