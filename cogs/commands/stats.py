@@ -38,8 +38,8 @@ class Stats(commands.Cog):
         channel_count = sum(len(guild.channels) for guild in self.bot.guilds)
         embed.add_field(name="💬 Channels", value=f"`{channel_count}`", inline=True)
         latency = round(self.bot.latency * 1000)
-        embed.add_field(name="📶 Latency", value=f"`{latency}ms`", inline=True)
         embed.add_field(name="💠 Shards", value=f"`{shard_count}`", inline=True)
+        embed.add_field(name="📶 Latency", value=f"`{latency}ms`", inline=True)
         embed.add_field(name="⏱️ Uptime", value=f"`{uptime_str}`", inline=True)
 
         await interaction.response.send_message(embed=embed)
