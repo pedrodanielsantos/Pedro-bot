@@ -21,26 +21,26 @@ COMMON_IMAGE_DESCRIBE = {
 
 # (command name, jeyy endpoint, output filename, description)
 SIMPLE_EFFECTS: list[tuple[str, str, str, str]] = [
-    ("petpet", "patpat", "patpat.gif", "Generate a patpat gif from an avatar, image URL, or attachment"),
-    ("explode", "bomb", "explode.gif", "Generate an exploding image effect from a user avatar, image URL, or attachment"),
-    ("bonk", "bonks", "bonk.gif", "Generate a bonk gif from an avatar, image URL, or attachment"),
-    ("burn", "burn", "burn.gif", "Generate a burning image effect from a user avatar, image URL, or attachment"),
-    ("cow", "cow", "cow.gif", "Generate a cow image effect from a user avatar, image URL, or attachment"),
-    ("cube", "cube", "cube.gif", "Generate a spinning cube image effect from a user avatar, image URL, or attachment"),
-    ("flush", "flush", "flush.gif", "Generate a flushing toilet image effect from a user avatar, image URL, or attachment"),
-    ("math", "equations", "math.gif", "Generate an equations image effect from a user avatar, image URL, or attachment"),
-    ("flag", "flag", "flag.gif", "Generate a waving flag image effect from a user avatar, image URL, or attachment"),
-    ("sphere", "globe", "sphere.gif", "Generate a spinning globe image effect from a user avatar, image URL, or attachment"),
-    ("pyramid", "pyramid", "pyramid.gif", "Generate a pyramid image effect from a user avatar, image URL, or attachment"),
-    ("spin", "spin", "spin.gif", "Generate a spinning image effect from a user avatar, image URL, or attachment"),
-    ("stereo", "stereo", "stereo.gif", "Generate a stereo image effect from a user avatar, image URL, or attachment"),
-    ("stretch", "stretch", "stretch.gif", "Generate a stretch image effect from a user avatar, image URL, or attachment"),
-    ("rain", "rain", "rain.gif", "Generate a falling rain image effect from a user avatar, image URL, or attachment"),
-    ("laundry", "laundry", "laundry.gif", "Generate a laundry image effect from a user avatar, image URL, or attachment"),
-    ("print", "print", "print.gif", "Generate a printing image effect from a user avatar, image URL, or attachment"),
-    ("matrix", "matrix", "matrix.gif", "Generate a Matrix-style digital rain image effect from a user avatar, image URL, or attachment"),
-    ("sensitive", "sensitive", "sensitive.gif", "Overlay a sensitive content warning on a user avatar, image URL, or attachment"),
-    ("billboard", "billboard", "billboard.gif", "Generate a billboard image effect from a user avatar, image URL, or attachment"),
+    ("petpet", "patpat", "patpat.gif", "Pat an image"),
+    ("explode", "bomb", "explode.gif", "Blow up an image"),
+    ("bonk", "bonks", "bonk.gif", "Bonk an image"),
+    ("burn", "burn", "burn.gif", "Set an image on fire"),
+    ("cow", "cow", "cow.gif", "Turn an image into a cow"),
+    ("cube", "cube", "cube.gif", "Spin an image on a cube"),
+    ("flush", "flush", "flush.gif", "Flush an image down a toilet"),
+    ("math", "equations", "math.gif", "Cover an image in equations"),
+    ("flag", "flag", "flag.gif", "Wave an image like a flag"),
+    ("sphere", "globe", "sphere.gif", "Wrap an image around a spinning globe"),
+    ("pyramid", "pyramid", "pyramid.gif", "Turn an image into a pyramid"),
+    ("spin", "spin", "spin.gif", "Spin an image"),
+    ("stereo", "stereo", "stereo.gif", "Split an image into a stereo effect"),
+    ("stretch", "stretch", "stretch.gif", "Stretch an image"),
+    ("rain", "rain", "rain.gif", "Make it rain with an image"),
+    ("laundry", "laundry", "laundry.gif", "Toss an image in the laundry"),
+    ("print", "print", "print.gif", "Print out an image"),
+    ("matrix", "matrix", "matrix.gif", "Turn an image into the Matrix"),
+    ("sensitive", "sensitive", "sensitive.gif", "Slap a sensitive content warning on an image"),
+    ("billboard", "billboard", "billboard.gif", "Put an image on a billboard"),
 ]
 
 
@@ -111,7 +111,7 @@ class image(SessionMixin, commands.GroupCog, group_name="image"):
 
     @app_commands.command(
         name="heartlocket",
-        description="Generate a heart locket image from one or two image sources"
+        description="Put one or two images in a heart locket"
     )
     @app_commands.describe(
         user1="A user whose avatar to include",
@@ -164,7 +164,7 @@ class image(SessionMixin, commands.GroupCog, group_name="image"):
 
     @app_commands.command(
         name="ace",
-        description="Generate an Ace Attorney style dialogue image"
+        description="Make an Ace Attorney dialogue image"
     )
     @app_commands.describe(
         name="Character name",
@@ -201,7 +201,7 @@ class image(SessionMixin, commands.GroupCog, group_name="image"):
 
     @app_commands.command(
         name="glitch",
-        description="Generate a glitch image effect from a user avatar, image URL, or attachment"
+        description="Glitch an image"
     )
     @app_commands.describe(
         level="Intensity of the effect (1-10, default 3)",
@@ -229,7 +229,7 @@ class image(SessionMixin, commands.GroupCog, group_name="image"):
 
     @app_commands.command(
         name="hearts",
-        description="Generate a hearts image effect from a user avatar, image URL, or attachment"
+        description="Cover an image in hearts"
     )
     @app_commands.describe(
         rainbow="Apply rainbow coloring (default False)",
@@ -260,7 +260,7 @@ class image(SessionMixin, commands.GroupCog, group_name="image"):
 
     @app_commands.command(
         name="earthquake",
-        description="Generate a shaking earthquake image effect from a user avatar, image URL, or attachment"
+        description="Shake an image like an earthquake"
     )
     @app_commands.describe(
         level="Intensity of the effect (1-10, default 3)",
