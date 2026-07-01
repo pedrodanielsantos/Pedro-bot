@@ -39,13 +39,19 @@ def create_app(bot):
             "guilds": guilds,
         })
 
+    @app.get("/guilds/clear", response_class=HTMLResponse)
+    async def guild_list_clear():
+        return HTMLResponse("")
+
     @app.post("/cogs/reload/{extension:path}", response_class=HTMLResponse)
     async def reload_cog(request: Request, extension: str):
         error = None
         try:
             await bot.reload_extension(extension)
+            print(f"[Web] Reloaded extension: {extension}")
         except Exception as e:
             error = str(e)
+            print(f"[Web] Failed to reload extension {extension}: {e}")
         return templates.TemplateResponse(request=request, name="partials/cog_row.html", context={
             "extension": extension,
             "error": error,
@@ -55,16 +61,18 @@ def create_app(bot):
     async def unload_cog(extension: str):
         try:
             await bot.unload_extension(extension)
-        except Exception:
-            pass
+            print(f"[Web] Unloaded extension: {extension}")
+        except Exception as e:
+            print(f"[Web] Failed to unload extension {extension}: {e}")
         return HTMLResponse("")
 
     @app.post("/cogs/load")
     async def load_cog(extension: str = Form(...)):
         try:
             await bot.load_extension(extension)
-        except Exception:
-            pass
+            print(f"[Web] Loaded extension: {extension}")
+        except Exception as e:
+            print(f"[Web] Failed to load extension {extension}: {e}")
         return RedirectResponse("/", status_code=303)
 
     return app

@@ -4,3 +4,11 @@
     <span class="guild-meta">{{ guild.members }} members &middot; {{ guild.id }}</span>
 </div>
 {% endfor %}
+<div style="padding: 10px 0 2px; text-align: right;">
+    <button class="btn"
+        hx-get="/guilds/clear"
+        hx-target="#guild-list"
+        hx-swap="innerHTML">
+        Hide
+    </button>
+</div>
