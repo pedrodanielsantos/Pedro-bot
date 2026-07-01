@@ -2,7 +2,7 @@
 {% block content %}
 
 <header>
-    <div class="dot"></div>
+    <div class="dot" style="background: {{ 'var(--green)' if is_ready else 'var(--red)' }};"></div>
     <span class="header-title">{{ bot_name }}</span>
     <span class="header-sub">/ Dashboard</span>
 </header>
@@ -12,11 +12,19 @@
     <div class="stat-grid">
         <div class="card">
             <div class="stat-label">Status</div>
+            {% if is_ready %}
             <div class="stat-value" style="font-size: 20px; color: var(--green);">Online</div>
+            {% else %}
+            <div class="stat-value" style="font-size: 20px; color: var(--red);">Offline</div>
+            {% endif %}
         </div>
         <div class="card">
             <div class="stat-label">Latency</div>
+            {% if is_ready %}
             <div class="stat-value">{{ latency }}<span class="stat-unit">ms</span></div>
+            {% else %}
+            <div class="stat-value">—</div>
+            {% endif %}
         </div>
         <div class="card">
             <div class="stat-label">Uptime</div>
@@ -28,7 +36,7 @@
         <div class="guild-card-row">
             <div>
                 <div class="stat-label">Guilds</div>
-                <div class="stat-value">{{ guild_count }}</div>
+                <div class="stat-value">{{ guild_count if guild_count is not none else "—" }}</div>
             </div>
             <button class="btn"
                 hx-get="/guilds"

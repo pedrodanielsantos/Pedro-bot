@@ -21,10 +21,12 @@ def create_app(bot):
 
     @app.get("/", response_class=HTMLResponse)
     async def dashboard(request: Request):
+        ready = bot.is_ready()
         return templates.TemplateResponse(request=request, name="dashboard.html", context={
             "bot_name": bot.user.name if bot.user else "Bot",
-            "latency": round(bot.latency * 1000),
-            "guild_count": len(bot.guilds),
+            "is_ready": ready,
+            "latency": round(bot.latency * 1000) if ready else None,
+            "guild_count": len(bot.guilds) if ready else None,
             "uptime": _uptime(),
             "extensions": sorted(bot.extensions.keys()),
         })
