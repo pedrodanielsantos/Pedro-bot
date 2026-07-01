@@ -121,6 +121,20 @@ class HelpCog(commands.Cog):
         ordered += [c for c in categorized if c not in CATEGORY_ORDER]
         return [(c, "".join(sorted(categorized[c]))) for c in ordered]
 
+    @staticmethod
+    def _chunk_field_value(text: str, limit: int = 1024) -> list[str]:
+        """Split a field value into pieces that fit Discord's per-field character limit."""
+        chunks = []
+        current = ""
+        for line in text.splitlines(keepends=True):
+            if current and len(current) + len(line) > limit:
+                chunks.append(current)
+                current = ""
+            current += line
+        if current:
+            chunks.append(current)
+        return chunks
+
     async def get_help_pages(self, guild_id=None):
         db_color = await get_embed_color(guild_id) if guild_id else None
         if db_color:
@@ -135,17 +149,23 @@ class HelpCog(commands.Cog):
             if not field_value:
                 continue
 
-            # Calculate current size to check against Discord limits (6000 chars total, 25 fields)
-            current_size = len(current_embed.title or "") + len(current_embed.description or "")
-            for f in current_embed.fields:
-                current_size += len(f.name) + len(f.value)
+            for i, chunk in enumerate(self._chunk_field_value(field_value)):
+                if i > 0:
+                    # Continuation of an oversized category: always give it a fresh page.
+                    pages.append(current_embed)
+                    current_embed = discord.Embed(title="Help", color=color)
+                else:
+                    # Calculate current size to check against Discord limits (6000 chars total, 25 fields)
+                    current_size = len(current_embed.title or "") + len(current_embed.description or "")
+                    for f in current_embed.fields:
+                        current_size += len(f.name) + len(f.value)
 
-            # If adding this field exceeds safe limit (5000) or field count (25), start new page
-            if (current_size + len(category) + len(field_value) > 5000) or (len(current_embed.fields) >= 25):
-                pages.append(current_embed)
-                current_embed = discord.Embed(title="Help", color=color)
+                    # If adding this field exceeds safe limit (5000) or field count (25), start new page
+                    if (current_size + len(category) + len(chunk) > 5000) or (len(current_embed.fields) >= 25):
+                        pages.append(current_embed)
+                        current_embed = discord.Embed(title="Help", color=color)
 
-            current_embed.add_field(name=category, value=field_value, inline=False)
+                current_embed.add_field(name=category, value=chunk, inline=False)
 
         pages.append(current_embed)
 
