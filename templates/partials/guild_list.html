@@ -1,0 +1,6 @@
+{% for guild in guilds %}
+<div class="guild-item">
+    <span class="guild-name">{{ guild.name }}</span>
+    <span class="guild-meta">{{ guild.members }} members &middot; {{ guild.id }}</span>
+</div>
+{% endfor %}

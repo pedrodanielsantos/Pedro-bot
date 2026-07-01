@@ -1,0 +1,27 @@
+<tr id="cog-{{ extension | replace('.', '-') }}">
+    <td class="mono">
+        {{ extension }}
+        {% if error %}
+            <span class="badge badge-error">Error</span>
+            <span class="error-msg">{{ error }}</span>
+        {% else %}
+            <span class="badge badge-ok">Reloaded</span>
+        {% endif %}
+    </td>
+    <td>
+        <div class="actions">
+            <button class="btn"
+                hx-post="/cogs/reload/{{ extension }}"
+                hx-target="#cog-{{ extension | replace('.', '-') }}"
+                hx-swap="outerHTML">
+                Reload
+            </button>
+            <button class="btn btn-danger"
+                hx-post="/cogs/unload/{{ extension }}"
+                hx-target="#cog-{{ extension | replace('.', '-') }}"
+                hx-swap="outerHTML">
+                Unload
+            </button>
+        </div>
+    </td>
+</tr>

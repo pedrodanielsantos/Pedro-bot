@@ -2,3 +2,7 @@ discord.py
 python-dotenv
 aiosqlite
 aiohttp
+fastapi
+uvicorn
+jinja2
+python-multipart

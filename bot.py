@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 from db.database import initialize_databases, close_all_databases
 import asyncio
+import web
 
 # Load environment variables from .env file
 load_dotenv()
@@ -62,8 +63,8 @@ if __name__ == "__main__":
         await load_cogs(bot)
 
         try:
-            # Start the bot
-            await bot.start(TOKEN)
+            # Start the bot and web dashboard concurrently
+            await asyncio.gather(bot.start(TOKEN), web.start(bot))
         finally:
             # Unload all cogs to trigger cog_unload hooks
             for extension in list(bot.extensions.keys()):
