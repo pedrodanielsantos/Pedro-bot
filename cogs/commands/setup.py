@@ -1,7 +1,6 @@
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
-import asyncio
 from typing import Optional
 
 from db.database import (
@@ -23,7 +22,6 @@ class Setup(commands.GroupCog, group_name="setup"):
     def __init__(self, bot: commands.Bot):
         super().__init__()
         self.bot = bot
-        self.cleanup_lobbies.start()
 
     def cog_unload(self):
         self.cleanup_lobbies.cancel()
@@ -159,9 +157,10 @@ class Setup(commands.GroupCog, group_name="setup"):
                 finally:
                     await lobby_delete(channel_id)
 
-    @cleanup_lobbies.before_loop
-    async def before_cleanup(self):
-        await self.bot.wait_until_ready()
+    @commands.Cog.listener()
+    async def on_ready(self):
+        if not self.cleanup_lobbies.is_running():
+            self.cleanup_lobbies.start()
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Setup(bot))
