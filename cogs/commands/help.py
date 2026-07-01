@@ -49,11 +49,28 @@ CATEGORY_ORDER = [
 
 DEFAULT_CATEGORY = "Other"
 
+class CategorySelect(discord.ui.Select):
+    def __init__(self, category_starts: dict[str, int]):
+        self.category_starts = category_starts
+        options = [
+            discord.SelectOption(label=category, value=category)
+            for category in category_starts
+        ]
+        super().__init__(placeholder="Jump to a category...", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        view: HelpView = self.view
+        view.current_page = self.category_starts[self.values[0]]
+        view.update_buttons()
+        await interaction.response.edit_message(embed=view.pages[view.current_page], view=view)
+
 class HelpView(discord.ui.View):
-    def __init__(self, pages):
+    def __init__(self, pages, category_starts: dict[str, int]):
         super().__init__(timeout=None)
         self.pages = pages
         self.current_page = 0
+        if category_starts:
+            self.add_item(CategorySelect(category_starts))
         self.update_buttons()
 
     def update_buttons(self):
@@ -93,8 +110,8 @@ class HelpCog(commands.Cog):
     @app_commands.command(name="help", description="Displays the help message with all available commands")
     async def help_command(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        pages = await self.get_help_pages(interaction.guild_id)
-        view = HelpView(pages)
+        pages, category_starts = await self.get_help_pages(interaction.guild_id)
+        view = HelpView(pages, category_starts)
         await interaction.followup.send(embed=pages[0], view=view)
 
     @staticmethod
@@ -143,6 +160,7 @@ class HelpCog(commands.Cog):
             color = discord.Color(EMBED_COLOR)
 
         pages = []
+        category_starts: dict[str, int] = {}
         current_embed = discord.Embed(title="Help", color=color)
 
         for category, field_value in self._collect_commands():
@@ -165,6 +183,8 @@ class HelpCog(commands.Cog):
                         pages.append(current_embed)
                         current_embed = discord.Embed(title="Help", color=color)
 
+                    category_starts.setdefault(category, len(pages))
+
                 current_embed.add_field(name=category, value=chunk, inline=False)
 
         pages.append(current_embed)
@@ -173,7 +193,7 @@ class HelpCog(commands.Cog):
         for i, page in enumerate(pages):
             page.set_footer(text=f"Page {i + 1} of {total_pages}")
 
-        return pages
+        return pages, category_starts
 
 async def setup(bot):
     await bot.add_cog(HelpCog(bot))
