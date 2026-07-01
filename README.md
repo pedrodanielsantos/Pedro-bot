@@ -2,8 +2,8 @@
 
 # Pedro-bot
 
-A modular Discord bot with a live web dashboard — temporary voice lobbies,
-image manipulation, autoroles, welcome messages, and more.
+A modular Discord bot with a live web dashboard, featuring temporary voice
+lobbies, image manipulation, autoroles, welcome messages, and more.
 
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
 ![discord.py](https://img.shields.io/badge/discord.py-5865F2?logo=discord&logoColor=white)
@@ -24,17 +24,17 @@ bot and hot-reloading cogs without a restart.
 
 ## Features
 
-- **Temporary voice lobbies** — members join a trigger channel to spin up their
+- **Temporary voice lobbies**: members join a trigger channel to spin up their
   own voice channel, which they can rename and resize, and which is cleaned up
   automatically when empty.
-- **Image manipulation** — patpet, heart-locket, and explode effects from an
-  avatar, URL, or attachment (via the Jeyy API).
-- **Autoroles & welcome messages** — automatically assign roles to new members
+- **Image manipulation**: over 20 effects (petpet, heart lock, explode, glitch,
+  and more) applied to an avatar, URL, or attachment via the Jeyy API.
+- **Autoroles & welcome messages**: automatically assign roles to new members
   and greet them in a configurable channel.
-- **Server customization** — per-guild embed colors and server rules.
-- **Fun & utility** — random cat/dog images, magic 8-ball, random choice,
+- **Server customization**: per-guild embed colors and server rules.
+- **Fun & utility**: random cat/dog images, magic 8-ball, random choice,
   avatar/user/server info, and a raw-JSON embed builder.
-- **Live web dashboard** — status, latency, uptime, guild list, and a cog
+- **Live web dashboard**: status, latency, uptime, guild list, and a cog
   manager to load / unload / reload extensions on the fly.
 
 ## Dashboard
@@ -45,7 +45,7 @@ extensions without restarting the bot.
 
 ## Command Reference
 
-> This section is generated from the cogs by `scripts/gen_readme.py` — do not edit
+> This section is generated from the cogs by `scripts/gen_readme.py`, so don't edit
 > it by hand. It stays in sync with the bot's own `/help` command automatically.
 
 <!-- COMMANDS:START -->
@@ -166,7 +166,7 @@ Non-secret defaults (lobby names, voice region, embed colors, etc.) live in
 ### Running
 
 ```bash
-run.bat          # Windows — auto-restarts on crash
+run.bat          # Windows, auto-restarts on crash
 ```
 
 Or directly:
@@ -203,7 +203,7 @@ py -3.13 scripts/gen_readme.py
 
 A git hook (`scripts/hooks/`) can run this automatically on every commit. When
 the table changes, the hook stages the updated README and appends a note to your
-commit message — no separate "docs" commits.
+commit message, so you won't end up with separate "docs" commits.
 
 > [!IMPORTANT]
 > **Run once per machine.** Git hooks are not cloned or pushed, so on every
@@ -213,5 +213,5 @@ commit message — no separate "docs" commits.
 > git config core.hooksPath scripts/hooks
 > ```
 >
-> Without this, commits still work — the command table just won't auto-update on
-> that machine until you run `py -3.13 scripts/gen_readme.py` manually.
+> Without this, commits still work, but the command table just won't auto-update
+> on that machine until you run `py -3.13 scripts/gen_readme.py` manually.
