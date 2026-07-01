@@ -56,17 +56,39 @@ def create_app(bot):
             print(f"[Web] Failed to reload extension {extension}: {e}")
         return templates.TemplateResponse(request=request, name="partials/cog_row.html", context={
             "extension": extension,
+            "loaded": True,
             "error": error,
         })
 
     @app.post("/cogs/unload/{extension:path}", response_class=HTMLResponse)
-    async def unload_cog(extension: str):
+    async def unload_cog(request: Request, extension: str):
+        error = None
         try:
             await bot.unload_extension(extension)
             print(f"[Web] Unloaded extension: {extension}")
         except Exception as e:
+            error = str(e)
             print(f"[Web] Failed to unload extension {extension}: {e}")
-        return HTMLResponse("")
+        return templates.TemplateResponse(request=request, name="partials/cog_row.html", context={
+            "extension": extension,
+            "loaded": False,
+            "error": error,
+        })
+
+    @app.post("/cogs/load/{extension:path}", response_class=HTMLResponse)
+    async def load_cog_row(request: Request, extension: str):
+        error = None
+        try:
+            await bot.load_extension(extension)
+            print(f"[Web] Loaded extension: {extension}")
+        except Exception as e:
+            error = str(e)
+            print(f"[Web] Failed to load extension {extension}: {e}")
+        return templates.TemplateResponse(request=request, name="partials/cog_row.html", context={
+            "extension": extension,
+            "loaded": error is None,
+            "error": error,
+        })
 
     @app.post("/cogs/load")
     async def load_cog(extension: str = Form(...)):

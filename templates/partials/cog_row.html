@@ -4,12 +4,13 @@
         {% if error %}
             <span class="badge badge-error">Error</span>
             <span class="error-msg">{{ error }}</span>
-        {% else %}
+        {% elif loaded %}
             <span class="badge badge-ok">Reloaded</span>
         {% endif %}
     </td>
     <td>
         <div class="actions">
+            {% if loaded %}
             <button class="btn"
                 hx-post="/cogs/reload/{{ extension }}"
                 hx-target="#cog-{{ extension | replace('.', '-') }}"
@@ -22,6 +23,14 @@
                 hx-swap="outerHTML">
                 Unload
             </button>
+            {% else %}
+            <button class="btn btn-primary"
+                hx-post="/cogs/load/{{ extension }}"
+                hx-target="#cog-{{ extension | replace('.', '-') }}"
+                hx-swap="outerHTML">
+                Load
+            </button>
+            {% endif %}
         </div>
     </td>
 </tr>
