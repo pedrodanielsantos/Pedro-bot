@@ -136,7 +136,6 @@ DISCORD_BOT_TOKEN=your_discord_bot_token
 JEYY_API_KEY=your_jeyy_api_key       # image manipulation commands
 CAT_API_KEY=your_cat_api_key         # /cat
 DOG_API_KEY=your_dog_api_key         # /dog
-OPEN_WEBUI_API_KEY=your_key          # optional
 ```
 
 Non-secret defaults (lobby names, voice region, embed colors, etc.) live in
