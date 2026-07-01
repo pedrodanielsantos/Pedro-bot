@@ -252,7 +252,10 @@ class image(SessionMixin, commands.GroupCog, group_name="image"):
 
         await interaction.response.defer(thinking=True)
         await self._fetch_jeyy(
-            interaction, "hearts", {"image_url": image_url, "rainbow": rainbow}, "hearts.gif"
+            interaction,
+            "hearts",
+            {"image_url": image_url, "rainbow": str(rainbow).lower()},
+            "hearts.gif",
         )
 
     @app_commands.command(
