@@ -90,6 +90,68 @@ def _group_name(cls: ast.ClassDef) -> str | None:
     return None
 
 
+def _module_level_list(tree: ast.Module, name: str) -> list | None:
+    """Pull a top-level ``NAME = [...]`` list-of-literals assignment out of a module."""
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == name for t in node.targets
+        ):
+            value = node.value
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == name:
+            value = node.value
+        else:
+            continue
+        try:
+            return ast.literal_eval(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _factory_loop_commands(cls: ast.ClassDef, tree: ast.Module) -> list[tuple[str, str]]:
+    """Detect ``for a, b, ... in TABLE: locals()[a] = factory(...)`` blocks used to
+    register commands data-driven from a module-level table (see cogs/commands/image.py),
+    and pull (name, description) pairs out of that table.
+    """
+    results: list[tuple[str, str]] = []
+    for item in cls.body:
+        if not isinstance(item, ast.For):
+            continue
+        if not isinstance(item.target, ast.Tuple) or not isinstance(item.iter, ast.Name):
+            continue
+        var_names = [elt.id for elt in item.target.elts if isinstance(elt, ast.Name)]
+        if not var_names:
+            continue
+
+        registers_commands = any(
+            isinstance(stmt, ast.Assign)
+            and isinstance(stmt.targets[0], ast.Subscript)
+            and isinstance(stmt.targets[0].value, ast.Call)
+            and isinstance(stmt.targets[0].value.func, ast.Name)
+            and stmt.targets[0].value.func.id == "locals"
+            for stmt in item.body
+        )
+        if not registers_commands:
+            continue
+
+        table = _module_level_list(tree, item.iter.id)
+        if not table:
+            continue
+
+        name_idx = next((i for i, n in enumerate(var_names) if "name" in n.lower()), None)
+        desc_idx = next((i for i, n in enumerate(var_names) if "desc" in n.lower()), None)
+        if name_idx is None:
+            continue
+
+        for row in table:
+            if not isinstance(row, (tuple, list)) or name_idx >= len(row):
+                continue
+            name = row[name_idx]
+            desc = row[desc_idx] if desc_idx is not None and desc_idx < len(row) else DEFAULT_DESCRIPTION
+            results.append((name, desc))
+    return results
+
+
 def collect_commands() -> list[tuple[str, str]]:
     """Return (qualified_name, description) for every slash command in cogs/."""
     commands: list[tuple[str, str]] = []
@@ -115,6 +177,9 @@ def collect_commands() -> list[tuple[str, str]]:
                     desc = kwargs.get("description") or DEFAULT_DESCRIPTION
                     commands.append((qualified, desc))
                     break
+            for name, desc in _factory_loop_commands(cls, tree):
+                qualified = f"{group} {name}" if group else name
+                commands.append((qualified, desc))
     return commands
 
 
