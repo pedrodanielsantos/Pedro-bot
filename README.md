@@ -79,9 +79,31 @@ extensions without restarting the bot.
 
 | Command | Description |
 | --- | --- |
+| `/image ace` | Generate an Ace Attorney style dialogue image |
+| `/image billboard` | Generate a billboard image effect from a user avatar, image URL, or attachment |
+| `/image bonk` | Generate a bonk gif from an avatar, image URL, or attachment |
+| `/image burn` | Generate a burning image effect from a user avatar, image URL, or attachment |
+| `/image cow` | Generate a cow image effect from a user avatar, image URL, or attachment |
+| `/image cube` | Generate a spinning cube image effect from a user avatar, image URL, or attachment |
+| `/image earthquake` | Generate a shaking earthquake image effect from a user avatar, image URL, or attachment |
 | `/image explode` | Generate an exploding image effect from a user avatar, image URL, or attachment |
+| `/image flag` | Generate a waving flag image effect from a user avatar, image URL, or attachment |
+| `/image flush` | Generate a flushing toilet image effect from a user avatar, image URL, or attachment |
+| `/image glitch` | Generate a glitch image effect from a user avatar, image URL, or attachment |
 | `/image heartlocket` | Generate a heart locket image from one or two image sources |
+| `/image hearts` | Generate a hearts image effect from a user avatar, image URL, or attachment |
+| `/image laundry` | Generate a laundry image effect from a user avatar, image URL, or attachment |
+| `/image math` | Generate an equations image effect from a user avatar, image URL, or attachment |
+| `/image matrix` | Generate a Matrix-style digital rain image effect from a user avatar, image URL, or attachment |
 | `/image petpet` | Generate a patpat gif from an avatar, image URL, or attachment |
+| `/image print` | Generate a printing image effect from a user avatar, image URL, or attachment |
+| `/image pyramid` | Generate a pyramid image effect from a user avatar, image URL, or attachment |
+| `/image rain` | Generate a falling rain image effect from a user avatar, image URL, or attachment |
+| `/image sensitive` | Overlay a sensitive content warning on a user avatar, image URL, or attachment |
+| `/image sphere` | Generate a spinning globe image effect from a user avatar, image URL, or attachment |
+| `/image spin` | Generate a spinning image effect from a user avatar, image URL, or attachment |
+| `/image stereo` | Generate a stereo image effect from a user avatar, image URL, or attachment |
+| `/image stretch` | Generate a stretch image effect from a user avatar, image URL, or attachment |
 
 ### Random Fun
 
