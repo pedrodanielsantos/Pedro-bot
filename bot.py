@@ -2,7 +2,6 @@ import discord
 from discord.ext import commands
 import os
 from dotenv import load_dotenv
-from utils.graceful_shutdown import setup_signal_handlers
 from db.database import initialize_databases, close_all_databases
 import asyncio
 
@@ -35,6 +34,8 @@ async def load_cogs(bot):
                 try:
                     await bot.load_extension(cog_path)
                     print(f"Loaded cog: {cog_path}")
+                except commands.NoEntryPointError:
+                    pass
                 except Exception as e:
                     print(f"Failed to load cog {cog_path}: {e}")
 
@@ -56,9 +57,6 @@ if __name__ == "__main__":
     async def main():
         # Initialize database connections
         await initialize_databases()
-
-        # Set up signal handlers for clean shutdown
-        setup_signal_handlers(bot)
 
         # Load cogs
         await load_cogs(bot)
@@ -86,4 +84,7 @@ if __name__ == "__main__":
                 await bot.close()
 
     # Use asyncio.run to execute the main() coroutine
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass

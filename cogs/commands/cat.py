@@ -2,27 +2,18 @@ import os
 import discord
 from discord.ext import commands
 from discord import app_commands
-import aiohttp
-import gc
 from dotenv import load_dotenv
 from config.constants import ERROR_COLOR
+from cogs.core.mixins import SessionMixin
 
 # Load environment variables
 load_dotenv()
 CAT_API_KEY = os.getenv("CAT_API_KEY")
 
 
-class Cat(commands.Cog):
+class Cat(SessionMixin, commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.session = aiohttp.ClientSession()
-
-    async def cog_unload(self):
-        print("cog_unload triggered (cat)")
-        if self.session and not self.session.closed:
-            await self.session.close()
-            
-        gc.collect()
 
     @app_commands.command(name="cat", description="Fetch a random cat image")
     async def fetch_cat(self, interaction: discord.Interaction):

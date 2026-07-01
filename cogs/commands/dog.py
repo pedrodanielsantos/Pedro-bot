@@ -2,27 +2,18 @@ import os
 import discord
 from discord.ext import commands
 from discord import app_commands
-import aiohttp
-import gc
 from dotenv import load_dotenv
 from config.constants import ERROR_COLOR
+from cogs.core.mixins import SessionMixin
 
 # Load environment variables
 load_dotenv()
 DOG_API_KEY = os.getenv("DOG_API_KEY")
 
 
-class Dog(commands.Cog):
+class Dog(SessionMixin, commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.session = aiohttp.ClientSession()
-
-    async def cog_unload(self):
-        print("cog_unload triggered (dog)")
-        if self.session and not self.session.closed:
-            await self.session.close()
-            
-        gc.collect()
 
     @app_commands.command(name="dog", description="Fetch a random dog image")
     async def fetch_dog(self, interaction: discord.Interaction):

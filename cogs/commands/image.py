@@ -1,13 +1,12 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-import aiohttp
 import io
 from typing import Optional
 from dotenv import load_dotenv
 import os
-import gc
 from config.constants import ERROR_COLOR
+from cogs.core.mixins import SessionMixin
 
 # Load environment variables
 load_dotenv()
@@ -16,18 +15,10 @@ load_dotenv()
 JEYY_API_KEY = os.getenv("JEYY_API_KEY")
 
 
-class image(commands.GroupCog, group_name="image"):
+class image(SessionMixin, commands.GroupCog, group_name="image"):
     def __init__(self, bot: commands.Bot):
         super().__init__()
         self.bot = bot
-        self.session = aiohttp.ClientSession()
-
-    async def cog_unload(self):
-        print("cog_unload triggered (image)")
-        if self.session and not self.session.closed:
-            await self.session.close()
-
-        gc.collect()
 
 # ------------------------------------------------------------------------------------------- petpet Command -------------------------------------------------------------------------------------------
 
