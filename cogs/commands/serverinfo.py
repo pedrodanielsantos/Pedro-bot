@@ -13,14 +13,14 @@ class ServerInfo(commands.Cog):
         """Shows server information."""
         guild = interaction.guild
         fields = [
-            ("Server Name", guild.name, True),
-            ("Server ID", guild.id, True),
-            ("Owner", str(guild.owner), True),
-            ("Member Count", guild.member_count, True),
+            ("Name", guild.name, True),
+            ("ID", guild.id, True),
+            ("Members", guild.member_count, True),
             ("Text Channels", len(guild.text_channels), True),
             ("Voice Channels", len(guild.voice_channels), True),
-            ("Roles", len(guild.roles), True),
-            ("Created On", guild.created_at.strftime('%Y-%m-%d %H:%M:%S'), False)
+            ("Roles", len(guild.roles) - 1, True),
+            ("Created", guild.created_at.strftime('%Y-%m-%d %H:%M:%S'), True),
+            ("Owner", str(guild.owner), True)
         ]
 
         db_color = await get_embed_color(interaction.guild_id)
