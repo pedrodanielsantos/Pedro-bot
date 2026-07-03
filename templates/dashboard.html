@@ -2,7 +2,7 @@
 {% block content %}
 
 <header>
-    <div class="dot" style="background: {{ 'var(--green)' if is_ready else 'var(--red)' }};"></div>
+    <div class="dot {{ 'dot-online' if is_ready else 'dot-offline' }}"></div>
     <span class="header-title">{{ bot_name }}</span>
     <span class="header-sub">/ Dashboard</span>
 </header>
