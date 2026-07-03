@@ -46,11 +46,6 @@ async def initialize_databases():
         )
     """)
 
-    try:
-        await db.execute("ALTER TABLE server_settings ADD COLUMN welcome_channel_id INTEGER")
-    except Exception:
-        pass
-
     await db.commit()
 
 async def close_all_databases():
