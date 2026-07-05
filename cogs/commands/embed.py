@@ -5,13 +5,15 @@ import io
 import json
 from config.constants import SUCCESS_COLOR, ERROR_COLOR
 
+MESSAGE_NOT_FOUND = "That message isn't in this channel. Specify which channel it's in."
+
 class Embed(commands.GroupCog, group_name="embed"):
     def __init__(self, bot: commands.Bot):
         super().__init__()
         self.bot = bot
 
     @app_commands.command(name="json", description="Get the JSON source of an embed")
-    @app_commands.describe(message_id="The ID of the message containing the embed.", channel="The channel the message is in (optional).")
+    @app_commands.describe(message_id="The ID of the message containing the embed.", channel="The channel the message is in, if not this one.")
     async def json(self, interaction: discord.Interaction, message_id: str, channel: discord.TextChannel = None):
         try:
             msg_id = int(message_id)
@@ -21,7 +23,12 @@ class Embed(commands.GroupCog, group_name="embed"):
             return
 
         target_channel = channel or interaction.channel
-        message = await target_channel.fetch_message(msg_id)
+        try:
+            message = await target_channel.fetch_message(msg_id)
+        except discord.NotFound:
+            embed = discord.Embed(description=MESSAGE_NOT_FOUND, color=ERROR_COLOR)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
 
         if not message.embeds:
             embed = discord.Embed(description="The specified message does not contain an embed.", color=ERROR_COLOR)
@@ -41,7 +48,7 @@ class Embed(commands.GroupCog, group_name="embed"):
         await interaction.response.send_message(file=file)
 
     @app_commands.command(name="createjson", description="Create an embed using raw JSON")
-    @app_commands.describe(data="The JSON data for the embed.", channel="The channel to send the embed to (optional)")
+    @app_commands.describe(data="The JSON data for the embed.", channel="The channel to send the embed to, if not this one")
     async def createjson(self, interaction: discord.Interaction, data: str, channel: discord.TextChannel = None):
         try:
             embed_data = json.loads(data, strict=False)
@@ -62,7 +69,7 @@ class Embed(commands.GroupCog, group_name="embed"):
         await interaction.response.send_message(embed=confirm_embed, ephemeral=True)
 
     @app_commands.command(name="editjson", description="Edit an existing embed using raw JSON")
-    @app_commands.describe(message_id="The ID of the message to edit", data="The new JSON data for the embed", channel="The channel the message is in (optional)")
+    @app_commands.describe(message_id="The ID of the message to edit", data="The new JSON data for the embed", channel="The channel the message is in, if not this one")
     async def editjson(self, interaction: discord.Interaction, message_id: str, data: str, channel: discord.TextChannel = None):
         try:
             msg_id = int(message_id)
@@ -72,8 +79,13 @@ class Embed(commands.GroupCog, group_name="embed"):
             return
 
         target_channel = channel or interaction.channel
-        
-        message = await target_channel.fetch_message(msg_id)
+
+        try:
+            message = await target_channel.fetch_message(msg_id)
+        except discord.NotFound:
+            embed = discord.Embed(description=MESSAGE_NOT_FOUND, color=ERROR_COLOR)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
 
         if message.author != self.bot.user:
             embed = discord.Embed(description="I can only edit my own messages.", color=ERROR_COLOR)
