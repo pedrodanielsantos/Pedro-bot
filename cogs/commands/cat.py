@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 from config.constants import ERROR_COLOR
 from cogs.core.mixins import SessionMixin
 
-# Load environment variables
 load_dotenv()
 CAT_API_KEY = os.getenv("CAT_API_KEY")
 
