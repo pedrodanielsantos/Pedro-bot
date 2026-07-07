@@ -17,5 +17,6 @@ esac
 LINE="- Regenerated command reference in README."
 grep -qF "$LINE" "$MSG_FILE" && exit 0
 
-printf '\n%s\n' "$LINE" >> "$MSG_FILE"
+[ -n "$(tail -c1 "$MSG_FILE")" ] && printf '\n' >> "$MSG_FILE"
+printf '%s\n' "$LINE" >> "$MSG_FILE"
 exit 0
