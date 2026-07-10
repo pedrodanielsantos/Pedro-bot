@@ -99,6 +99,22 @@ def create_app(bot):
             print(f"[Web] Failed to load extension {extension}: {e}")
         return RedirectResponse("/", status_code=303)
 
+    @app.post("/commands/sync", response_class=HTMLResponse)
+    async def sync_commands(request: Request):
+        error = None
+        count = None
+        try:
+            synced = await bot.tree.sync()
+            count = len(synced)
+            print(f"[Web] Synced {count} slash commands.")
+        except Exception as e:
+            error = str(e)
+            print(f"[Web] Failed to sync commands: {e}")
+        return templates.TemplateResponse(request=request, name="partials/sync_result.html", context={
+            "count": count,
+            "error": error,
+        })
+
     return app
 
 

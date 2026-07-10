@@ -169,6 +169,12 @@
         }
 
         .btn:hover            { background: var(--border); }
+        .btn:disabled         { opacity: 0.6; cursor: default; }
+
+        .btn .btn-label.htmx-indicator { display: none; }
+        .btn.htmx-request .btn-label { display: none; }
+        .btn.htmx-request .btn-label.htmx-indicator { display: inline; }
+
         .btn-primary          { background: var(--accent); border-color: var(--accent); color: #fff; }
         .btn-primary:hover    { background: #4752c4; border-color: #4752c4; }
         .btn-danger           { border-color: var(--red); color: var(--red); }
