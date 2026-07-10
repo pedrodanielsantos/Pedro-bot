@@ -35,14 +35,18 @@ bot and hot-reloading cogs without a restart.
 - **Server customization**: per-guild embed colors and server rules.
 - **Fun & utility**: random cat/dog images, magic 8-ball, random choice,
   avatar/user/server info, and a raw-JSON embed builder.
-- **Live web dashboard**: status, latency, uptime, guild list, and a cog
-  manager to load / unload / reload extensions on the fly.
+- **Command logging**: log every slash command used in a server to a
+  configurable channel, with the invoking user, options, and channel.
+- **Live web dashboard**: status, latency, uptime, guild list, a cog
+  manager to load / unload / reload extensions on the fly, and a button
+  to sync slash commands with Discord.
 
 ## Dashboard
 
 Runs alongside the bot at **http://localhost:8000**. It shows real-time status,
 latency, uptime and guild count, and provides a **Cog Manager** for hot-reloading
-extensions without restarting the bot.
+extensions without restarting the bot. A **Sync Commands** button lets you push
+slash command changes to Discord on demand, without restarting the bot.
 
 ## Command Reference
 
@@ -183,7 +187,7 @@ python bot.py    # run the bot once, no auto-restart
 ```
 Pedro-bot/
 ├── bot.py              # Entry point: loads cogs, starts bot + dashboard
-├── web.py              # FastAPI dashboard (status, guilds, cog manager)
+├── web.py              # FastAPI dashboard (status, guilds, cog manager, command sync)
 ├── run.py              # Auto-restart wrapper
 ├── cogs/
 │   ├── commands/       # User-facing slash commands
