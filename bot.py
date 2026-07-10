@@ -6,21 +6,20 @@ from db.database import initialize_databases, close_all_databases
 import asyncio
 import web
 
-# Load environment variables from .env file
 load_dotenv()
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+if not TOKEN:
+    raise SystemExit("DISCORD_BOT_TOKEN is not set. Add it to your .env file.")
 
-# Initialize bot
 intents = discord.Intents.default()
 intents.members = True
 intents.guilds = True
 intents.message_content = True
 bot = commands.Bot(command_prefix="ç!", intents=intents)
 
-# Remove default help command to replace with a custom one
+# A custom /help command is loaded from cogs, so the built-in one is removed to avoid a name clash.
 bot.remove_command("help")
 
-# Load cogs asynchronously
 async def load_cogs(bot):
     cogs_dir = os.path.join(os.path.dirname(__file__), "cogs")
     for root, dirs, files in os.walk(cogs_dir):
@@ -40,33 +39,35 @@ async def load_cogs(bot):
                 except Exception as e:
                     print(f"Failed to load cog {cog_path}: {e}")
 
+has_synced = False
+
 @bot.event
 async def on_ready():
-    """Event triggered when the bot is ready."""
+    global has_synced
+
     print(f"{bot.user.name} is ready and connected!")
     print(f"Command prefix: {bot.command_prefix}")
     await bot.change_presence(activity=discord.CustomActivity(name="/help", state="/help"))
 
-    # Sync slash commands
-    try:
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} slash commands.")
-    except Exception as e:
-        print(f"Failed to sync commands: {e}")
+    # on_ready can fire again after a reconnect, so this only syncs once per process.
+    # Use ç!sync (developer_tools.py) to force a resync without restarting.
+    if not has_synced:
+        try:
+            synced = await bot.tree.sync()
+            print(f"Synced {len(synced)} slash commands.")
+            has_synced = True
+        except Exception as e:
+            print(f"Failed to sync commands: {e}")
 
 if __name__ == "__main__":
     async def main():
-        # Initialize database connections
         await initialize_databases()
-
-        # Load cogs
         await load_cogs(bot)
 
         try:
-            # Start the bot and web dashboard concurrently
             await asyncio.gather(bot.start(TOKEN), web.start(bot))
         finally:
-            # Unload all cogs to trigger cog_unload hooks
+            # Unloading each extension explicitly ensures cog_unload hooks run before exit.
             for extension in list(bot.extensions.keys()):
                 try:
                     await bot.unload_extension(extension)
@@ -74,17 +75,14 @@ if __name__ == "__main__":
                 except Exception as e:
                     print(f"Failed to unload extension {extension}: {e}")
 
-            # Close all databases
             await close_all_databases()
 
-            # Add a short delay to ensure all tasks and cleanup complete
+            # Gives any straggling background tasks a moment to finish before the process exits.
             await asyncio.sleep(2)
 
-            # Ensure the bot is fully closed
             if not bot.is_closed():
                 await bot.close()
 
-    # Use asyncio.run to execute the main() coroutine
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
