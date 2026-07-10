@@ -1,8 +1,8 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from config.constants import EMBED_COLOR, ERROR_COLOR
-from db.database import get_embed_color
+from config.constants import ERROR_COLOR
+from db.database import get_guild_embed_color
 
 class UserInfo(commands.Cog):
     def __init__(self, bot):
@@ -55,11 +55,7 @@ class UserInfo(commands.Cog):
         if is_member and target.joined_at:
             fields.append(("Joined Server", target.joined_at.strftime('%Y-%m-%d %H:%M:%S'), False))
 
-        db_color = await get_embed_color(interaction.guild_id)
-        if db_color:
-            color = discord.Color(int(db_color, 16))
-        else:
-            color = discord.Color(EMBED_COLOR)
+        color = await get_guild_embed_color(interaction.guild_id)
 
         embed = discord.Embed(
             title="User Info",

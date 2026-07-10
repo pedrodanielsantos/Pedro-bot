@@ -1,7 +1,6 @@
 import discord
 from discord.ext import commands
-from config.constants import EMBED_COLOR
-from db.database import get_embed_color
+from db.database import get_guild_embed_color
 
 class Rules(commands.Cog):
     def __init__(self, bot):
@@ -16,11 +15,7 @@ class Rules(commands.Cog):
             f"**#3 No Hate Speech** | For the love of all that is good, please\n{padding}"
         )
 
-        db_color = await get_embed_color(ctx.guild.id if ctx.guild else None)
-        if db_color:
-            color = discord.Color(int(db_color, 16))
-        else:
-            color = discord.Color(EMBED_COLOR)
+        color = await get_guild_embed_color(ctx.guild.id if ctx.guild else None)
 
         embed = (
             discord.Embed(

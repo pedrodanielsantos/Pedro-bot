@@ -1,5 +1,8 @@
 import aiosqlite
+import discord
 import os
+
+from config.constants import EMBED_COLOR
 
 # Global database connection
 db = None
@@ -114,6 +117,12 @@ async def get_embed_color(guild_id: int):
     async with db.execute("SELECT embed_color FROM server_settings WHERE guild_id = ?", (guild_id,)) as cursor:
         result = await cursor.fetchone()
         return result[0] if result else None
+
+async def get_guild_embed_color(guild_id: int) -> discord.Color:
+    db_color = await get_embed_color(guild_id)
+    if db_color:
+        return discord.Color(int(db_color, 16))
+    return discord.Color(EMBED_COLOR)
 
 async def set_welcome_channel(guild_id: int, channel_id: int | None):
     await db.execute(

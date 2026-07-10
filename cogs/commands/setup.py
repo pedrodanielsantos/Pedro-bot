@@ -5,7 +5,7 @@ from typing import Optional
 
 from db.database import (
     lobby_add, lobby_delete, lobbies_all, lobby_is_tracked,
-    set_welcome_channel, get_welcome_channel, get_embed_color,
+    set_welcome_channel, get_welcome_channel, get_guild_embed_color,
     set_log_channel
 )
 from config.constants import (
@@ -14,7 +14,6 @@ from config.constants import (
     LOBBY_EMOJI,
     VOICE_VQM,
     VOICE_REGION,
-    EMBED_COLOR,
     SUCCESS_COLOR,
     ERROR_COLOR,
 )
@@ -101,11 +100,7 @@ class Setup(commands.GroupCog, group_name="setup"):
         if not channel:
             return
 
-        db_color = await get_embed_color(member.guild.id)
-        if db_color:
-            color = discord.Color(int(db_color, 16))
-        else:
-            color = discord.Color(EMBED_COLOR)
+        color = await get_guild_embed_color(member.guild.id)
 
         description = (
             f"Hey! {member.mention}\n\n"

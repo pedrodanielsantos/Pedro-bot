@@ -1,8 +1,7 @@
 import discord
 from discord.ext import commands
 
-from db.database import get_log_channel
-from config.constants import EMBED_COLOR
+from db.database import get_log_channel, get_guild_embed_color
 
 class CommandLogger(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -28,7 +27,8 @@ class CommandLogger(commands.Cog):
         if options_str:
             description += f"\n{options_str}"
 
-        embed = discord.Embed(description=description, color=EMBED_COLOR)
+        color = await get_guild_embed_color(interaction.guild_id)
+        embed = discord.Embed(description=description, color=color)
         embed.set_footer(text=f"User ID: {interaction.user.id}")
 
         try:

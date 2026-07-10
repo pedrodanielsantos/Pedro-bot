@@ -1,8 +1,8 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from config.constants import EMBED_COLOR, SUCCESS_COLOR, ERROR_COLOR
-from db.database import get_embed_color, add_autorole, remove_autorole, get_autoroles
+from config.constants import SUCCESS_COLOR, ERROR_COLOR
+from db.database import get_guild_embed_color, add_autorole, remove_autorole, get_autoroles
 
 @app_commands.default_permissions(manage_roles=True)
 class Autorole(commands.GroupCog, group_name="autorole"):
@@ -25,10 +25,7 @@ class Autorole(commands.GroupCog, group_name="autorole"):
 
     async def get_color(self, guild_id: int) -> discord.Color:
         """Helper method to fetch the server's configured embed color."""
-        db_color = await get_embed_color(guild_id)
-        if db_color:
-            return discord.Color(int(db_color, 16))
-        return discord.Color(EMBED_COLOR)
+        return await get_guild_embed_color(guild_id)
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):

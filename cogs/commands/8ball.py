@@ -1,8 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from config.constants import EMBED_COLOR
-from db.database import get_embed_color
+from db.database import get_guild_embed_color
 import random
 
 class EightBall(commands.Cog):
@@ -27,11 +26,7 @@ class EightBall(commands.Cog):
         # Randomly select an answer
         answer = random.choice(self.answers)
 
-        db_color = await get_embed_color(interaction.guild_id)
-        if db_color:
-            color = discord.Color(int(db_color, 16))
-        else:
-            color = discord.Color(EMBED_COLOR)
+        color = await get_guild_embed_color(interaction.guild_id)
 
         # Create the embed
         embed = discord.Embed(

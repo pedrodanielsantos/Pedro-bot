@@ -1,8 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from config.constants import EMBED_COLOR
-from db.database import get_embed_color
+from db.database import get_guild_embed_color
 
 # Commands are categorized by their qualified name. A key may be a whole
 # group (e.g. "image") or a single subcommand (e.g. "setup welcome"); the
@@ -153,11 +152,7 @@ class HelpCog(commands.Cog):
         return chunks
 
     async def get_help_pages(self, guild_id=None):
-        db_color = await get_embed_color(guild_id) if guild_id else None
-        if db_color:
-            color = discord.Color(int(db_color, 16))
-        else:
-            color = discord.Color(EMBED_COLOR)
+        color = await get_guild_embed_color(guild_id)
 
         pages = []
         category_starts: dict[str, int] = {}

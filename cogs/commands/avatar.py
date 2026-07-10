@@ -1,8 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from config.constants import EMBED_COLOR
-from db.database import get_embed_color
+from db.database import get_guild_embed_color
 
 class Avatar(commands.Cog):
     def __init__(self, bot):
@@ -12,11 +11,7 @@ class Avatar(commands.Cog):
     async def avatar(self, interaction: discord.Interaction, member: discord.Member = None):
         """Shows the avatar of the user."""
         member = member or interaction.user  # Default to the command user if no member is mentioned
-        db_color = await get_embed_color(interaction.guild_id)
-        if db_color:
-            color = discord.Color(int(db_color, 16))
-        else:
-            color = discord.Color(EMBED_COLOR)
+        color = await get_guild_embed_color(interaction.guild_id)
 
         embed = discord.Embed(
             title=f"{member}'s Avatar",

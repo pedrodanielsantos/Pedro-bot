@@ -2,8 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from datetime import datetime
-from config.constants import EMBED_COLOR
-from db.database import get_embed_color
+from db.database import get_guild_embed_color
 
 class Stats(commands.Cog):
     def __init__(self, bot):
@@ -23,11 +22,7 @@ class Stats(commands.Cog):
         member_count = sum(g.member_count for g in self.bot.guilds if g.member_count)
         shard_count = self.bot.shard_count or 1
 
-        db_color = await get_embed_color(interaction.guild_id)
-        if db_color:
-            color = discord.Color(int(db_color, 16))
-        else:
-            color = discord.Color(EMBED_COLOR)
+        color = await get_guild_embed_color(interaction.guild_id)
 
         embed = discord.Embed(
             title="Statistics",
