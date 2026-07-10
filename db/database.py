@@ -34,9 +34,16 @@ async def initialize_databases():
             guild_id INTEGER PRIMARY KEY,
             embed_color TEXT,
             updated_by INTEGER,
-            welcome_channel_id INTEGER
+            welcome_channel_id INTEGER,
+            log_channel_id INTEGER
         )
     """)
+
+    # Older databases created before log_channel_id existed need it backfilled.
+    try:
+        await db.execute("ALTER TABLE server_settings ADD COLUMN log_channel_id INTEGER")
+    except aiosqlite.OperationalError:
+        pass
 
     await db.execute("""
         CREATE TABLE IF NOT EXISTS autoroles (
@@ -120,6 +127,21 @@ async def set_welcome_channel(guild_id: int, channel_id: int | None):
 
 async def get_welcome_channel(guild_id: int):
     async with db.execute("SELECT welcome_channel_id FROM server_settings WHERE guild_id = ?", (guild_id,)) as cursor:
+        result = await cursor.fetchone()
+        return result[0] if result else None
+
+async def set_log_channel(guild_id: int, channel_id: int | None):
+    await db.execute(
+        """
+        INSERT INTO server_settings (guild_id, log_channel_id) VALUES (?, ?)
+        ON CONFLICT(guild_id) DO UPDATE SET log_channel_id=excluded.log_channel_id
+        """,
+        (guild_id, channel_id)
+    )
+    await db.commit()
+
+async def get_log_channel(guild_id: int):
+    async with db.execute("SELECT log_channel_id FROM server_settings WHERE guild_id = ?", (guild_id,)) as cursor:
         result = await cursor.fetchone()
         return result[0] if result else None
 

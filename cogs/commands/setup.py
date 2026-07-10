@@ -5,7 +5,8 @@ from typing import Optional
 
 from db.database import (
     lobby_add, lobby_delete, lobbies_all, lobby_is_tracked,
-    set_welcome_channel, get_welcome_channel, get_embed_color
+    set_welcome_channel, get_welcome_channel, get_embed_color,
+    set_log_channel
 )
 from config.constants import (
     NEW_LOBBY_TRIGGER,
@@ -71,6 +72,23 @@ class Setup(commands.GroupCog, group_name="setup"):
         else:
             await set_welcome_channel(interaction.guild_id, channel.id)
             embed = discord.Embed(description=f"Welcome messages will now be sent in {channel.mention}.", color=SUCCESS_COLOR)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(name="logs", description="Setup or disable the command log channel")
+    @app_commands.describe(channel="The channel to send command logs in (leave empty to disable)")
+    async def logs(self, interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
+        if not interaction.user.guild_permissions.administrator:
+            embed = discord.Embed(description="You need **Administrator** permission to use this command.", color=ERROR_COLOR)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        if channel is None:
+            await set_log_channel(interaction.guild_id, None)
+            embed = discord.Embed(description="Command logging has been disabled.", color=SUCCESS_COLOR)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        else:
+            await set_log_channel(interaction.guild_id, channel.id)
+            embed = discord.Embed(description=f"Commands will now be logged in {channel.mention}.", color=SUCCESS_COLOR)
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @commands.Cog.listener()

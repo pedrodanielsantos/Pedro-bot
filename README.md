@@ -131,6 +131,7 @@ extensions without restarting the bot.
 
 | Command | Description |
 | --- | --- |
+| `/setup logs` | Setup or disable the command log channel |
 | `/test welcome` | Simulate a member joining to test the welcome message |
 
 <!-- COMMANDS:END -->
