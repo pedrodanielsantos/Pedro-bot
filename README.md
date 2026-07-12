@@ -167,14 +167,18 @@ Non-secret defaults (lobby names, voice region, embed colors, etc.) live in
 ### Running
 
 ```bash
-run.bat          # Windows, auto-restarts on crash
+py -3.13 run.py
 ```
 
-Or directly:
+`run.py` automatically restarts `bot.py` if it crashes, waiting 5 seconds between
+attempts. To stop the bot, just press **Ctrl+C**. It shuts down gracefully
+(unloading cogs, closing DB connections), and since that counts as a clean exit,
+`run.py` knows not to restart it.
+
+If you're debugging and don't want crashes to auto-restart, run the bot directly:
 
 ```bash
-py -3.13 run.py  # wrapper that restarts the bot if it exits
-python bot.py    # run the bot once, no auto-restart
+py -3.13 bot.py
 ```
 
 ## Project Structure

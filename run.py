@@ -16,6 +16,10 @@ while True:
     result = subprocess.run([sys.executable, "bot.py"])
     signal.signal(signal.SIGINT, signal.default_int_handler)
 
+    if result.returncode == 0:
+        print(f"\n[{ts()}] Bot stopped cleanly (exit code 0). Not restarting.")
+        break
+
     print(f"\n[{ts()}] Bot stopped (exit code {result.returncode}). Restarting in 5 seconds... (Ctrl+C to stop)")
 
     try:
