@@ -3,7 +3,8 @@
 # Pedro-bot
 
 A modular Discord bot with a live web dashboard, featuring temporary voice
-lobbies, image manipulation, autoroles, welcome messages, and more.
+lobbies, GIF generation, autoroles, welcome messages, command logging,
+and more.
 
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
 ![discord.py](https://img.shields.io/badge/discord.py-5865F2?logo=discord&logoColor=white)
@@ -28,7 +29,7 @@ bot and hot-reloading cogs without a restart.
 - **Temporary voice lobbies**: members join a trigger channel to spin up their
   own voice channel, which they can rename and resize, and which is cleaned up
   automatically when empty.
-- **Image manipulation**: over 20 effects (petpet, heart lock, explode, glitch,
+- **GIF generation**: over 20 effects (petpet, heart lock, explode, glitch,
   and more) applied to an avatar, URL, or attachment via the Jeyy API.
 - **Autoroles & welcome messages**: automatically assign roles to new members
   and greet them in a configurable channel.
@@ -38,8 +39,8 @@ bot and hot-reloading cogs without a restart.
 - **Command logging**: log every slash command used in a server to a
   configurable channel, with the invoking user, options, and channel.
 - **Live web dashboard**: status, latency, uptime, guild list, a cog
-  manager to load / unload / reload extensions on the fly, and a button
-  to sync slash commands with Discord.
+  manager to load / unload / reload extensions on the fly, sync slash
+  commands with Discord, and a live console view of the bot's logs.
 
 ## Dashboard
 
@@ -47,6 +48,10 @@ Runs alongside the bot at **http://localhost:8000**. It shows real-time status,
 latency, uptime and guild count, and provides a **Cog Manager** for hot-reloading
 extensions without restarting the bot. A **Sync Commands** button lets you push
 slash command changes to Discord on demand, without restarting the bot.
+
+A separate **Console** page (`/console`) shows a live, auto-scrolling view of the
+bot's logs, shared across every module that logs (bot, web, db, cogs), so the same
+view works whether you're debugging startup, a cog reload, or a command error.
 
 ## Command Reference
 
@@ -186,7 +191,7 @@ py -3.13 bot.py
 ```
 Pedro-bot/
 ├── bot.py              # Entry point: loads cogs, starts bot + dashboard
-├── web.py              # FastAPI dashboard (status, guilds, cog manager, command sync)
+├── web.py              # FastAPI dashboard (status, guilds, cog manager, command sync, console)
 ├── run.py              # Auto-restart wrapper
 ├── cogs/
 │   ├── commands/       # User-facing slash commands
