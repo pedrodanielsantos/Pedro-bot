@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+
+<header>
+    <div class="dot {{ 'dot-online' if is_ready else 'dot-offline' }}"></div>
+    <span class="header-title">{{ bot_name }}</span>
+    <span class="header-sub">/ Console</span>
+    <a href="/" class="btn" style="margin-left: auto;">Dashboard</a>
+</header>
+
+<main>
+    <div class="section-label">Live Logs</div>
+    <pre id="console-log" class="card" style="font-family: var(--mono); font-size: 12px; white-space: pre-wrap; max-height: 75vh; overflow-y: auto;"
+        hx-get="/console/logs" hx-trigger="load, every 2s" hx-swap="innerHTML">{% include "partials/console_log.html" %}</pre>
+</main>
+
+<script>
+    document.body.addEventListener("htmx:afterSwap", (e) => {
+        if (e.target.id === "console-log") {
+            e.target.scrollTop = e.target.scrollHeight;
+        }
+    });
+</script>
+
+{% endblock %}

@@ -1,3 +1,4 @@
+import logging
 import time
 
 import uvicorn
@@ -5,8 +6,11 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from utils.log import LOG_BUFFER
+
 templates = Jinja2Templates(directory="templates")
 _start_time = time.time()
+logger = logging.getLogger("web")
 
 
 def _uptime() -> str:
@@ -50,10 +54,10 @@ def create_app(bot):
         error = None
         try:
             await bot.reload_extension(extension)
-            print(f"[Web] Reloaded extension: {extension}")
+            logger.info(f"Reloaded extension: {extension}")
         except Exception as e:
             error = str(e)
-            print(f"[Web] Failed to reload extension {extension}: {e}")
+            logger.error(f"Failed to reload extension {extension}: {e}")
         return templates.TemplateResponse(request=request, name="partials/cog_row.html", context={
             "extension": extension,
             "loaded": True,
@@ -65,10 +69,10 @@ def create_app(bot):
         error = None
         try:
             await bot.unload_extension(extension)
-            print(f"[Web] Unloaded extension: {extension}")
+            logger.info(f"Unloaded extension: {extension}")
         except Exception as e:
             error = str(e)
-            print(f"[Web] Failed to unload extension {extension}: {e}")
+            logger.error(f"Failed to unload extension {extension}: {e}")
         return templates.TemplateResponse(request=request, name="partials/cog_row.html", context={
             "extension": extension,
             "loaded": False,
@@ -80,10 +84,10 @@ def create_app(bot):
         error = None
         try:
             await bot.load_extension(extension)
-            print(f"[Web] Loaded extension: {extension}")
+            logger.info(f"Loaded extension: {extension}")
         except Exception as e:
             error = str(e)
-            print(f"[Web] Failed to load extension {extension}: {e}")
+            logger.error(f"Failed to load extension {extension}: {e}")
         return templates.TemplateResponse(request=request, name="partials/cog_row.html", context={
             "extension": extension,
             "loaded": error is None,
@@ -94,9 +98,9 @@ def create_app(bot):
     async def load_cog(extension: str = Form(...)):
         try:
             await bot.load_extension(extension)
-            print(f"[Web] Loaded extension: {extension}")
+            logger.info(f"Loaded extension: {extension}")
         except Exception as e:
-            print(f"[Web] Failed to load extension {extension}: {e}")
+            logger.error(f"Failed to load extension {extension}: {e}")
         return RedirectResponse("/", status_code=303)
 
     @app.post("/commands/sync", response_class=HTMLResponse)
@@ -106,13 +110,28 @@ def create_app(bot):
         try:
             synced = await bot.tree.sync()
             count = len(synced)
-            print(f"[Web] Synced {count} slash commands.")
+            logger.info(f"Synced {count} slash commands.")
         except Exception as e:
             error = str(e)
-            print(f"[Web] Failed to sync commands: {e}")
+            logger.error(f"Failed to sync commands: {e}")
         return templates.TemplateResponse(request=request, name="partials/sync_result.html", context={
             "count": count,
             "error": error,
+        })
+
+    @app.get("/console", response_class=HTMLResponse)
+    async def console(request: Request):
+        ready = bot.is_ready()
+        return templates.TemplateResponse(request=request, name="console.html", context={
+            "bot_name": bot.user.name if bot.user else "Bot",
+            "is_ready": ready,
+            "logs": list(LOG_BUFFER),
+        })
+
+    @app.get("/console/logs", response_class=HTMLResponse)
+    async def console_logs(request: Request):
+        return templates.TemplateResponse(request=request, name="partials/console_log.html", context={
+            "logs": list(LOG_BUFFER),
         })
 
     return app

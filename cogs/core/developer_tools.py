@@ -1,11 +1,14 @@
 import asyncio
 import importlib
+import logging
 
 import discord
 from discord.ext import commands
 import os
 from config.constants import SUCCESS_COLOR, ERROR_COLOR
 import web as web_module
+
+logger = logging.getLogger("dev")
 
 class DeveloperTools(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -21,7 +24,7 @@ class DeveloperTools(commands.Cog):
         else:
             embed = discord.Embed(description=f"An error occurred: {error}", color=ERROR_COLOR)
             await ctx.reply(embed=embed)
-            print(f"[Dev] Error in command: {error}")
+            logger.error(f"Error in command: {error}")
 
     async def cog_check(self, ctx: commands.Context) -> bool:
         # This method runs before any command in this cog.
@@ -75,10 +78,10 @@ class DeveloperTools(commands.Cog):
             for extension in list(self.bot.extensions):
                 try:
                     await self.bot.reload_extension(extension)
-                    print(f"[Dev] Reloaded extension: {extension}")
+                    logger.info(f"Reloaded extension: {extension}")
                 except Exception as e:
                     failed.append((extension, e))
-                    print(f"[Dev] Failed to reload extension {extension}: {e}")
+                    logger.error(f"Failed to reload extension {extension}: {e}")
 
             if failed:
                 details = "\n".join(f"`{ext}`: {e}" for ext, e in failed)
@@ -100,11 +103,11 @@ class DeveloperTools(commands.Cog):
             await self.bot.reload_extension(extension)
             embed = discord.Embed(description=f"Reloaded `{extension}`", color=SUCCESS_COLOR)
             await ctx.reply(embed=embed)
-            print(f"[Dev] Reloaded extension: {extension}")
+            logger.info(f"Reloaded extension: {extension}")
         except Exception as e:
             embed = discord.Embed(description=f"Failed to reload `{extension}`:\n```py\n{e}\n```", color=ERROR_COLOR)
             await ctx.reply(embed=embed)
-            print(f"[Dev] Failed to reload extension {extension}: {e}")
+            logger.error(f"Failed to reload extension {extension}: {e}")
 
     @commands.command(name="load", hidden=True)
     async def load(self, ctx: commands.Context, cog: str):
@@ -123,11 +126,11 @@ class DeveloperTools(commands.Cog):
             await self.bot.load_extension(extension)
             embed = discord.Embed(description=f"Loaded `{extension}`", color=SUCCESS_COLOR)
             await ctx.reply(embed=embed)
-            print(f"[Dev] Loaded extension: {extension}")
+            logger.info(f"Loaded extension: {extension}")
         except Exception as e:
             embed = discord.Embed(description=f"Failed to load `{extension}`:\n```py\n{e}\n```", color=ERROR_COLOR)
             await ctx.reply(embed=embed)
-            print(f"[Dev] Failed to load extension {extension}: {e}")
+            logger.error(f"Failed to load extension {extension}: {e}")
 
     @commands.command(name="unload", hidden=True)
     async def unload(self, ctx: commands.Context, cog: str):
@@ -146,11 +149,11 @@ class DeveloperTools(commands.Cog):
             await self.bot.unload_extension(extension)
             embed = discord.Embed(description=f"Unloaded `{extension}`", color=SUCCESS_COLOR)
             await ctx.reply(embed=embed)
-            print(f"[Dev] Unloaded extension: {extension}")
+            logger.info(f"Unloaded extension: {extension}")
         except Exception as e:
             embed = discord.Embed(description=f"Failed to unload `{extension}`:\n```py\n{e}\n```", color=ERROR_COLOR)
             await ctx.reply(embed=embed)
-            print(f"[Dev] Failed to unload extension {extension}: {e}")
+            logger.error(f"Failed to unload extension {extension}: {e}")
 
     @commands.command(name="sync", hidden=True)
     async def sync(self, ctx: commands.Context, spec: str = None):
@@ -177,11 +180,11 @@ class DeveloperTools(commands.Cog):
             synced = await self.bot.tree.sync(guild=target)
             embed = discord.Embed(description=f"Synced {len(synced)} commands {target_desc}.", color=SUCCESS_COLOR)
             await ctx.reply(embed=embed)
-            print(f"[Dev] Synced {len(synced)} commands {target_desc}.")
+            logger.info(f"Synced {len(synced)} commands {target_desc}.")
         except Exception as e:
             embed = discord.Embed(description=f"Sync failed: {e}", color=ERROR_COLOR)
             await ctx.reply(embed=embed)
-            print(f"[Dev] Sync failed: {e}")
+            logger.error(f"Sync failed: {e}")
 
     @commands.command(name="devhelp", hidden=True)
     async def devhelp(self, ctx: commands.Context):
@@ -204,7 +207,7 @@ class DeveloperTools(commands.Cog):
         try:
             msg = await ctx.channel.fetch_message(message_id)
             await msg.delete()
-            print(f"[Dev] Deleted message {message_id}.")
+            logger.info(f"Deleted message {message_id}.")
         except discord.NotFound:
             embed = discord.Embed(description=f"Message `{message_id}` not found.", color=ERROR_COLOR)
             await ctx.reply(embed=embed, delete_after=5)
@@ -231,7 +234,7 @@ class DeveloperTools(commands.Cog):
 
         importlib.reload(web_module)
         asyncio.create_task(web_module.start(self.bot))
-        print("[Dev] Reloaded web dashboard.")
+        logger.info("Reloaded web dashboard.")
 
         embed = discord.Embed(description="Web dashboard reloaded.", color=SUCCESS_COLOR)
         await ctx.reply(embed=embed)

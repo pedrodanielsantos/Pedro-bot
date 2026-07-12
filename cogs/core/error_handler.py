@@ -1,10 +1,12 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-import traceback
+import logging
 import asyncio
 import aiohttp
 from config.constants import ERROR_COLOR
+
+logger = logging.getLogger("errors")
 
 class ErrorHandler(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -48,8 +50,7 @@ class ErrorHandler(commands.Cog):
                 message = f"HTTP Error: {error.status}"
         else:
             # Log unexpected errors to console so you can debug them
-            print(f"Ignoring exception in command {interaction.command}:")
-            traceback.print_exception(type(error), error, error.__traceback__)
+            logger.error(f"Ignoring exception in command {interaction.command}:", exc_info=error)
             message = f"An unexpected error occurred: {error}"
 
         embed = discord.Embed(description=message, color=ERROR_COLOR)

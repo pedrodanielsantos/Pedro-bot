@@ -1,8 +1,10 @@
 import discord
 from discord.ext import commands
+import logging
 import os
 from dotenv import load_dotenv
 from db.database import initialize_databases, close_all_databases
+from utils.log import setup_logging
 import asyncio
 import web
 
@@ -10,6 +12,9 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 if not TOKEN:
     raise SystemExit("DISCORD_BOT_TOKEN is not set. Add it to your .env file.")
+
+setup_logging()
+logger = logging.getLogger("bot")
 
 intents = discord.Intents.default()
 intents.members = True
@@ -33,11 +38,11 @@ async def load_cogs(bot):
 
                 try:
                     await bot.load_extension(cog_path)
-                    print(f"Loaded cog: {cog_path}")
+                    logger.info(f"Loaded cog: {cog_path}")
                 except commands.NoEntryPointError:
                     pass
                 except Exception as e:
-                    print(f"Failed to load cog {cog_path}: {e}")
+                    logger.error(f"Failed to load cog {cog_path}: {e}")
 
 has_synced = False
 
@@ -45,8 +50,8 @@ has_synced = False
 async def on_ready():
     global has_synced
 
-    print(f"{bot.user.name} is ready and connected!")
-    print(f"Command prefix: {bot.command_prefix}")
+    logger.info(f"{bot.user.name} is ready and connected!")
+    logger.info(f"Command prefix: {bot.command_prefix}")
     await bot.change_presence(activity=discord.CustomActivity(name="/help", state="/help"))
 
     # on_ready can fire again after a reconnect, so this only syncs once per process.
@@ -54,10 +59,10 @@ async def on_ready():
     if not has_synced:
         try:
             synced = await bot.tree.sync()
-            print(f"Synced {len(synced)} slash commands.")
+            logger.info(f"Synced {len(synced)} slash commands.")
             has_synced = True
         except Exception as e:
-            print(f"Failed to sync commands: {e}")
+            logger.error(f"Failed to sync commands: {e}")
 
 if __name__ == "__main__":
     async def main():
@@ -71,9 +76,9 @@ if __name__ == "__main__":
             for extension in list(bot.extensions.keys()):
                 try:
                     await bot.unload_extension(extension)
-                    print(f"Successfully unloaded extension: {extension}")
+                    logger.info(f"Successfully unloaded extension: {extension}")
                 except Exception as e:
-                    print(f"Failed to unload extension {extension}: {e}")
+                    logger.error(f"Failed to unload extension {extension}: {e}")
 
             await close_all_databases()
 
