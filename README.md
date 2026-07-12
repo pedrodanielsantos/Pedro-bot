@@ -55,32 +55,36 @@ slash command changes to Discord on demand, without restarting the bot.
 
 <!-- COMMANDS:START -->
 
-### General
-
-| Command | Description |
-| --- | --- |
-| `/help` | Displays the help message with all available commands |
-| `/rules` | Displays the server rules |
-
-### Settings
-
-| Command | Description |
-| --- | --- |
-| `/autorole add` | Adds a role to be automatically given to new members |
-| `/autorole list` | Lists all currently configured autoroles |
-| `/autorole remove` | Removes a role from the autorole list |
-| `/set embedcolor` | Set or reset the server's embed color |
-| `/setup welcome` | Setup or disable the welcome message channel |
-
 ### Lobbies
 
 | Command | Description |
 | --- | --- |
 | `/rename` | Rename your current lobby voice-channel |
 | `/resize` | Resize your current lobby |
-| `/setup lobbies` | Setup temporary voice-chat system with user-created lobbies |
 
-### Image Manipulation
+### Fun
+
+| Command | Description |
+| --- | --- |
+| `/8ball` | Ask the magic 8-ball a question |
+| `/cat` | Fetch a random cat image |
+| `/choice` | Chooses randomly from the given options (separated by commas) |
+| `/dog` | Fetch a random dog image |
+
+### Utility
+
+| Command | Description |
+| --- | --- |
+| `/avatar` | Displays the avatar of a user |
+| `/embed createjson` | Create an embed using raw JSON |
+| `/embed editjson` | Edit an existing embed using raw JSON |
+| `/embed json` | Get the JSON source of an embed |
+| `/rules` | Displays the server rules |
+| `/serverinfo` | Displays server statistics |
+| `/stats` | Shows technical information about the bot |
+| `/userinfo` | Displays information about a user |
+
+### Image
 
 | Command | Description |
 | --- | --- |
@@ -110,33 +114,24 @@ slash command changes to Discord on demand, without restarting the bot.
 | `/image stereo` | Split an image into a stereo effect |
 | `/image stretch` | Stretch an image |
 
-### Random Fun
+### Administration
 
 | Command | Description |
 | --- | --- |
-| `/8ball` | Ask the magic 8-ball a question |
-| `/cat` | Fetch a random cat image |
-| `/choice` | Chooses randomly from the given options (separated by commas) |
-| `/dog` | Fetch a random dog image |
-
-### Utility
-
-| Command | Description |
-| --- | --- |
-| `/avatar` | Displays the avatar of a user |
-| `/embed createjson` | Create an embed using raw JSON |
-| `/embed editjson` | Edit an existing embed using raw JSON |
-| `/embed json` | Get the JSON source of an embed |
-| `/serverinfo` | Displays server statistics |
-| `/stats` | Shows technical information about the bot |
-| `/userinfo` | Displays information about a user |
+| `/autorole add` | Adds a role to be automatically given to new members |
+| `/autorole list` | Lists all currently configured autoroles |
+| `/autorole remove` | Removes a role from the autorole list |
+| `/set embedcolor` | Set or reset the server's embed color |
+| `/setup lobbies` | Setup temporary voice-chat system with user-created lobbies |
+| `/setup logs` | Setup or disable the command log channel |
+| `/setup welcome` | Setup or disable the welcome message channel |
+| `/test welcome` | Simulate a member joining to test the welcome message |
 
 ### Other
 
 | Command | Description |
 | --- | --- |
-| `/setup logs` | Setup or disable the command log channel |
-| `/test welcome` | Simulate a member joining to test the welcome message |
+| `/help` | Displays the help message with all available commands |
 
 <!-- COMMANDS:END -->
 

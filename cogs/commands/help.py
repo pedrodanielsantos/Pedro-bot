@@ -3,100 +3,125 @@ from discord import app_commands
 from discord.ext import commands
 from db.database import get_guild_embed_color
 
-# Commands are categorized by their qualified name. A key may be a whole
-# group (e.g. "image") or a single subcommand (e.g. "setup welcome"); the
-# more specific subcommand entry wins over its group's entry. Anything not
-# listed here falls into DEFAULT_CATEGORY so it can never silently vanish.
+# Keyed by qualified name, whole group (e.g. "image") or single subcommand
+# (e.g. "setup welcome"). A subcommand entry wins over its group's entry.
+# Anything unlisted falls into DEFAULT_CATEGORY so it can't silently vanish.
 COMMAND_CATEGORIES = {
-    # General
-    "help": "General",
-    "rules": "General",
-    # Settings
-    "set": "Settings",
-    "autorole": "Settings",
-    "setup welcome": "Settings",
-    # Lobbies
-    "setup lobbies": "Lobbies",
     "rename": "Lobbies",
     "resize": "Lobbies",
-    # Image Manipulation
-    "image": "Image Manipulation",
-    # Random Fun
-    "dog": "Random Fun",
-    "cat": "Random Fun",
-    "8ball": "Random Fun",
-    "choice": "Random Fun",
-    # Utility
-    "ping": "Utility",
+
+    "dog": "Fun",
+    "cat": "Fun",
+    "8ball": "Fun",
+    "choice": "Fun",
+
+    "rules": "Utility",
     "avatar": "Utility",
     "userinfo": "Utility",
     "serverinfo": "Utility",
     "stats": "Utility",
     "embed": "Utility",
+
+    "image": "Image",
+
+    "set": "Administration",
+    "autorole": "Administration",
+    "setup": "Administration",
+    "test": "Administration",
 }
 
-# Order in which categories are rendered. Categories produced at runtime but
-# not listed here (including DEFAULT_CATEGORY) are appended afterwards.
+# Render order; categories not listed here (including DEFAULT_CATEGORY) are appended after.
 CATEGORY_ORDER = [
-    "General",
-    "Settings",
     "Lobbies",
-    "Image Manipulation",
-    "Random Fun",
+    "Fun",
     "Utility",
+    "Image",
+    "Administration",
 ]
 
 DEFAULT_CATEGORY = "Other"
 
+CATEGORY_DESCRIPTIONS = {
+    "Lobbies": "Manage your own temporary voice lobby",
+    "Fun": "Random novelty commands",
+    "Utility": "Info and utility commands",
+    "Image": "Apply effects to images and create GIFs",
+    "Administration": "Server configuration commands",
+    DEFAULT_CATEGORY: "Uncategorized commands",
+}
+
+HOME_VALUE = "__home__"
+
 class CategorySelect(discord.ui.Select):
     def __init__(self, category_starts: dict[str, int]):
         self.category_starts = category_starts
-        options = [
-            discord.SelectOption(label=category, value=category)
-            for category in category_starts
+        super().__init__(placeholder="Jump to a category...", options=self._build_options(on_overview=True), row=0)
+
+    def _build_options(self, on_overview: bool) -> list[discord.SelectOption]:
+        options = []
+        if not on_overview:
+            options.append(discord.SelectOption(label="Help", description="Back to the category list", value=HOME_VALUE))
+        options += [
+            discord.SelectOption(label=category, description=CATEGORY_DESCRIPTIONS.get(category), value=category)
+            for category in self.category_starts
         ]
-        super().__init__(placeholder="Jump to a category...", options=options)
+        return options
+
+    def refresh(self, on_overview: bool):
+        self.options = self._build_options(on_overview)
 
     async def callback(self, interaction: discord.Interaction):
         view: HelpView = self.view
-        view.current_page = self.category_starts[self.values[0]]
+        value = self.values[0]
+        view.current_page = 0 if value == HOME_VALUE else self.category_starts[value]
         view.update_buttons()
         await interaction.response.edit_message(embed=view.pages[view.current_page], view=view)
 
 class HelpView(discord.ui.View):
     def __init__(self, pages, category_starts: dict[str, int]):
-        super().__init__(timeout=None)
+        super().__init__(timeout=180)
         self.pages = pages
         self.current_page = 0
-        if category_starts:
-            self.add_item(CategorySelect(category_starts))
+        self.message: discord.WebhookMessage | None = None
+        self.category_select = CategorySelect(category_starts) if category_starts else None
+        if self.category_select:
+            self.add_item(self.category_select)
         self.update_buttons()
+
+    async def on_timeout(self):
+        if self.message:
+            try:
+                await self.message.delete()
+            except discord.HTTPException:
+                pass
 
     def update_buttons(self):
         self.first_page.disabled = (self.current_page == 0)
         self.prev_page.disabled = (self.current_page == 0)
         self.next_page.disabled = (self.current_page == len(self.pages) - 1)
         self.last_page.disabled = (self.current_page == len(self.pages) - 1)
+        if self.category_select:
+            self.category_select.refresh(on_overview=(self.current_page == 0))
 
-    @discord.ui.button(label="<<", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="<<", style=discord.ButtonStyle.secondary, row=1)
     async def first_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.current_page = 0
         self.update_buttons()
         await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
 
-    @discord.ui.button(label="<", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="<", style=discord.ButtonStyle.secondary, row=1)
     async def prev_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.current_page = max(0, self.current_page - 1)
         self.update_buttons()
         await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
 
-    @discord.ui.button(label=">", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label=">", style=discord.ButtonStyle.secondary, row=1)
     async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.current_page = min(len(self.pages) - 1, self.current_page + 1)
         self.update_buttons()
         await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
 
-    @discord.ui.button(label=">>", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label=">>", style=discord.ButtonStyle.secondary, row=1)
     async def last_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.current_page = len(self.pages) - 1
         self.update_buttons()
@@ -111,7 +136,7 @@ class HelpCog(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         pages, category_starts = await self.get_help_pages(interaction.guild_id)
         view = HelpView(pages, category_starts)
-        await interaction.followup.send(embed=pages[0], view=view)
+        view.message = await interaction.followup.send(embed=pages[0], view=view)
 
     @staticmethod
     def _category_for(qualified_name: str) -> str:
@@ -127,9 +152,11 @@ class HelpCog(commands.Cog):
         for cmd in self.bot.tree.walk_commands():
             if not isinstance(cmd, app_commands.Command):
                 continue  # skip Group containers; their leaves are walked too
+            if cmd.qualified_name == "help":
+                continue  # the help command doesn't need to list itself
             category = self._category_for(cmd.qualified_name)
             desc = cmd.description or "No description provided."
-            line = f"**/{cmd.qualified_name}**: {desc}\n"
+            line = f"**/{cmd.qualified_name}**: *{desc}*\n"
             categorized.setdefault(category, []).append(line)
 
         # Render known categories first (in declared order), then any extras.
@@ -154,35 +181,41 @@ class HelpCog(commands.Cog):
     async def get_help_pages(self, guild_id=None):
         color = await get_guild_embed_color(guild_id)
 
-        pages = []
-        category_starts: dict[str, int] = {}
-        current_embed = discord.Embed(title="Help", color=color)
+        collected = self._collect_commands()
 
-        for category, field_value in self._collect_commands():
+        overview = discord.Embed(
+            title="Help",
+            description="Select a category below, or use the arrows to browse each one in order.",
+            color=color,
+        )
+        for category, field_value in collected:
+            if not field_value:
+                continue
+            overview.add_field(
+                name=category,
+                value=CATEGORY_DESCRIPTIONS.get(category, "​"),
+                inline=False,
+            )
+
+        # The overview occupies page 0; category pages are appended after it,
+        # so category_starts naturally points past it. Each category gets its
+        # own page(s) -- categories never share a page with one another.
+        pages = [overview]
+        category_starts: dict[str, int] = {}
+
+        for category, field_value in collected:
             if not field_value:
                 continue
 
-            for i, chunk in enumerate(self._chunk_field_value(field_value)):
-                if i > 0:
-                    # Continuation of an oversized category: always give it a fresh page.
-                    pages.append(current_embed)
-                    current_embed = discord.Embed(title="Help", color=color)
-                else:
-                    # Calculate current size to check against Discord limits (6000 chars total, 25 fields)
-                    current_size = len(current_embed.title or "") + len(current_embed.description or "")
-                    for f in current_embed.fields:
-                        current_size += len(f.name) + len(f.value)
-
-                    # If adding this field exceeds safe limit (5000) or field count (25), start new page
-                    if (current_size + len(category) + len(chunk) > 5000) or (len(current_embed.fields) >= 25):
-                        pages.append(current_embed)
-                        current_embed = discord.Embed(title="Help", color=color)
-
-                    category_starts.setdefault(category, len(pages))
-
-                current_embed.add_field(name=category, value=chunk, inline=False)
-
-        pages.append(current_embed)
+            category_starts[category] = len(pages)
+            prefix = CATEGORY_DESCRIPTIONS.get(category, "")
+            prefix_block = f"{prefix}\n\n" if prefix else ""
+            for chunk in self._chunk_field_value(field_value, limit=4096 - len(prefix_block)):
+                pages.append(discord.Embed(
+                    title=category,
+                    description=f"{prefix_block}{chunk}",
+                    color=color,
+                ))
 
         total_pages = len(pages)
         for i, page in enumerate(pages):
