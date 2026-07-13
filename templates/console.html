@@ -3,10 +3,12 @@
 {% block content %}
 
 <header>
-    <div class="dot {{ 'dot-online' if is_ready else 'dot-offline' }}"></div>
-    <span class="header-title">{{ bot_name }}</span>
-    <span class="header-sub">/ Console</span>
-    <a href="/" class="btn" style="margin-left: auto;">Dashboard</a>
+    <div class="header-left">
+        <div class="dot {{ 'dot-online' if is_ready else 'dot-offline' }}"></div>
+        <span class="header-title">{{ bot_name }}</span>
+        <span class="header-sub">/ Console</span>
+    </div>
+    <a href="/" class="btn">Dashboard</a>
 </header>
 
 <main>

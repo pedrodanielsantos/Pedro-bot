@@ -33,9 +33,25 @@
 
         header {
             border-bottom: 1px solid var(--border);
-            padding: 14px 32px;
+            padding: 14px 16px;
             display: flex;
             align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            row-gap: 8px;
+            gap: 10px;
+        }
+
+        header > a.btn {
+            margin-left: auto;
+            text-decoration: none;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            row-gap: 8px;
             gap: 10px;
         }
 
@@ -49,8 +65,8 @@
         .dot-online  { background: var(--green); }
         .dot-offline { background: var(--red); }
 
-        .header-title { font-weight: 600; font-size: 15px; }
-        .header-sub   { color: var(--muted); font-size: 13px; }
+        .header-title { font-weight: 600; font-size: 15px; white-space: nowrap; }
+        .header-sub   { color: var(--muted); font-size: 13px; white-space: nowrap; }
 
         .icon-btn {
             display: inline-flex;
