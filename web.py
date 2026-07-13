@@ -1,9 +1,11 @@
 import asyncio
 import importlib
 import logging
+import subprocess
 import sys
 import time
 
+import discord
 import uvicorn
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -12,6 +14,21 @@ from fastapi.templating import Jinja2Templates
 from utils.log import LOG_BUFFER
 
 templates = Jinja2Templates(directory="templates")
+templates.env.globals["discord_version"] = discord.__version__
+
+
+def _commit_hash() -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, check=True, timeout=5,
+        )
+        return result.stdout.strip()
+    except (subprocess.SubprocessError, OSError):
+        return None
+
+
+templates.env.globals["commit_hash"] = _commit_hash()
 _start_time = time.time()
 logger = logging.getLogger("web")
 

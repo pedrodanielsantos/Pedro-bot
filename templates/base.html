@@ -297,9 +297,33 @@
             margin-top: 3px;
             font-family: var(--mono);
         }
+
+        footer {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 0 16px 32px;
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        footer a {
+            color: var(--muted);
+            text-decoration: none;
+        }
+
+        footer a:hover { color: var(--text); }
     </style>
 </head>
 <body>
     {% block content %}{% endblock %}
+    <footer>
+        <a href="https://github.com/pedrodanielsantos/Pedro-bot" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://github.com/pedrodanielsantos/Pedro-bot#readme" target="_blank" rel="noopener noreferrer">README</a>
+        <span>discord.py {{ discord_version }}</span>
+        {% if commit_hash %}<span>{{ commit_hash }}</span>{% endif %}
+    </footer>
 </body>
 </html>
