@@ -104,7 +104,7 @@
         .card {
             background: var(--surface);
             border-radius: var(--radius);
-            padding: 18px 22px;
+            padding: 18px 16px;
         }
 
         .stat-grid {
@@ -159,6 +159,7 @@
             border-collapse: collapse;
             background: var(--surface);
             border-radius: var(--radius);
+            border-bottom: 1px solid var(--border);
             overflow: hidden;
         }
 
@@ -225,7 +226,6 @@
             vertical-align: middle;
         }
 
-        tbody tr:last-child td { border-bottom: none; }
         td.mono { font-family: var(--mono); font-size: 12px; }
 
         .actions { display: flex; gap: 6px; justify-content: flex-end; }
