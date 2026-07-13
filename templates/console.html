@@ -12,7 +12,6 @@
 </header>
 
 <main>
-    <div class="section-label">Live Logs</div>
     <pre id="console-log" class="card" style="font-family: var(--mono); font-size: 12px; white-space: pre-wrap; max-height: 75vh; overflow-y: auto;"
         hx-get="/console/logs" hx-trigger="load, every 2s" hx-swap="innerHTML">{% include "partials/console_log.html" %}</pre>
 </main>
