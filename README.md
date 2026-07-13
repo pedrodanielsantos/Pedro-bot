@@ -87,6 +87,8 @@ view works whether you're debugging startup, a cog reload, or a command error.
 | `/rules` | Displays the server rules |
 | `/serverinfo` | Displays server statistics |
 | `/stats` | Shows technical information about the bot |
+| `/timestamp at` | Generate a timestamp tag for a specific date and time |
+| `/timestamp in` | Generate a timestamp tag relative to now |
 | `/userinfo` | Displays information about a user |
 
 ### Image

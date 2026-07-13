@@ -21,6 +21,7 @@ COMMAND_CATEGORIES = {
     "serverinfo": "Utility",
     "stats": "Utility",
     "embed": "Utility",
+    "timestamp": "Utility",
 
     "image": "Image",
 
