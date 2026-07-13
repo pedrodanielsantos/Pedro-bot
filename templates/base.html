@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ bot_name or "Bot" }} — Dashboard</title>
+    <title>{{ bot_name or "Bot" }} {% block title %}Dashboard{% endblock %}</title>
+    {% if bot_avatar_url %}<link rel="icon" href="{{ bot_avatar_url }}">{% endif %}
     <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
     <style>
         :root {

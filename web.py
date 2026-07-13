@@ -28,6 +28,7 @@ def create_app(bot):
         ready = bot.is_ready()
         return templates.TemplateResponse(request=request, name="dashboard.html", context={
             "bot_name": bot.user.name if bot.user else "Bot",
+            "bot_avatar_url": str(bot.user.display_avatar.url) if bot.user else None,
             "is_ready": ready,
             "latency": round(bot.latency * 1000) if ready else None,
             "guild_count": len(bot.guilds) if ready else None,
@@ -124,6 +125,7 @@ def create_app(bot):
         ready = bot.is_ready()
         return templates.TemplateResponse(request=request, name="console.html", context={
             "bot_name": bot.user.name if bot.user else "Bot",
+            "bot_avatar_url": str(bot.user.display_avatar.url) if bot.user else None,
             "is_ready": ready,
             "logs": list(LOG_BUFFER),
         })
