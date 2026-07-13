@@ -1,11 +1,20 @@
-<tr id="cog-{{ extension | replace('.', '-') }}">
+<tr id="cog-{{ extension | replace('.', '-') }}"{% if oob %} hx-swap-oob="true"{% endif %}>
+    <td>
+        <input type="checkbox" name="cogs" value="{{ extension }}" data-loaded="{{ 'true' if loaded else 'false' }}">
+    </td>
     <td class="mono">
         {{ extension }}
         {% if error %}
             <span class="badge badge-error">Error</span>
             <span class="error-msg">{{ error }}</span>
-        {% elif loaded %}
-            <span class="badge badge-ok">Reloaded</span>
+        {% elif just_reloaded %}
+            <span class="badge badge-ok"
+                hx-get="/cogs/badge/clear"
+                hx-trigger="load delay:2s"
+                hx-target="this"
+                hx-swap="outerHTML">
+                Reloaded
+            </span>
         {% endif %}
     </td>
     <td>

@@ -70,7 +70,12 @@ def create_app(bot):
             "extension": extension,
             "loaded": True,
             "error": error,
+            "just_reloaded": True,
         })
+
+    @app.get("/cogs/badge/clear", response_class=HTMLResponse)
+    async def cog_badge_clear():
+        return HTMLResponse("")
 
     @app.post("/cogs/unload/{extension:path}", response_class=HTMLResponse)
     async def unload_cog(request: Request, extension: str):
@@ -100,6 +105,58 @@ def create_app(bot):
             "extension": extension,
             "loaded": error is None,
             "error": error,
+        })
+
+    @app.post("/cogs/bulk/reload", response_class=HTMLResponse)
+    async def bulk_reload_cogs(request: Request, cogs: list[str] = Form(...)):
+        rows = []
+        for extension in cogs:
+            error = None
+            try:
+                await bot.reload_extension(extension)
+                logger.info(f"Reloaded extension: {extension}")
+            except Exception as e:
+                error = str(e)
+                logger.error(f"Failed to reload extension {extension}: {e}")
+            rows.append({"extension": extension, "loaded": extension in bot.extensions, "error": error, "just_reloaded": True})
+        return templates.TemplateResponse(request=request, name="partials/cog_rows_oob.html", context={
+            "rows": rows,
+        })
+
+    @app.post("/cogs/bulk/unload", response_class=HTMLResponse)
+    async def bulk_unload_cogs(request: Request, cogs: list[str] = Form(...)):
+        rows = []
+        for extension in cogs:
+            if extension not in bot.extensions:
+                continue
+            error = None
+            try:
+                await bot.unload_extension(extension)
+                logger.info(f"Unloaded extension: {extension}")
+            except Exception as e:
+                error = str(e)
+                logger.error(f"Failed to unload extension {extension}: {e}")
+            rows.append({"extension": extension, "loaded": extension in bot.extensions, "error": error})
+        return templates.TemplateResponse(request=request, name="partials/cog_rows_oob.html", context={
+            "rows": rows,
+        })
+
+    @app.post("/cogs/bulk/load", response_class=HTMLResponse)
+    async def bulk_load_cogs(request: Request, cogs: list[str] = Form(...)):
+        rows = []
+        for extension in cogs:
+            if extension in bot.extensions:
+                continue
+            error = None
+            try:
+                await bot.load_extension(extension)
+                logger.info(f"Loaded extension: {extension}")
+            except Exception as e:
+                error = str(e)
+                logger.error(f"Failed to load extension {extension}: {e}")
+            rows.append({"extension": extension, "loaded": extension in bot.extensions, "error": error})
+        return templates.TemplateResponse(request=request, name="partials/cog_rows_oob.html", context={
+            "rows": rows,
         })
 
     @app.post("/cogs/load")

@@ -1,0 +1,5 @@
+{% for row in rows %}
+{% with extension=row.extension, loaded=row.loaded, error=row.error, just_reloaded=row.just_reloaded, oob=true %}
+{% include "partials/cog_row.html" %}
+{% endwith %}
+{% endfor %}

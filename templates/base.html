@@ -155,14 +155,59 @@
 
         table {
             width: 100%;
+            table-layout: fixed;
             border-collapse: collapse;
             background: var(--surface);
             border-radius: var(--radius);
             overflow: hidden;
         }
 
+        table input[type="checkbox"] {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            margin: 0;
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            background: var(--bg);
+            cursor: pointer;
+            position: relative;
+            vertical-align: middle;
+            flex-shrink: 0;
+        }
+
+        table input[type="checkbox"]:checked,
+        table input[type="checkbox"]:indeterminate {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        table input[type="checkbox"]:checked::after {
+            content: "";
+            position: absolute;
+            left: 4px;
+            top: 0px;
+            width: 4px;
+            height: 8px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: rotate(40deg);
+        }
+
+        table input[type="checkbox"]:indeterminate::after {
+            content: "";
+            position: absolute;
+            left: 3px;
+            top: 5px;
+            width: 6px;
+            height: 2px;
+            background: white;
+        }
+
         th {
             text-align: left;
+            height: 48px;
             padding: 10px 16px;
             font-size: 11px;
             font-weight: 600;
@@ -170,15 +215,17 @@
             letter-spacing: 0.06em;
             color: var(--muted);
             border-bottom: 1px solid var(--border);
+            vertical-align: middle;
         }
 
         td {
+            height: 48px;
             padding: 10px 16px;
             border-bottom: 1px solid var(--border);
             vertical-align: middle;
         }
 
-        tr:last-child td { border-bottom: none; }
+        tbody tr:last-child td { border-bottom: none; }
         td.mono { font-family: var(--mono); font-size: 12px; }
 
         .actions { display: flex; gap: 6px; justify-content: flex-end; }
@@ -214,7 +261,6 @@
             display: flex;
             gap: 8px;
             padding: 10px 16px;
-            border-top: 1px solid var(--border);
         }
 
         input[type="text"] {

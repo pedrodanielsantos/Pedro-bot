@@ -80,48 +80,115 @@
     </div>
 
     <div>
-        <table>
-            <thead>
-                <tr>
-                    <th>Cogs</th>
-                    <th style="text-align: right; width: 150px;">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for ext in extensions %}
-                <tr id="cog-{{ ext | replace('.', '-') }}">
-                    <td class="mono">{{ ext }}</td>
-                    <td>
-                        <div class="actions">
-                            <button class="btn"
-                                hx-post="/cogs/reload/{{ ext }}"
-                                hx-target="#cog-{{ ext | replace('.', '-') }}"
-                                hx-swap="outerHTML">
-                                Reload
-                            </button>
-                            <button class="btn btn-danger"
-                                hx-post="/cogs/unload/{{ ext }}"
-                                hx-target="#cog-{{ ext | replace('.', '-') }}"
-                                hx-swap="outerHTML">
-                                Unload
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td colspan="2" style="padding: 0;">
-                        <form class="load-form" action="/cogs/load" method="post">
-                            <input type="text" name="extension" placeholder="cogs.commands.example" />
-                            <button type="submit" class="btn btn-primary">Load</button>
-                        </form>
-                    </td>
-                </tr>
-            </tfoot>
-        </table>
+        <div id="cogs-form">
+            <table>
+                <thead>
+                    <tr id="cogs-header-row">
+                        <th style="width: 32px;">
+                            <input type="checkbox" id="cogs-select-all" style="display: none;">
+                        </th>
+                        <th>
+                            <span id="cogs-header-label" style="margin-left: -26px;">Cogs</span>
+                        </th>
+                        <th id="cogs-actions-cell" style="text-align: right; width: 220px;">
+                            <span id="cogs-actions-label">Actions</span>
+                            <div id="cogs-bulk-actions" class="actions" style="display: none; justify-content: flex-end; flex-wrap: wrap; row-gap: 4px;">
+                                <button type="button" class="btn"
+                                    hx-post="/cogs/bulk/reload"
+                                    hx-include="#cogs-form"
+                                    hx-target="#cogs-actions-cell"
+                                    hx-swap="none">
+                                    Reload
+                                </button>
+                                <button type="button" id="cogs-bulk-unload" class="btn btn-danger" style="display: none;"
+                                    hx-post="/cogs/bulk/unload"
+                                    hx-include="#cogs-form"
+                                    hx-target="#cogs-actions-cell"
+                                    hx-swap="none">
+                                    Unload
+                                </button>
+                                <button type="button" id="cogs-bulk-load" class="btn btn-primary" style="display: none;"
+                                    hx-post="/cogs/bulk/load"
+                                    hx-include="#cogs-form"
+                                    hx-target="#cogs-actions-cell"
+                                    hx-swap="none">
+                                    Load
+                                </button>
+                            </div>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody id="cog-tbody">
+                    {% for ext in extensions %}
+                    {% with extension=ext, loaded=true, error=none, just_reloaded=false, oob=false %}
+                    {% include "partials/cog_row.html" %}
+                    {% endwith %}
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="3" style="padding: 0;">
+                            <form class="load-form" action="/cogs/load" method="post">
+                                <input type="text" name="extension" placeholder="cogs.commands.example" />
+                                <button type="submit" class="btn btn-primary">Load</button>
+                            </form>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
     </div>
+
+    <script>
+        (function() {
+            const container = document.getElementById('cogs-form');
+            const headerLabel = document.getElementById('cogs-header-label');
+            const actionsLabel = document.getElementById('cogs-actions-label');
+            const bulkActions = document.getElementById('cogs-bulk-actions');
+            const selectAll = document.getElementById('cogs-select-all');
+            const unloadBtn = document.getElementById('cogs-bulk-unload');
+            const loadBtn = document.getElementById('cogs-bulk-load');
+
+            function updateToolbar() {
+                const boxes = Array.from(container.querySelectorAll('input[name="cogs"]'));
+                const checked = boxes.filter(function(cb) { return cb.checked; });
+
+                if (checked.length) {
+                    headerLabel.textContent = checked.length + ' selected';
+                    headerLabel.style.marginLeft = '0';
+                    actionsLabel.style.display = 'none';
+                    bulkActions.style.display = 'flex';
+                    selectAll.style.display = '';
+                } else {
+                    headerLabel.textContent = 'Cogs';
+                    headerLabel.style.marginLeft = '-26px';
+                    actionsLabel.style.display = '';
+                    bulkActions.style.display = 'none';
+                    selectAll.style.display = 'none';
+                    selectAll.checked = false;
+                }
+
+                selectAll.checked = boxes.length > 0 && checked.length === boxes.length;
+                selectAll.indeterminate = checked.length > 0 && checked.length < boxes.length;
+
+                const anyLoaded = checked.some(function(cb) { return cb.dataset.loaded === 'true'; });
+                const anyUnloaded = checked.some(function(cb) { return cb.dataset.loaded === 'false'; });
+                unloadBtn.style.display = anyLoaded ? '' : 'none';
+                loadBtn.style.display = anyUnloaded ? '' : 'none';
+            }
+
+            container.addEventListener('change', function(e) {
+                if (e.target === selectAll) {
+                    container.querySelectorAll('input[name="cogs"]').forEach(function(cb) {
+                        cb.checked = selectAll.checked;
+                    });
+                }
+                updateToolbar();
+            });
+
+            document.body.addEventListener('htmx:afterSwap', updateToolbar);
+        })();
+    </script>
 
 </main>
 
