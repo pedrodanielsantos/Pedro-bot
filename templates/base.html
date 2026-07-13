@@ -52,6 +52,21 @@
         .header-title { font-weight: 600; font-size: 15px; }
         .header-sub   { color: var(--muted); font-size: 13px; }
 
+        .icon-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: none;
+            border: none;
+            color: var(--muted);
+            cursor: pointer;
+            padding: 2px;
+            border-radius: 4px;
+            transition: color 0.12s, background 0.12s;
+        }
+
+        .icon-btn:hover { color: var(--text); background: var(--border); }
+
         main {
             max-width: 860px;
             margin: 0 auto;

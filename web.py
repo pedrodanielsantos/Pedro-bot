@@ -1,4 +1,7 @@
+import asyncio
+import importlib
 import logging
+import sys
 import time
 
 import uvicorn
@@ -136,6 +139,41 @@ def create_app(bot):
             "logs": list(LOG_BUFFER),
         })
 
+    @app.post("/web/reload", response_class=HTMLResponse)
+    async def reload_web(request: Request):
+        since = getattr(bot, "_web_epoch", 0)
+
+        async def _reload():
+            server = getattr(bot, "_web_server", None)
+            if server:
+                server.should_exit = True
+                for _ in range(30):
+                    if getattr(bot, "_web_server", None) is None:
+                        break
+                    await asyncio.sleep(0.1)
+
+            web_module = sys.modules[__name__]
+            importlib.reload(web_module)
+            asyncio.create_task(web_module.start(bot))
+            logger.info("Reloaded web dashboard.")
+
+        asyncio.create_task(_reload())
+        return templates.TemplateResponse(request=request, name="partials/web_reload_result.html", context={
+            "since": since,
+        })
+
+    @app.get("/web/reload/status", response_class=HTMLResponse)
+    async def reload_web_status(request: Request, since: int = 0):
+        if getattr(bot, "_web_epoch", 0) > since:
+            return templates.TemplateResponse(request=request, name="partials/web_reload_done.html", context={})
+        return templates.TemplateResponse(request=request, name="partials/web_reload_result.html", context={
+            "since": since,
+        })
+
+    @app.get("/web/reload/clear", response_class=HTMLResponse)
+    async def reload_web_clear():
+        return HTMLResponse('<span id="web-reload-status"></span>')
+
     return app
 
 
@@ -144,5 +182,6 @@ async def start(bot):
     config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="warning")
     server = uvicorn.Server(config)
     bot._web_server = server
+    bot._web_epoch = getattr(bot, "_web_epoch", 0) + 1
     await server.serve()
     bot._web_server = None

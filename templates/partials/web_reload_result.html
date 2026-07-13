@@ -1,0 +1,6 @@
+<span id="web-reload-status"
+    hx-get="/web/reload/status?since={{ since }}"
+    hx-trigger="load, every 500ms"
+    hx-swap="outerHTML">
+    <span class="badge badge-ok">Reloading…</span>
+</span>

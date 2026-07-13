@@ -5,6 +5,17 @@
     <div class="dot {{ 'dot-online' if is_ready else 'dot-offline' }}"></div>
     <span class="header-title">{{ bot_name }}</span>
     <span class="header-sub">/ Dashboard</span>
+    <button class="icon-btn"
+        title="Reload dashboard"
+        hx-post="/web/reload"
+        hx-target="#web-reload-status"
+        hx-swap="outerHTML"
+        hx-disabled-elt="this">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2v3.5H10" />
+        </svg>
+    </button>
+    <span id="web-reload-status"></span>
     <a href="/console" class="btn" style="margin-left: auto;">Console</a>
 </header>
 
