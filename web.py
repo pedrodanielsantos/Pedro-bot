@@ -51,7 +51,11 @@ def create_app(bot):
 
     @app.get("/guilds/clear", response_class=HTMLResponse)
     async def guild_list_clear():
-        return HTMLResponse("")
+        return HTMLResponse(
+            '<button id="guild-toggle" class="btn" hx-swap-oob="true" '
+            'hx-get="/guilds" hx-target="#guild-list" hx-swap="innerHTML">'
+            "View</button>"
+        )
 
     @app.post("/cogs/reload/{extension:path}", response_class=HTMLResponse)
     async def reload_cog(request: Request, extension: str):

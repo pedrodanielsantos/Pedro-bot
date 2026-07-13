@@ -7,7 +7,7 @@
         <span class="header-title">{{ bot_name }}</span>
         <span class="header-sub">/ Dashboard</span>
         <button class="icon-btn"
-            title="Reload dashboard"
+            title="Reload web.py"
             hx-post="/web/reload"
             hx-target="#web-reload-status"
             hx-swap="outerHTML"
@@ -27,9 +27,9 @@
         <div class="card">
             <div class="stat-label">Status</div>
             {% if is_ready %}
-            <div class="stat-value" style="font-size: 20px; color: var(--green);">Online</div>
+            <div class="stat-value" style="color: var(--green);">Online</div>
             {% else %}
-            <div class="stat-value" style="font-size: 20px; color: var(--red);">Offline</div>
+            <div class="stat-value" style="color: var(--red);">Offline</div>
             {% endif %}
         </div>
         <div class="card">
@@ -42,7 +42,7 @@
         </div>
         <div class="card">
             <div class="stat-label">Uptime</div>
-            <div class="stat-value" style="font-size: 18px;">{{ uptime }}</div>
+            <div class="stat-value">{{ uptime }}</div>
         </div>
     </div>
 
@@ -52,11 +52,11 @@
                 <div class="stat-label">Guilds</div>
                 <div class="stat-value">{{ guild_count if guild_count is not none else "—" }}</div>
             </div>
-            <button class="btn"
+            <button id="guild-toggle" class="btn"
                 hx-get="/guilds"
                 hx-target="#guild-list"
                 hx-swap="innerHTML">
-                View all
+                View
             </button>
         </div>
         <div id="guild-list"></div>
@@ -73,18 +73,17 @@
                 hx-target="#sync-status"
                 hx-swap="outerHTML"
                 hx-disabled-elt="this">
-                <span class="btn-label">Sync Commands</span>
+                <span class="btn-label">Sync</span>
                 <span class="btn-label htmx-indicator">Syncing…</span>
             </button>
         </div>
     </div>
 
     <div>
-        <div class="section-label">Cog Manager</div>
         <table>
             <thead>
                 <tr>
-                    <th>Extension</th>
+                    <th>Cogs</th>
                     <th style="text-align: right; width: 150px;">Actions</th>
                 </tr>
             </thead>
