@@ -55,7 +55,7 @@ HOME_VALUE = "__home__"
 class CategorySelect(discord.ui.Select):
     def __init__(self, category_starts: dict[str, int]):
         self.category_starts = category_starts
-        super().__init__(placeholder="Jump to a category...", options=self._build_options(on_overview=True), row=0)
+        super().__init__(placeholder="Jump to a category...", options=self._build_options(on_overview=True))
 
     def _build_options(self, on_overview: bool) -> list[discord.SelectOption]:
         options = []
@@ -73,19 +73,42 @@ class CategorySelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         view: HelpView = self.view
         value = self.values[0]
-        view.current_page = 0 if value == HOME_VALUE else self.category_starts[value]
-        view.update_buttons()
-        await interaction.response.edit_message(embed=view.pages[view.current_page], view=view)
+        target = 0 if value == HOME_VALUE else self.category_starts[value]
+        await view.go_to_page(interaction, target)
 
-class HelpView(discord.ui.View):
-    def __init__(self, pages, category_starts: dict[str, int]):
+class HelpView(discord.ui.LayoutView):
+    def __init__(self, pages: list[str], category_starts: dict[str, int], color):
         super().__init__(timeout=180)
         self.pages = pages
         self.current_page = 0
         self.message: discord.WebhookMessage | None = None
+
+        self.text_display = discord.ui.TextDisplay(pages[0])
+
+        self.first_page = discord.ui.Button(label="<<", style=discord.ButtonStyle.secondary)
+        self.first_page.callback = self._first_page
+        self.prev_page = discord.ui.Button(label="<", style=discord.ButtonStyle.secondary)
+        self.prev_page.callback = self._prev_page
+        self.page_indicator = discord.ui.Button(style=discord.ButtonStyle.secondary, disabled=True)
+        self.next_page = discord.ui.Button(label=">", style=discord.ButtonStyle.secondary)
+        self.next_page.callback = self._next_page
+        self.last_page = discord.ui.Button(label=">>", style=discord.ButtonStyle.secondary)
+        self.last_page.callback = self._last_page
+        nav_row = discord.ui.ActionRow(
+            self.first_page, self.prev_page, self.page_indicator, self.next_page, self.last_page
+        )
+
+        # Everything lives in one Container so the select and buttons render
+        # attached to the text, inside the same accent-colored box.
+        self.container = discord.ui.Container(self.text_display, accent_color=color)
+
         self.category_select = CategorySelect(category_starts) if category_starts else None
         if self.category_select:
-            self.add_item(self.category_select)
+            self.container.add_item(discord.ui.ActionRow(self.category_select))
+
+        self.container.add_item(nav_row)
+
+        self.add_item(self.container)
         self.update_buttons()
 
     async def on_timeout(self):
@@ -100,32 +123,27 @@ class HelpView(discord.ui.View):
         self.prev_page.disabled = (self.current_page == 0)
         self.next_page.disabled = (self.current_page == len(self.pages) - 1)
         self.last_page.disabled = (self.current_page == len(self.pages) - 1)
+        self.page_indicator.label = f"Page {self.current_page + 1}/{len(self.pages)}"
         if self.category_select:
             self.category_select.refresh(on_overview=(self.current_page == 0))
 
-    @discord.ui.button(label="<<", style=discord.ButtonStyle.secondary, row=1)
-    async def first_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page = 0
+    async def go_to_page(self, interaction: discord.Interaction, page: int):
+        self.current_page = page
+        self.text_display.content = self.pages[self.current_page]
         self.update_buttons()
-        await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
+        await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="<", style=discord.ButtonStyle.secondary, row=1)
-    async def prev_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page = max(0, self.current_page - 1)
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
+    async def _first_page(self, interaction: discord.Interaction):
+        await self.go_to_page(interaction, 0)
 
-    @discord.ui.button(label=">", style=discord.ButtonStyle.secondary, row=1)
-    async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page = min(len(self.pages) - 1, self.current_page + 1)
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
+    async def _prev_page(self, interaction: discord.Interaction):
+        await self.go_to_page(interaction, max(0, self.current_page - 1))
 
-    @discord.ui.button(label=">>", style=discord.ButtonStyle.secondary, row=1)
-    async def last_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page = len(self.pages) - 1
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
+    async def _next_page(self, interaction: discord.Interaction):
+        await self.go_to_page(interaction, min(len(self.pages) - 1, self.current_page + 1))
+
+    async def _last_page(self, interaction: discord.Interaction):
+        await self.go_to_page(interaction, len(self.pages) - 1)
 
 class HelpCog(commands.Cog):
     def __init__(self, bot):
@@ -134,9 +152,9 @@ class HelpCog(commands.Cog):
     @app_commands.command(name="help", description="Displays the help message with all available commands")
     async def help_command(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        pages, category_starts = await self.get_help_pages(interaction.guild_id)
-        view = HelpView(pages, category_starts)
-        view.message = await interaction.followup.send(embed=pages[0], view=view)
+        pages, category_starts, color = await self.get_help_pages(interaction.guild_id)
+        view = HelpView(pages, category_starts, color)
+        view.message = await interaction.followup.send(view=view)
 
     @staticmethod
     def _category_for(qualified_name: str) -> str:
@@ -165,8 +183,8 @@ class HelpCog(commands.Cog):
         return [(c, "".join(sorted(categorized[c]))) for c in ordered]
 
     @staticmethod
-    def _chunk_field_value(text: str, limit: int = 1024) -> list[str]:
-        """Split a field value into pieces that fit Discord's per-field character limit."""
+    def _chunk_text(text: str, limit: int) -> list[str]:
+        """Split text into pieces that fit Discord's per-TextDisplay character limit."""
         chunks = []
         current = ""
         for line in text.splitlines(keepends=True):
@@ -183,24 +201,19 @@ class HelpCog(commands.Cog):
 
         collected = self._collect_commands()
 
-        overview = discord.Embed(
-            title="Help",
-            description="Select a category below, or use the arrows to browse each one in order.",
-            color=color,
-        )
+        overview_parts = [
+            "# Help",
+            "Select a category below, or use the arrows to browse each one in order.",
+        ]
         for category, field_value in collected:
             if not field_value:
                 continue
-            overview.add_field(
-                name=category,
-                value=CATEGORY_DESCRIPTIONS.get(category, "​"),
-                inline=False,
-            )
+            overview_parts.append(f"**{category}**\n{CATEGORY_DESCRIPTIONS.get(category, '')}")
 
         # The overview occupies page 0; category pages are appended after it,
         # so category_starts naturally points past it. Each category gets its
         # own page(s) -- categories never share a page with one another.
-        pages = [overview]
+        pages = ["\n\n".join(overview_parts)]
         category_starts: dict[str, int] = {}
 
         for category, field_value in collected:
@@ -208,20 +221,13 @@ class HelpCog(commands.Cog):
                 continue
 
             category_starts[category] = len(pages)
+            header = f"# {category}\n"
             prefix = CATEGORY_DESCRIPTIONS.get(category, "")
             prefix_block = f"{prefix}\n\n" if prefix else ""
-            for chunk in self._chunk_field_value(field_value, limit=4096 - len(prefix_block)):
-                pages.append(discord.Embed(
-                    title=category,
-                    description=f"{prefix_block}{chunk}",
-                    color=color,
-                ))
+            for chunk in self._chunk_text(field_value, limit=4000 - len(header) - len(prefix_block)):
+                pages.append(f"{header}{prefix_block}{chunk}")
 
-        total_pages = len(pages)
-        for i, page in enumerate(pages):
-            page.set_footer(text=f"Page {i + 1} of {total_pages}")
-
-        return pages, category_starts
+        return pages, category_starts, color
 
 async def setup(bot):
     await bot.add_cog(HelpCog(bot))
