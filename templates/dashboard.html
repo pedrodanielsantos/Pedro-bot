@@ -119,8 +119,8 @@
                     </tr>
                 </thead>
                 <tbody id="cog-tbody">
-                    {% for ext in extensions %}
-                    {% with extension=ext, loaded=true, error=none, just_reloaded=false, oob=false %}
+                    {% for cog in cogs %}
+                    {% with extension=cog.extension, loaded=cog.loaded, error=none, just_reloaded=false, oob=false %}
                     {% include "partials/cog_row.html" %}
                     {% endwith %}
                     {% endfor %}

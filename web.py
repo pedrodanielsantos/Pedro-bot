@@ -1,6 +1,7 @@
 import asyncio
 import importlib
 import logging
+import os
 import subprocess
 import sys
 
@@ -10,8 +11,11 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from utils.cogs import discover_cog_paths
 from utils.log import LOG_BUFFER
 from utils.uptime import format_uptime
+
+COGS_DIR = os.path.join(os.path.dirname(__file__), "cogs")
 
 templates = Jinja2Templates(directory="templates")
 templates.env.globals["discord_version"] = discord.__version__
@@ -38,6 +42,8 @@ def create_app(bot):
     @app.get("/", response_class=HTMLResponse)
     async def dashboard(request: Request):
         ready = bot.is_ready()
+        all_paths = sorted(set(discover_cog_paths(COGS_DIR)) | set(bot.extensions.keys()))
+        cogs = [{"extension": path, "loaded": path in bot.extensions} for path in all_paths]
         return templates.TemplateResponse(request=request, name="dashboard.html", context={
             "bot_name": bot.user.name if bot.user else "Bot",
             "bot_avatar_url": str(bot.user.display_avatar.url) if bot.user else None,
@@ -45,7 +51,7 @@ def create_app(bot):
             "latency": round(bot.latency * 1000) if ready else None,
             "guild_count": len(bot.guilds) if ready else None,
             "uptime": format_uptime(bot.launch_time),
-            "extensions": sorted(bot.extensions.keys()),
+            "cogs": cogs,
         })
 
     @app.get("/guilds", response_class=HTMLResponse)

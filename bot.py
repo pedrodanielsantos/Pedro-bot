@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from db.database import initialize_databases, close_all_databases
 from utils.log import setup_logging
+from utils.cogs import discover_cog_paths
 import asyncio
 import web
 
@@ -29,22 +30,14 @@ bot.remove_command("help")
 
 async def load_cogs(bot):
     cogs_dir = os.path.join(os.path.dirname(__file__), "cogs")
-    for root, dirs, files in os.walk(cogs_dir):
-        for filename in files:
-            if filename.endswith(".py") and not filename.startswith("__"):
-                relative_path = os.path.relpath(root, cogs_dir)
-                if relative_path == ".":
-                    cog_path = f"cogs.{filename[:-3]}"
-                else:
-                    cog_path = f"cogs.{relative_path.replace(os.sep, '.')}.{filename[:-3]}"
-
-                try:
-                    await bot.load_extension(cog_path)
-                    logger.info(f"Loaded cog: {cog_path}")
-                except commands.NoEntryPointError:
-                    pass
-                except Exception as e:
-                    logger.error(f"Failed to load cog {cog_path}: {e}")
+    for cog_path in discover_cog_paths(cogs_dir):
+        try:
+            await bot.load_extension(cog_path)
+            logger.info(f"Loaded cog: {cog_path}")
+        except commands.NoEntryPointError:
+            pass
+        except Exception as e:
+            logger.error(f"Failed to load cog {cog_path}: {e}")
 
 has_synced = False
 
