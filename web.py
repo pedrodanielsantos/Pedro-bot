@@ -8,7 +8,7 @@ import sys
 import discord
 import uvicorn
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from utils.cogs import discover_cog_paths
@@ -173,15 +173,6 @@ def create_app(bot):
         return templates.TemplateResponse(request=request, name="partials/cog_rows_oob.html", context={
             "rows": rows,
         })
-
-    @app.post("/cogs/load")
-    async def load_cog(extension: str = Form(...)):
-        try:
-            await bot.load_extension(extension)
-            logger.info(f"Loaded extension: {extension}")
-        except Exception as e:
-            logger.error(f"Failed to load extension {extension}: {e}")
-        return RedirectResponse("/", status_code=303)
 
     @app.post("/commands/sync", response_class=HTMLResponse)
     async def sync_commands(request: Request):
