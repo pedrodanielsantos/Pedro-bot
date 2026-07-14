@@ -3,7 +3,6 @@ import importlib
 import logging
 import subprocess
 import sys
-import time
 
 import discord
 import uvicorn
@@ -12,6 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from utils.log import LOG_BUFFER
+from utils.uptime import format_uptime
 
 templates = Jinja2Templates(directory="templates")
 templates.env.globals["discord_version"] = discord.__version__
@@ -29,15 +29,7 @@ def _commit_hash() -> str | None:
 
 
 templates.env.globals["commit_hash"] = _commit_hash()
-_start_time = time.time()
 logger = logging.getLogger("web")
-
-
-def _uptime() -> str:
-    delta = int(time.time() - _start_time)
-    hours, remainder = divmod(delta, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    return f"{hours}h {minutes}m {seconds}s"
 
 
 def create_app(bot):
@@ -52,7 +44,7 @@ def create_app(bot):
             "is_ready": ready,
             "latency": round(bot.latency * 1000) if ready else None,
             "guild_count": len(bot.guilds) if ready else None,
-            "uptime": _uptime(),
+            "uptime": format_uptime(bot.launch_time),
             "extensions": sorted(bot.extensions.keys()),
         })
 

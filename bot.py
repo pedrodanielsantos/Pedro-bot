@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import logging
 import os
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from db.database import initialize_databases, close_all_databases
 from utils.log import setup_logging
@@ -21,6 +22,7 @@ intents.members = True
 intents.guilds = True
 intents.message_content = True
 bot = commands.Bot(command_prefix="ç!", intents=intents)
+bot.launch_time = datetime.now(timezone.utc)
 
 # A custom /help command is loaded from cogs, so the built-in one is removed to avoid a name clash.
 bot.remove_command("help")

@@ -1,22 +1,17 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from datetime import datetime
 from db.database import get_guild_embed_color
+from utils.uptime import format_uptime
 
 class Stats(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.start_time = datetime.utcnow()
 
     @app_commands.command(name="stats", description="Shows technical information about the bot")
     async def stats(self, interaction: discord.Interaction):
         """Displays technical information about the bot."""
-        uptime = datetime.utcnow() - self.start_time
-        days, remainder = divmod(int(uptime.total_seconds()), 86400)
-        hours, remainder = divmod(remainder, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        uptime_str = f"{days}d {hours}h {minutes}m {seconds}s"
+        uptime_str = format_uptime(self.bot.launch_time)
 
         server_count = len(self.bot.guilds)
         member_count = sum(g.member_count for g in self.bot.guilds if g.member_count)
