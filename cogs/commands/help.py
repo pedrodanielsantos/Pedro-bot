@@ -230,5 +230,5 @@ class HelpCog(commands.Cog):
 
         return pages, category_starts, color
 
-async def setup(bot):
+async def setup(bot: commands.Bot):
     await bot.add_cog(HelpCog(bot))
