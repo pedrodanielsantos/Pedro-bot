@@ -18,14 +18,30 @@ class DeveloperTools(commands.Cog):
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
         if isinstance(error, commands.CheckFailure):
             embed = discord.Embed(description="You are not authorized to use this command.", color=ERROR_COLOR)
-            await ctx.reply(embed=embed, delete_after=5)
+            await self._reply_or_dm(ctx, embed, delete_after=5)
         elif isinstance(error, commands.MissingRequiredArgument):
             embed = discord.Embed(description=f"Missing required argument: `{error.param.name}`", color=ERROR_COLOR)
-            await ctx.reply(embed=embed)
+            await self._reply_or_dm(ctx, embed)
         else:
             embed = discord.Embed(description=f"An error occurred: {error}", color=ERROR_COLOR)
-            await ctx.reply(embed=embed)
+            await self._reply_or_dm(ctx, embed)
             logger.error(f"Error in command: {error}")
+
+    async def _reply_or_dm(self, ctx: commands.Context, embed: discord.Embed, **reply_kwargs):
+        """Replies in the invoking channel, falling back to a DM if the bot can't
+        send there. cog_check guarantees ctx.author is always the bot owner.
+        """
+        try:
+            await ctx.reply(embed=embed, **reply_kwargs)
+        except discord.Forbidden:
+            dm_embed = discord.Embed(
+                description=f"Couldn't reply in {ctx.channel.mention} (missing permissions). {embed.description}",
+                color=embed.color,
+            )
+            try:
+                await ctx.author.send(embed=dm_embed)
+            except discord.Forbidden:
+                logger.error(f"Could not DM the owner about a command error: {embed.description}")
 
     async def cog_check(self, ctx: commands.Context) -> bool:
         # Runs before every command in this cog and restricts all of them to the bot owner.
@@ -69,9 +85,8 @@ class DeveloperTools(commands.Cog):
     @commands.command(name="reload", hidden=True)
     async def reload(self, ctx: commands.Context, cog: str = None):
         """
-        Reloads a specific cog, or all loaded cogs if none is given.
-        Usage: ç!reload lobby
-               ç!reload
+        Reloads a specific cog, or all loaded cogs if none is given
+        Usage: ç!reload [cog]
         """
         if cog is None:
             failed = []
@@ -112,8 +127,8 @@ class DeveloperTools(commands.Cog):
     @commands.command(name="load", hidden=True)
     async def load(self, ctx: commands.Context, cog: str):
         """
-        Loads a specific cog.
-        Usage: ç!load lobby
+        Loads a specific cog
+        Usage: ç!load <cog>
         """
         extension = self.find_extension(cog)
 
@@ -135,8 +150,8 @@ class DeveloperTools(commands.Cog):
     @commands.command(name="unload", hidden=True)
     async def unload(self, ctx: commands.Context, cog: str):
         """
-        Unloads a specific cog.
-        Usage: ç!unload lobby
+        Unloads a specific cog
+        Usage: ç!unload <cog>
         """
         extension = self.find_extension(cog)
 
@@ -158,11 +173,11 @@ class DeveloperTools(commands.Cog):
     @commands.command(name="sync", hidden=True)
     async def sync(self, ctx: commands.Context, spec: str = None):
         """
-        Syncs the slash command tree.
-        Usage:
-        ç!sync       -> Global sync
-        ç!sync .     -> Sync to current guild (instant)
-        ç!sync ^     -> Clear commands from current guild
+        Syncs the slash command tree
+        Usage: ç!sync [. | ^]
+        ç!sync       globally
+        ç!sync .     this guild
+        ç!sync ^     clear guild
         """
         if spec == "." and ctx.guild:
             self.bot.tree.copy_global_to(guild=ctx.guild)
@@ -189,23 +204,38 @@ class DeveloperTools(commands.Cog):
     @commands.command(name="devtools", hidden=True)
     async def devtools(self, ctx: commands.Context):
         """
-        Shows available developer commands.
+        Shows available developer commands
         Usage: ç!devtools
         """
         guild_id = ctx.guild.id if ctx.guild else None
         color = await get_guild_embed_color(guild_id)
-        embed = discord.Embed(title="Developer Tools", color=color)
+
+        lines = [
+            "# Developer Tools",
+            "`<required>` arguments must be given. `[optional]` ones can be left out.",
+            "",
+        ]
         for cmd in self.get_commands():
-            desc = cmd.help or "No description provided."
-            embed.add_field(name=f"ç!{cmd.name}", value=f"```{desc}```", inline=False)
+            doc = (cmd.help or "No description provided.").strip()
+            if "\nUsage:" in doc:
+                summary, usage = doc.split("\nUsage:", 1)
+                usage = "Usage:" + usage
+            else:
+                summary, usage = doc, ""
+            summary = " ".join(summary.split())
+
+            lines.append(f"**ç!{cmd.name}**: *{summary}*")
+            if usage:
+                lines.append(f"```{usage}```")
+
+        embed = discord.Embed(description="\n".join(lines).rstrip(), color=color)
         await ctx.reply(embed=embed)
 
     @commands.command(name="deletemessage", hidden=True)
     async def deletemessage(self, ctx: commands.Context, message_id: int):
         """
-        Deletes a specific message by ID. Only works on the bot's own messages
-        (e.g. in DMs, where it can't delete anyone else's).
-        Usage: ç!deletemessage 123456789
+        Deletes a message by ID, only works on the bot's own messages
+        Usage: ç!deletemessage <message_id>
         """
         try:
             msg = await ctx.channel.fetch_message(message_id)
@@ -224,7 +254,7 @@ class DeveloperTools(commands.Cog):
     @commands.command(name="reloadweb", hidden=True)
     async def reloadweb(self, ctx: commands.Context):
         """
-        Reloads the web dashboard without restarting the bot.
+        Reloads the web dashboard
         Usage: ç!reloadweb
         """
         # The dashboard runs in run.py's process, so trigger its reload endpoint instead of reimplementing it here.
