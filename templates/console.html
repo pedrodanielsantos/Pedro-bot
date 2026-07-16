@@ -4,7 +4,7 @@
 
 <header>
     <div class="header-left">
-        <div class="dot {{ 'dot-online' if is_ready else 'dot-offline' }}"></div>
+        {% with is_ready=is_ready, status=supervisor_status %}{% include "partials/bot_control.html" %}{% endwith %}
         <span class="header-title">{{ bot_name }}</span>
         <span class="header-sub">/ Console</span>
     </div>

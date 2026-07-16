@@ -240,6 +240,7 @@ def create_app(supervisor, web_state):
             "bot_avatar_url": status.get("bot_avatar_url"),
             "is_ready": bool(status.get("ready")),
             "logs": logs,
+            "supervisor_status": supervisor.status,
         })
 
     @app.get("/console/logs", response_class=HTMLResponse)
