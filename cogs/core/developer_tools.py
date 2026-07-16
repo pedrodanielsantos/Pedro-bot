@@ -1,14 +1,15 @@
 import asyncio
-import importlib
 import logging
 
+import aiohttp
 import discord
 from discord.ext import commands
 import os
 from config.constants import SUCCESS_COLOR, ERROR_COLOR
-import web as web_module
+from db.database import get_guild_embed_color
 
 logger = logging.getLogger("dev")
+WEB_DASHBOARD = "http://127.0.0.1:8000"
 
 class DeveloperTools(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -192,7 +193,8 @@ class DeveloperTools(commands.Cog):
         Shows available developer commands.
         Usage: ç!devhelp
         """
-        embed = discord.Embed(title="Developer Tools", color=discord.Color(0x33cbbe))
+        color = await get_guild_embed_color(ctx.guild_id)
+        embed = discord.Embed(title="Developer Tools", color=color)
         for cmd in self.get_commands():
             desc = cmd.help or "No description provided."
             embed.add_field(name=f"ç!{cmd.name}", value=f"```{desc}```", inline=False)
@@ -224,19 +226,20 @@ class DeveloperTools(commands.Cog):
         Reloads the web dashboard without restarting the bot.
         Usage: ç!reloadweb
         """
-        server = getattr(self.bot, '_web_server', None)
-        if server:
-            server.should_exit = True
-            for _ in range(30):
-                if getattr(self.bot, '_web_server', None) is None:
-                    break
-                await asyncio.sleep(0.1)
+        # Dashboard lives in run.py's process now; reuse its reload endpoint instead of duplicating the logic here.
+        try:
+            timeout = aiohttp.ClientTimeout(total=5)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(f"{WEB_DASHBOARD}/web/reload") as resp:
+                    resp.raise_for_status()
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            embed = discord.Embed(description=f"Failed to reach the web dashboard: {e}", color=ERROR_COLOR)
+            await ctx.reply(embed=embed)
+            logger.error(f"Failed to reload web dashboard: {e}")
+            return
 
-        importlib.reload(web_module)
-        asyncio.create_task(web_module.start(self.bot))
-        logger.info("Reloaded web dashboard.")
-
-        embed = discord.Embed(description="Web dashboard reloaded.", color=SUCCESS_COLOR)
+        logger.info("Triggered web dashboard reload.")
+        embed = discord.Embed(description="Web dashboard reload triggered.", color=SUCCESS_COLOR)
         await ctx.reply(embed=embed)
 
 async def setup(bot: commands.Bot):
