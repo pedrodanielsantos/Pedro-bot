@@ -28,8 +28,7 @@ class DeveloperTools(commands.Cog):
             logger.error(f"Error in command: {error}")
 
     async def cog_check(self, ctx: commands.Context) -> bool:
-        # This method runs before any command in this cog.
-        # It ensures only the bot owner can run these commands.
+        # Runs before every command in this cog and restricts all of them to the bot owner.
         return await self.bot.is_owner(ctx.author)
 
     def find_extension(self, query: str) -> str | None:
@@ -37,17 +36,17 @@ class DeveloperTools(commands.Cog):
         Resolves a partial cog name (e.g., 'image') to its full module path (e.g., 'cogs.commands.image').
         Searches both loaded extensions and the file system.
         """
-        # 1. Check if it's a direct match in loaded extensions
+        # Exact match against a loaded extension's full module path.
         if query in self.bot.extensions:
             return query
 
-        # 2. Check if it's a suffix match in loaded extensions (e.g. "image" -> "cogs.commands.image")
+        # Suffix match against loaded extensions, e.g. "image" resolves to "cogs.commands.image".
         matches = [ext for ext in self.bot.extensions if ext.endswith(f".{query}")]
         if len(matches) == 1:
             return matches[0]
 
-        # 3. Search the filesystem (useful for 'load' command where extension isn't loaded yet)
-        # Current file is in cogs/core/, so we go up two levels to find the 'cogs' root
+        # Not loaded yet (needed for 'load'), so fall back to scanning the cogs folder on disk.
+        # This file lives in cogs/core/, so cogs_dir and bot_root are two levels up from here.
         current_dir = os.path.dirname(os.path.abspath(__file__))
         cogs_dir = os.path.dirname(current_dir) # y:\cogs
         bot_root = os.path.dirname(cogs_dir)    # y:\
@@ -59,10 +58,10 @@ class DeveloperTools(commands.Cog):
                     rel_path = os.path.relpath(full_path, bot_root)
                     module_path = rel_path.replace(os.sep, ".")[:-3]
 
-                    # Check for exact filename match (e.g. "image" matches "image.py")
+                    # Exact filename match, e.g. "image" matches "image.py".
                     if file == f"{query}.py":
                         return module_path
-                    # Check for module path suffix match (e.g. "commands.image" matches "cogs.commands.image")
+                    # Module path suffix match, e.g. "commands.image" matches "cogs.commands.image".
                     if module_path.endswith(query):
                         return module_path
         return None
@@ -187,13 +186,14 @@ class DeveloperTools(commands.Cog):
             await ctx.reply(embed=embed)
             logger.error(f"Sync failed: {e}")
 
-    @commands.command(name="devhelp", hidden=True)
-    async def devhelp(self, ctx: commands.Context):
+    @commands.command(name="devtools", hidden=True)
+    async def devtools(self, ctx: commands.Context):
         """
         Shows available developer commands.
-        Usage: ç!devhelp
+        Usage: ç!devtools
         """
-        color = await get_guild_embed_color(ctx.guild_id)
+        guild_id = ctx.guild.id if ctx.guild else None
+        color = await get_guild_embed_color(guild_id)
         embed = discord.Embed(title="Developer Tools", color=color)
         for cmd in self.get_commands():
             desc = cmd.help or "No description provided."
@@ -203,7 +203,8 @@ class DeveloperTools(commands.Cog):
     @commands.command(name="deletemessage", hidden=True)
     async def deletemessage(self, ctx: commands.Context, message_id: int):
         """
-        Deletes a specific message by ID.
+        Deletes a specific message by ID. Only works on the bot's own messages
+        (e.g. in DMs, where it can't delete anyone else's).
         Usage: ç!deletemessage 123456789
         """
         try:
@@ -226,7 +227,7 @@ class DeveloperTools(commands.Cog):
         Reloads the web dashboard without restarting the bot.
         Usage: ç!reloadweb
         """
-        # Dashboard lives in run.py's process now; reuse its reload endpoint instead of duplicating the logic here.
+        # The dashboard runs in run.py's process, so trigger its reload endpoint instead of reimplementing it here.
         try:
             timeout = aiohttp.ClientTimeout(total=5)
             async with aiohttp.ClientSession(timeout=timeout) as session:

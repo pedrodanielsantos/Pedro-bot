@@ -148,6 +148,21 @@ restart, whether you're debugging startup, a cog reload, or a command error.
 
 <!-- COMMANDS:END -->
 
+### Developer Commands
+
+Bot-owner-only, `ç!`-prefixed commands ([`cogs/core/developer_tools.py`](cogs/core/developer_tools.py)),
+hidden from `/help` and excluded from the table above. Not part of the generated docs.
+
+| Command | Description |
+| --- | --- |
+| `ç!reload [cog]` | Reload a specific cog, or all loaded cogs if none is given |
+| `ç!load <cog>` | Load a specific cog |
+| `ç!unload <cog>` | Unload a specific cog |
+| `ç!sync [. \| ^]` | Sync slash commands (globally, to the current guild, or clear guild commands) |
+| `ç!devtools` | List all developer commands |
+| `ç!deletemessage <id>` | Delete one of the bot's own messages by ID |
+| `ç!reloadweb` | Reload the web dashboard without restarting the bot |
+
 ## Getting Started
 
 ### Prerequisites
