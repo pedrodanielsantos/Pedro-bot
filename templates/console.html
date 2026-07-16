@@ -17,11 +17,21 @@
 </main>
 
 <script>
-    document.body.addEventListener("htmx:afterSwap", (e) => {
-        if (e.target.id === "console-log") {
-            e.target.scrollTop = e.target.scrollHeight;
-        }
-    });
+    (function() {
+        const consoleLog = document.getElementById("console-log");
+        const stickThreshold = 24;
+        let stickToBottom = true;
+
+        consoleLog.addEventListener("scroll", () => {
+            stickToBottom = consoleLog.scrollHeight - consoleLog.scrollTop - consoleLog.clientHeight < stickThreshold;
+        });
+
+        document.body.addEventListener("htmx:afterSwap", (e) => {
+            if (e.target.id === "console-log" && stickToBottom) {
+                consoleLog.scrollTop = consoleLog.scrollHeight;
+            }
+        });
+    })();
 </script>
 
 {% endblock %}

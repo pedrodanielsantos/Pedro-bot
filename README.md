@@ -40,18 +40,24 @@ bot and hot-reloading cogs without a restart.
   configurable channel, with the invoking user, options, and channel.
 - **Live web dashboard**: status, latency, uptime, guild list, a cog
   manager to load / unload / reload extensions on the fly, sync slash
-  commands with Discord, and a live console view of the bot's logs.
+  commands with Discord, and a live console view of the bot's logs. Runs as
+  its own process, so it stays online (with a Start/Stop control) even if
+  the bot itself crashes or is stopped.
 
 ## Dashboard
 
-Runs alongside the bot at **http://localhost:8000**. It shows real-time status,
-latency, uptime and guild count, and provides a **Cog Manager** for hot-reloading
-extensions without restarting the bot. A **Sync Commands** button lets you push
-slash command changes to Discord on demand, without restarting the bot.
+Runs at **http://localhost:8000**, hosted by `run.py` as its own always-on
+process, separate from the bot itself, so the dashboard stays reachable even if
+the bot crashes or is stopped. It shows real-time status, latency, uptime and
+guild count, a **Start/Stop** control for the bot process, a **Cog Manager** for
+hot-reloading extensions, and a **Sync Commands** button to push slash command
+changes to Discord, all without restarting the bot. Cog management, guild list,
+and command sync only work while the bot is actually online; while it's offline
+the dashboard shows an Offline status and a Start button instead.
 
 A separate **Console** page (`/console`) shows a live, auto-scrolling view of the
-bot's logs, shared across every module that logs (bot, web, db, cogs), so the same
-view works whether you're debugging startup, a cog reload, or a command error.
+bot's logs, read from `logs/bot.log` so it stays visible even across a crash or
+restart, whether you're debugging startup, a cog reload, or a command error.
 
 ## Command Reference
 
@@ -166,10 +172,17 @@ DISCORD_BOT_TOKEN=your_discord_bot_token
 JEYY_API_KEY=your_jeyy_api_key       # image manipulation commands
 CAT_API_KEY=your_cat_api_key         # /cat
 DOG_API_KEY=your_dog_api_key         # /dog
+SYNC_ON_STARTUP=false                # optional; skip the automatic command sync on every restart
 ```
 
 Non-secret defaults (lobby names, voice region, embed colors, etc.) live in
 [`config/constants.py`](config/constants.py).
+
+`SYNC_ON_STARTUP` defaults to `true`. The bot normally syncs slash commands once
+per process on `on_ready`, which means every restart re-syncs, so set this to
+`false` if you're restarting frequently (e.g. testing the dashboard's Start/Stop
+controls) and want to avoid hitting Discord's rate limits. You can still sync
+manually at any time with the dashboard's **Sync Commands** button or `ç!sync`.
 
 ### Running
 
@@ -177,12 +190,24 @@ Non-secret defaults (lobby names, voice region, embed colors, etc.) live in
 py -3.13 run.py
 ```
 
-`run.py` automatically restarts `bot.py` if it crashes, waiting 5 seconds between
-attempts. To stop the bot, just press **Ctrl+C**. It shuts down gracefully
-(unloading cogs, closing DB connections), and since that counts as a clean exit,
-`run.py` knows not to restart it.
+`run.py` is the process you actually keep running (e.g. via a service manager on
+a server). It hosts the dashboard on port 8000 and supervises `bot.py` as a
+child process, restarting it automatically if it crashes (waiting 5 seconds
+between attempts). You can also start/stop the bot from the dashboard itself; a
+manual stop is a clean shutdown (unloading cogs, closing DB connections) and
+won't trigger an auto-restart.
 
-If you're debugging and don't want crashes to auto-restart, run the bot directly:
+To stop everything, press **Ctrl+C** in `run.py`'s console. It stops the bot
+cleanly first, then exits.
+
+`bot.py` also exposes a small internal API on **127.0.0.1:8001** that the
+dashboard uses to fetch live bot data (status, guilds, cogs, command sync) and
+that only `run.py`'s process can reach. It isn't meant to be exposed publicly,
+so if you're putting the dashboard behind a reverse proxy or tunnel, only forward
+port 8000.
+
+If you're debugging and don't want crashes to auto-restart (or want the bot
+running without the dashboard in front of it), run the bot directly:
 
 ```bash
 py -3.13 bot.py
@@ -192,9 +217,11 @@ py -3.13 bot.py
 
 ```
 Pedro-bot/
-├── bot.py              # Entry point: loads cogs, starts bot + dashboard
-├── web.py              # FastAPI dashboard (status, guilds, cog manager, command sync, console)
-├── run.py              # Auto-restart wrapper
+├── bot.py              # Entry point: loads cogs, starts the bot + internal API
+├── internal_api.py     # Localhost-only API (127.0.0.1:8001) exposing live bot data to web.py
+├── web.py              # FastAPI dashboard (proxies to internal_api.py; status, guilds, cog manager, command sync, console)
+├── run.py              # Supervisor: hosts the dashboard (:8000) and starts/stops/restarts bot.py
+├── logs/               # Rotating bot.log, read by the Console page
 ├── cogs/
 │   ├── commands/       # User-facing slash commands
 │   └── core/           # Error handling, dev tools, shared mixins

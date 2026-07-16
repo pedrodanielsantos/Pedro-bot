@@ -2,13 +2,33 @@ import discord
 from discord.ext import commands
 import logging
 import os
+import signal
+import sys
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from db.database import initialize_databases, close_all_databases
 from utils.log import setup_logging
 from utils.cogs import discover_cog_paths
 import asyncio
-import web
+import internal_api
+
+_shutdown_event = None
+
+if sys.platform == "win32":
+    # run.py spawns this process in its own console process group so it can send
+    # CTRL_BREAK_EVENT for a graceful stop without also signalling the parent.
+    # Python's default handler for SIGBREAK just kills the process, so trigger the
+    # clean-shutdown path in main() instead. This handler can fire deep inside
+    # uvicorn's own signal handling (it re-raises via signal.raise_signal so outer
+    # code sees it too), so it must not raise an exception here directly — doing so
+    # previously confused asyncio's task bookkeeping ("Task exception was never
+    # retrieved"). Setting an Event is safe from a signal handler since Python signal
+    # handlers always run on the main thread, same as the event loop.
+    def _handle_sigbreak(signum, frame):
+        if _shutdown_event is not None:
+            _shutdown_event.set()
+
+    signal.signal(signal.SIGBREAK, _handle_sigbreak)
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
@@ -50,8 +70,11 @@ async def on_ready():
     await bot.change_presence(activity=discord.CustomActivity(name="/help", state="/help"))
 
     # on_ready can fire again after a reconnect, so this only syncs once per process.
-    # Use ç!sync (developer_tools.py) to force a resync without restarting.
-    if not has_synced:
+    # Use ç!sync (developer_tools.py) or the dashboard's Sync button to force a resync.
+    # Set SYNC_ON_STARTUP=false in .env to skip this entirely, e.g. during restart testing
+    # where every crash/restart would otherwise trigger a fresh command sync.
+    sync_on_startup = os.getenv("SYNC_ON_STARTUP", "true").lower() != "false"
+    if sync_on_startup and not has_synced:
         try:
             synced = await bot.tree.sync()
             logger.info(f"Synced {len(synced)} slash commands.")
@@ -61,11 +84,29 @@ async def on_ready():
 
 if __name__ == "__main__":
     async def main():
+        global _shutdown_event
         await initialize_databases()
         await load_cogs(bot)
 
+        _shutdown_event = asyncio.Event()
+        bot_task = asyncio.create_task(bot.start(TOKEN))
+        api_task = asyncio.create_task(internal_api.start(bot))
+        shutdown_task = asyncio.create_task(_shutdown_event.wait())
+
         try:
-            await asyncio.gather(bot.start(TOKEN), web.start(bot))
+            done, pending = await asyncio.wait(
+                {bot_task, api_task, shutdown_task}, return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+            for task in done:
+                if task is shutdown_task:
+                    continue
+                exc = task.exception()
+                if exc:
+                    raise exc
         finally:
             # Unloading each extension explicitly ensures cog_unload hooks run before exit.
             for extension in list(bot.extensions.keys()):
