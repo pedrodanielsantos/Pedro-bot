@@ -66,7 +66,7 @@ async def close_all_databases():
     global db
     if db:
         await db.close()
-        logger.info("Database connection closed.")
+        logger.info("Database connection closed")
 
 async def store_user_role(guild_id: int, user_id: int, role_id: int):
     await db.execute(

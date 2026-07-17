@@ -33,7 +33,7 @@ if sys.platform == "win32":
 load_dotenv()
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 if not TOKEN:
-    raise SystemExit("DISCORD_BOT_TOKEN is not set. Add it to your .env file.")
+    raise SystemExit("DISCORD_BOT_TOKEN is not set. Add it to your .env file")
 
 setup_logging()
 logger = logging.getLogger("bot")
@@ -53,20 +53,29 @@ async def load_cogs(bot):
     for cog_path in discover_cog_paths(cogs_dir):
         try:
             await bot.load_extension(cog_path)
-            logger.info(f"Loaded cog: {cog_path}")
+            logger.info(f"Loaded: {cog_path}")
         except commands.NoEntryPointError:
             pass
         except Exception as e:
             logger.error(f"Failed to load cog {cog_path}: {e}")
 
 has_synced = False
+has_greeted = False
 
 @bot.event
 async def on_ready():
-    global has_synced
+    global has_synced, has_greeted
 
-    logger.info(f"{bot.user.name} is ready and connected!")
-    logger.info(f"Command prefix: {bot.command_prefix}")
+    # on_ready can fire again after a reconnect; only banner the first one so
+    # a flaky connection doesn't spam the console with repeated startup blocks.
+    if not has_greeted:
+        logger.info("=" * 50)
+        logger.info(f"{bot.user.name} online and ready with devtools prefix {bot.command_prefix}")
+        logger.info("=" * 50)
+        has_greeted = True
+    else:
+        logger.info(f"{bot.user.name} reconnected")
+
     await bot.change_presence(activity=discord.CustomActivity(name="/help", state="/help"))
 
     # on_ready can fire again after a reconnect, so this only syncs once per process.
@@ -77,7 +86,7 @@ async def on_ready():
     if sync_on_startup and not has_synced:
         try:
             synced = await bot.tree.sync()
-            logger.info(f"Synced {len(synced)} slash commands.")
+            logger.info(f"Synced {len(synced)} slash commands")
             has_synced = True
         except Exception as e:
             logger.error(f"Failed to sync commands: {e}")
@@ -112,7 +121,7 @@ if __name__ == "__main__":
             for extension in list(bot.extensions.keys()):
                 try:
                     await bot.unload_extension(extension)
-                    logger.info(f"Successfully unloaded extension: {extension}")
+                    logger.info(f"Unloaded: {extension}")
                 except Exception as e:
                     logger.error(f"Failed to unload extension {extension}: {e}")
 
@@ -123,6 +132,15 @@ if __name__ == "__main__":
 
             if not bot.is_closed():
                 await bot.close()
+
+            uptime = datetime.now(timezone.utc) - bot.launch_time
+            hours, remainder = divmod(int(uptime.total_seconds()), 3600)
+            minutes, seconds = divmod(remainder, 60)
+            uptime_str = f"{hours}h {minutes}m {seconds}s"
+
+            logger.info("=" * 49)
+            logger.info(f"Bot shut down cleanly after running for {uptime_str}")
+            logger.info("=" * 49)
 
     try:
         asyncio.run(main())
