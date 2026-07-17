@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from db.database import initialize_databases, close_all_databases
 from utils.log import setup_logging
 from utils.cogs import discover_cog_paths
+from utils.uptime import format_uptime
 import asyncio
 import internal_api
 
@@ -69,9 +70,9 @@ async def on_ready():
     # on_ready can fire again after a reconnect; only banner the first one so
     # a flaky connection doesn't spam the console with repeated startup blocks.
     if not has_greeted:
-        logger.info("=" * 50)
+        logger.info("=" * 56)
         logger.info(f"{bot.user.name} online and ready with devtools prefix {bot.command_prefix}")
-        logger.info("=" * 50)
+        logger.info("=" * 56)
         has_greeted = True
     else:
         logger.info(f"{bot.user.name} reconnected")
@@ -133,14 +134,9 @@ if __name__ == "__main__":
             if not bot.is_closed():
                 await bot.close()
 
-            uptime = datetime.now(timezone.utc) - bot.launch_time
-            hours, remainder = divmod(int(uptime.total_seconds()), 3600)
-            minutes, seconds = divmod(remainder, 60)
-            uptime_str = f"{hours}h {minutes}m {seconds}s"
-
-            logger.info("=" * 49)
-            logger.info(f"Bot shut down cleanly after running for {uptime_str}")
-            logger.info("=" * 49)
+            logger.info("=" * 56)
+            logger.info(f"Bot shut down cleanly after running for {format_uptime(bot.launch_time)}")
+            logger.info("=" * 56)
 
     try:
         asyncio.run(main())
