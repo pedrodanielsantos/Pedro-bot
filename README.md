@@ -2,9 +2,9 @@
 
 # Pedro-bot
 
-A modular Discord bot with a live web dashboard, featuring temporary voice
-lobbies, GIF generation, autoroles, welcome messages, command logging,
-and more.
+A Discord bot built on discord.py, with a FastAPI + htmx web dashboard.
+Temporary voice lobbies, GIF generation, autoroles, welcome messages,
+command logging, and more.
 
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
 ![discord.py](https://img.shields.io/badge/discord.py-5865F2?logo=discord&logoColor=white)
@@ -18,51 +18,43 @@ and more.
 
 ## Overview
 
-Pedro-bot is a slash-command Discord bot built on [discord.py](https://discordpy.readthedocs.io/).
-Features are split into self-contained **cogs** that are auto-discovered from the
-`cogs/` folder, so adding functionality is as simple as dropping in a new file.
-It ships with a lightweight **web dashboard** (FastAPI + htmx) for monitoring the
-bot and hot-reloading cogs without a restart.
+Slash-command bot built on [discord.py](https://discordpy.readthedocs.io/). Features
+are split into self-contained **cogs**, auto-discovered from `cogs/`. Ships with a
+**web dashboard** (FastAPI + htmx) for monitoring the bot and hot-reloading cogs
+without a restart.
 
 ## Features
 
-- **Temporary voice lobbies**: members join a trigger channel to spin up their
-  own voice channel, which they can rename and resize, and which is cleaned up
-  automatically when empty.
-- **GIF generation**: over 20 effects (petpet, heart lock, explode, glitch,
-  and more) applied to an avatar, URL, or attachment via the Jeyy API.
-- **Autoroles & welcome messages**: automatically assign roles to new members
-  and greet them in a configurable channel.
+- **Temporary voice lobbies**: joining a trigger channel spins up a voice channel
+  the member can rename and resize, cleaned up automatically when empty.
+- **GIF generation**: 25 effects (petpet, heart lock, explode, glitch, etc.)
+  applied to an avatar, URL, or attachment via the Jeyy API.
+- **Autoroles & welcome messages**: auto-assign roles to new members, greet them
+  in a configurable channel.
 - **Server customization**: per-guild embed colors and server rules.
 - **Fun & utility**: random cat/dog images, magic 8-ball, random choice,
-  avatar/user/server info, and a raw-JSON embed builder.
-- **Command logging**: log every slash command used in a server to a
-  configurable channel, with the invoking user, options, and channel.
-- **Live web dashboard**: status, latency, uptime, guild list, a cog
-  manager to load / unload / reload extensions on the fly, sync slash
-  commands with Discord, and a live console view of the bot's logs. Runs as
-  its own process, so it stays online (with a Start/Stop control) even if
-  the bot itself crashes or is stopped.
+  avatar/user/server info, raw-JSON embed builder.
+- **Command logging**: logs every slash command used, with invoking user,
+  options, and channel, to a configurable channel.
+- **Web dashboard**: status, latency, uptime, guild list, cog manager
+  (load/unload/reload), slash command sync, live console. Runs as its own
+  process with a Start/Stop control, so it stays up even if the bot crashes.
 
 ## Dashboard
 
 Runs at **http://localhost:8000**, hosted by `run.py` as its own always-on
-process, separate from the bot itself, so the dashboard stays reachable even if
-the bot crashes or is stopped. It shows real-time status, latency, uptime and
-guild count, a **Start/Stop** control for the bot process, a **Cog Manager** for
-hot-reloading extensions, and a **Sync Commands** button to push slash command
-changes to Discord, all without restarting the bot. Cog management, guild list,
-and command sync only work while the bot is actually online; while it's offline
-the dashboard shows an Offline status and a Start button instead.
+process, separate from the bot. Shows real-time status, latency, uptime, and
+guild count, with a **Start/Stop** control, a **Cog Manager**, and a **Sync**
+button for slash commands.
 
-A separate **Console** page (`/console`) shows a live, auto-scrolling view of the
-bot's logs, read from `logs/bot.log` so it stays visible even across a crash or
-restart, whether you're debugging startup, a cog reload, or a command error.
+A separate **Console** page (`/console`) shows a live, auto-scrolling, color-coded
+view of the bot's logs, read from `logs/bot.log` so it stays visible across a
+crash or restart.
 
 ## Command Reference
 
-> This section is generated from the cogs by `scripts/gen_readme.py`, so don't edit
-> it by hand. It stays in sync with the bot's own `/help` command automatically.
+> Generated from the cogs by `scripts/gen_readme.py`, so don't edit by hand. Stays
+> in sync with the bot's own `/help` command automatically.
 
 <!-- COMMANDS:START -->
 
@@ -180,7 +172,7 @@ pip install -r requirements.txt
 
 ### Configuration
 
-Create a `.env` file in the project root:
+`.env` in the project root:
 
 ```env
 DISCORD_BOT_TOKEN=your_discord_bot_token
@@ -193,11 +185,10 @@ SYNC_ON_STARTUP=false                # optional; skip the automatic command sync
 Non-secret defaults (lobby names, voice region, embed colors, etc.) live in
 [`config/constants.py`](config/constants.py).
 
-`SYNC_ON_STARTUP` defaults to `true`. The bot normally syncs slash commands once
-per process on `on_ready`, which means every restart re-syncs, so set this to
-`false` if you're restarting frequently (e.g. testing the dashboard's Start/Stop
-controls) and want to avoid hitting Discord's rate limits. You can still sync
-manually at any time with the dashboard's **Sync Commands** button or `ç!sync`.
+`SYNC_ON_STARTUP` defaults to `true`, syncing slash commands once per process
+on `on_ready`. Set it to `false` to skip that and avoid Discord's rate limits
+when restarting often. Sync manually anytime with the dashboard's **Sync**
+button or `ç!sync`.
 
 ### Running
 
@@ -205,24 +196,18 @@ manually at any time with the dashboard's **Sync Commands** button or `ç!sync`.
 py -3.13 run.py
 ```
 
-`run.py` is the process you actually keep running (e.g. via a service manager on
-a server). It hosts the dashboard on port 8000 and supervises `bot.py` as a
-child process, restarting it automatically if it crashes (waiting 5 seconds
-between attempts). You can also start/stop the bot from the dashboard itself; a
-manual stop is a clean shutdown (unloading cogs, closing DB connections) and
-won't trigger an auto-restart.
+`run.py` hosts the dashboard on port 8000 and supervises `bot.py` as a child
+process, restarting it automatically on crash. Terminal output is color-coded,
+same as the web console.
 
-To stop everything, press **Ctrl+C** in `run.py`'s console. It stops the bot
-cleanly first, then exits.
+Ctrl+C in `run.py`'s console, or Stop on the dashboard, shuts the bot down cleanly.
 
 `bot.py` also exposes a small internal API on **127.0.0.1:8001** that the
-dashboard uses to fetch live bot data (status, guilds, cogs, command sync) and
-that only `run.py`'s process can reach. It isn't meant to be exposed publicly,
-so if you're putting the dashboard behind a reverse proxy or tunnel, only forward
-port 8000.
+dashboard uses for live bot data (status, guilds, cogs, command sync); reachable
+only from `run.py`'s process.
 
-If you're debugging and don't want crashes to auto-restart (or want the bot
-running without the dashboard in front of it), run the bot directly:
+For debugging without auto-restart on crash (or running the bot without the
+dashboard in front of it):
 
 ```bash
 py -3.13 bot.py
@@ -232,40 +217,40 @@ py -3.13 bot.py
 
 ```
 Pedro-bot/
-├── bot.py              # Entry point: loads cogs, starts the bot + internal API
-├── internal_api.py     # Localhost-only API (127.0.0.1:8001) exposing live bot data to web.py
-├── web.py              # FastAPI dashboard (proxies to internal_api.py; status, guilds, cog manager, command sync, console)
-├── run.py              # Supervisor: hosts the dashboard (:8000) and starts/stops/restarts bot.py
+├── bot.py              # Entry point: loads cogs, starts the bot and internal API
+├── internal_api.py     # Localhost-only API (127.0.0.1:8001), feeds live bot data to web.py
+├── web.py              # FastAPI dashboard: status, guilds, cog manager, command sync, console
+├── run.py              # Supervisor: hosts the dashboard (:8000), starts/stops/restarts bot.py
 ├── logs/               # Rotating bot.log, read by the Console page
 ├── cogs/
-│   ├── commands/       # User-facing slash commands
+│   ├── commands/       # Slash commands
 │   └── core/           # Error handling, dev tools, shared mixins
 ├── config/             # Constants and configuration
 ├── db/                 # SQLite storage (aiosqlite)
-├── utils/              # Runtime helpers imported by the bot
+├── utils/              # Runtime helpers
 ├── templates/          # Jinja2 templates for the dashboard
 └── scripts/            # Dev tooling (e.g. README generation)
 ```
 
 ## Maintaining the docs
 
-The command table above is generated from the cogs. Regenerate it with:
+The command table above is generated from the cogs:
 
 ```bash
 py -3.13 scripts/gen_readme.py
 ```
 
-A git hook (`scripts/hooks/`) can run this automatically on every commit. When
-the table changes, the hook stages the updated README and appends a note to your
-commit message, so you won't end up with separate "docs" commits.
+A git hook (`scripts/hooks/`) runs this on every commit. When the table
+changes, it stages the updated README and appends a note to the commit message,
+avoiding separate "docs" commits.
 
 > [!IMPORTANT]
-> **Run once per machine.** Git hooks are not cloned or pushed, so on every
-> machine you work from (desktop, laptop, a fresh clone) you must enable them once:
+> **Run once per machine.** Git hooks aren't cloned or pushed, so on every
+> machine (desktop, laptop, fresh clone) enable them once:
 >
 > ```bash
 > git config core.hooksPath scripts/hooks
 > ```
 >
-> Without this, commits still work, but the command table just won't auto-update
-> on that machine until you run `py -3.13 scripts/gen_readme.py` manually.
+> Without this, commits still work, but the command table won't auto-update on
+> that machine until `py -3.13 scripts/gen_readme.py` is run manually.
