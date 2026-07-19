@@ -1,9 +1,17 @@
 import logging
 import os
+import re
 from collections import deque
 from logging.handlers import RotatingFileHandler
 
+from markupsafe import Markup, escape
+
 LOG_BUFFER = deque(maxlen=100_000)
+
+_LOG_LINE_RE = re.compile(
+    r"^\[(?P<ts>[^\]]+)\] (?P<level>[A-Z]+) (?P<logger>[^:]+): (?P<msg>.*)$",
+    re.DOTALL,
+)
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
 LOG_FILE = os.path.join(LOG_DIR, "bot.log")
@@ -61,3 +69,24 @@ def tail_log_file(lines=500, chunk_size=8192):
 
     text = data.decode("utf-8", errors="replace")
     return text.splitlines()[-lines:]
+
+
+def colorize_log_line(line: str) -> Markup:
+    """Wraps a formatted log line's timestamp/level/logger in spans so the web
+    console can color it the way a log-highlighter extension colors bot.log in an editor."""
+    match = _LOG_LINE_RE.match(line)
+    if not match:
+        return Markup(escape(line))
+
+    level = match["level"]
+    return Markup(
+        '<span class="log-ts">[{ts}]</span> '
+        '<span class="log-level log-level-{level_class}">{level}</span> '
+        '<span class="log-logger">{logger}:</span> {msg}'
+    ).format(
+        ts=escape(match["ts"]),
+        level_class=escape(level.lower()),
+        level=escape(level),
+        logger=escape(match["logger"]),
+        msg=escape(match["msg"]),
+    )

@@ -46,7 +46,7 @@ def create_internal_app(bot):
         error = None
         try:
             await bot.reload_extension(extension)
-            logger.info(f"Reloaded extension: {extension}")
+            logger.info(f"Reloaded: {extension}")
         except Exception as e:
             error = str(e)
             logger.error(f"Failed to reload extension {extension}: {e}")
@@ -57,7 +57,7 @@ def create_internal_app(bot):
         error = None
         try:
             await bot.unload_extension(extension)
-            logger.info(f"Unloaded extension: {extension}")
+            logger.info(f"Unloaded: {extension}")
         except Exception as e:
             error = str(e)
             logger.error(f"Failed to unload extension {extension}: {e}")
@@ -68,7 +68,7 @@ def create_internal_app(bot):
         error = None
         try:
             await bot.load_extension(extension)
-            logger.info(f"Loaded extension: {extension}")
+            logger.info(f"Loaded: {extension}")
         except Exception as e:
             error = str(e)
             logger.error(f"Failed to load extension {extension}: {e}")
@@ -81,7 +81,7 @@ def create_internal_app(bot):
             error = None
             try:
                 await bot.reload_extension(extension)
-                logger.info(f"Reloaded extension: {extension}")
+                logger.info(f"Reloaded: {extension}")
             except Exception as e:
                 error = str(e)
                 logger.error(f"Failed to reload extension {extension}: {e}")
@@ -97,7 +97,7 @@ def create_internal_app(bot):
             error = None
             try:
                 await bot.unload_extension(extension)
-                logger.info(f"Unloaded extension: {extension}")
+                logger.info(f"Unloaded: {extension}")
             except Exception as e:
                 error = str(e)
                 logger.error(f"Failed to unload extension {extension}: {e}")
@@ -113,7 +113,7 @@ def create_internal_app(bot):
             error = None
             try:
                 await bot.load_extension(extension)
-                logger.info(f"Loaded extension: {extension}")
+                logger.info(f"Loaded: {extension}")
             except Exception as e:
                 error = str(e)
                 logger.error(f"Failed to load extension {extension}: {e}")

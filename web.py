@@ -13,13 +13,14 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from utils.cogs import discover_cog_paths
-from utils.log import tail_log_file
+from utils.log import colorize_log_line, tail_log_file
 
 COGS_DIR = os.path.join(os.path.dirname(__file__), "cogs")
 INTERNAL_API = "http://127.0.0.1:8001"
 
 templates = Jinja2Templates(directory="templates")
 templates.env.globals["discord_version"] = discord.__version__
+templates.env.filters["colorize_log"] = colorize_log_line
 
 
 def _commit_hash() -> str | None:

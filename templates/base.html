@@ -16,6 +16,7 @@
             --accent:  #5865f2;
             --green:   #57f287;
             --red:     #ed4245;
+            --yellow:  #faa61a;
             --radius:  8px;
             --mono:    'Consolas', 'Monaco', 'Courier New', monospace;
         }
@@ -301,6 +302,15 @@
         }
 
         footer a:hover { color: var(--text); }
+
+        .log-ts     { color: var(--muted); }
+        .log-logger { color: var(--muted); }
+        .log-level  { font-weight: 700; }
+        .log-level-debug    { color: var(--muted); }
+        .log-level-info     { color: var(--accent); }
+        .log-level-warning  { color: var(--yellow); }
+        .log-level-error,
+        .log-level-critical { color: var(--red); }
     </style>
 </head>
 <body>
