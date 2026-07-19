@@ -9,11 +9,11 @@ import aiohttp
 import discord
 import uvicorn
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from utils.cogs import discover_cog_paths
-from utils.log import colorize_log_line, tail_log_file
+from utils.log import colorize_log_line, tail_log_file, tail_log_lines
 
 COGS_DIR = os.path.join(os.path.dirname(__file__), "cogs")
 INTERNAL_API = "http://127.0.0.1:8001"
@@ -244,11 +244,20 @@ def create_app(supervisor, web_state):
             "supervisor_status": supervisor.status,
         })
 
-    @app.get("/console/logs", response_class=HTMLResponse)
-    async def console_logs(request: Request):
-        logs = await asyncio.to_thread(tail_log_file)
-        return templates.TemplateResponse(request=request, name="partials/console_log.html", context={
-            "logs": logs,
+    @app.get("/console/logs/stream")
+    async def console_logs_stream(request: Request):
+        async def event_stream():
+            async for line in tail_log_lines():
+                if await request.is_disconnected():
+                    break
+                if line is None:
+                    yield ": keepalive\n\n"
+                else:
+                    yield f"data: {colorize_log_line(line)}\n\n"
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream", headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
         })
 
     @app.post("/web/reload", response_class=HTMLResponse)

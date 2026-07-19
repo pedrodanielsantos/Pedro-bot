@@ -13,7 +13,7 @@
 
 <main>
     <pre id="console-log" class="card" style="font-family: var(--mono); font-size: 12px; white-space: pre-wrap; max-height: 75vh; overflow-y: auto;"
-        hx-get="/console/logs" hx-trigger="load, every 2s" hx-swap="innerHTML">{% include "partials/console_log.html" %}</pre>
+        >{% include "partials/console_log.html" %}</pre>
 </main>
 
 <script>
@@ -26,11 +26,16 @@
             stickToBottom = consoleLog.scrollHeight - consoleLog.scrollTop - consoleLog.clientHeight < stickThreshold;
         });
 
-        document.body.addEventListener("htmx:afterSwap", (e) => {
-            if (e.target.id === "console-log" && stickToBottom) {
+        consoleLog.scrollTop = consoleLog.scrollHeight;
+
+        // Appends instead of replacing, so an active text selection isn't lost.
+        const source = new EventSource("/console/logs/stream");
+        source.onmessage = (e) => {
+            consoleLog.insertAdjacentHTML("beforeend", e.data + "\n");
+            if (stickToBottom) {
                 consoleLog.scrollTop = consoleLog.scrollHeight;
             }
-        });
+        };
     })();
 </script>
 

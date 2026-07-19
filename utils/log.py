@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import re
@@ -34,8 +35,7 @@ _LEVEL_COLORS = {
 
 
 def _enable_windows_vt():
-    """Turns on ANSI escape processing for the console run.py was double-clicked
-    from — off by default on plain conhost, unlike Windows Terminal."""
+    """Windows conhost doesn't render ANSI colors unless this is set."""
     if sys.platform != "win32":
         return
     import ctypes
@@ -50,8 +50,7 @@ def _enable_windows_vt():
 
 
 class ColorFormatter(logging.Formatter):
-    """Mirrors colorize_log_line's web console colors (log.py's timestamp/level/
-    logger spans) as ANSI escapes for the terminal run.py runs in."""
+    """Same colors as colorize_log_line, as ANSI escapes for the terminal."""
 
     def format(self, record):
         line = super().format(record)
@@ -121,6 +120,51 @@ def tail_log_file(lines=500, chunk_size=8192):
 
     text = data.decode("utf-8", errors="replace")
     return text.splitlines()[-lines:]
+
+
+async def tail_log_lines(poll_interval=0.5):
+    """Yields new bot.log lines as they're written, or None on an idle poll.
+    Tails the file (not LOG_BUFFER) since bot.py is a separate process from
+    web.py's. Reopens on rotation, detected by the file shrinking."""
+    while not os.path.exists(LOG_FILE):
+        yield None
+        await asyncio.sleep(poll_interval)
+
+    f = open(LOG_FILE, "rb")
+    f.seek(0, os.SEEK_END)
+    buf = b""
+
+    try:
+        while True:
+            await asyncio.sleep(poll_interval)
+            try:
+                size = os.path.getsize(LOG_FILE)
+            except OSError:
+                yield None
+                continue
+
+            pos = f.tell()
+            if size < pos:
+                f.close()
+                f = open(LOG_FILE, "rb")
+                pos = 0
+
+            if size <= pos:
+                yield None
+                continue
+
+            f.seek(pos)
+            buf += f.read(size - pos)
+            *complete, buf = buf.split(b"\n")
+
+            if not complete:
+                yield None
+            for raw_line in complete:
+                text = raw_line.decode("utf-8", errors="replace").rstrip("\r")
+                if text:
+                    yield text
+    finally:
+        f.close()
 
 
 def colorize_log_line(line: str) -> Markup:
