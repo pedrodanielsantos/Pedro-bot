@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import sys
 from collections import deque
 from logging.handlers import RotatingFileHandler
 
@@ -16,6 +17,56 @@ _LOG_LINE_RE = re.compile(
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
 LOG_FILE = os.path.join(LOG_DIR, "bot.log")
 
+_MUTED = "\x1b[38;2;114;118;125m"
+_ACCENT = "\x1b[38;2;88;101;242m"
+_YELLOW = "\x1b[38;2;250;166;26m"
+_RED = "\x1b[38;2;237;66;69m"
+_RESET = "\x1b[0m"
+_BOLD = "\x1b[1m"
+
+_LEVEL_COLORS = {
+    "DEBUG": _MUTED,
+    "INFO": _ACCENT,
+    "WARNING": _YELLOW,
+    "ERROR": _RED,
+    "CRITICAL": _RED,
+}
+
+
+def _enable_windows_vt():
+    """Turns on ANSI escape processing for the console run.py was double-clicked
+    from — off by default on plain conhost, unlike Windows Terminal."""
+    if sys.platform != "win32":
+        return
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32
+    for handle_id in (-11, -12):  # STD_OUTPUT_HANDLE, STD_ERROR_HANDLE
+        handle = kernel32.GetStdHandle(handle_id)
+        mode = ctypes.c_uint32()
+        if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            continue
+        kernel32.SetConsoleMode(handle, mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+
+
+class ColorFormatter(logging.Formatter):
+    """Mirrors colorize_log_line's web console colors (log.py's timestamp/level/
+    logger spans) as ANSI escapes for the terminal run.py runs in."""
+
+    def format(self, record):
+        line = super().format(record)
+        match = _LOG_LINE_RE.match(line)
+        if not match:
+            return line
+
+        level = match["level"]
+        color = _LEVEL_COLORS.get(level, "")
+        return (
+            f"{_MUTED}[{match['ts']}]{_RESET} "
+            f"{_BOLD}{color}{level}{_RESET} "
+            f"{_MUTED}{match['logger']}:{_RESET} {match['msg']}"
+        )
+
 
 class BufferHandler(logging.Handler):
     """Keeps formatted log lines in memory so the web console can display them."""
@@ -30,8 +81,9 @@ def setup_logging(level=logging.INFO):
         datefmt="%d/%m/%Y %H:%M:%S",
     )
 
+    _enable_windows_vt()
     stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(fmt)
+    stream_handler.setFormatter(ColorFormatter(fmt._fmt, datefmt=fmt.datefmt))
 
     buffer_handler = BufferHandler()
     buffer_handler.setFormatter(fmt)
