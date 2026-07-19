@@ -102,6 +102,7 @@ def create_app(supervisor, web_state):
             "latency": status.get("latency_ms"),
             "guild_count": status.get("guild_count"),
             "uptime": status.get("uptime") or "—",
+            "launch_time": status.get("launch_time"),
             "cogs": cogs,
             "supervisor_status": supervisor.status,
         })

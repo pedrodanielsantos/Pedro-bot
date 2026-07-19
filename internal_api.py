@@ -25,6 +25,7 @@ def create_internal_app(bot):
             "latency_ms": round(bot.latency * 1000) if ready else None,
             "guild_count": len(bot.guilds) if ready else None,
             "uptime": format_uptime(bot.launch_time),
+            "launch_time": bot.launch_time.timestamp() if ready else None,
         }
 
     @app.get("/cogs")
