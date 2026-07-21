@@ -100,7 +100,7 @@ def setup_logging(level=logging.INFO):
 
 def tail_log_file(lines=500, chunk_size=8192):
     """Reads only the tail of the log file by scanning backward in chunks, instead
-    of the whole file — matters once the file approaches its rotation size."""
+    of the whole file. Matters once the file approaches its rotation size."""
     if not os.path.exists(LOG_FILE):
         return []
 
@@ -122,17 +122,27 @@ def tail_log_file(lines=500, chunk_size=8192):
     return text.splitlines()[-lines:]
 
 
-async def tail_log_lines(poll_interval=0.5):
-    """Yields new bot.log lines as they're written, or None on an idle poll.
+async def tail_log_lines(poll_interval=0.5, start_pos=None):
+    """Yields (pos, line) as bot.log grows, or (pos, None) on an idle poll. pos is
+    the byte offset just after the most recently consumed line, so a reconnecting
+    SSE client can resume from there via Last-Event-ID instead of jumping to "now"
+    and silently missing whatever was logged while it was disconnected.
     Tails the file (not LOG_BUFFER) since bot.py is a separate process from
     web.py's. Reopens on rotation, detected by the file shrinking."""
     while not os.path.exists(LOG_FILE):
-        yield None
+        yield None, None
         await asyncio.sleep(poll_interval)
 
     f = open(LOG_FILE, "rb")
-    f.seek(0, os.SEEK_END)
+    size = os.path.getsize(LOG_FILE)
+    # A stale offset from before a rotation could point past the new file's end,
+    # or into a stale earlier generation entirely. Safest fallback is "now".
+    if start_pos is None or start_pos > size:
+        f.seek(0, os.SEEK_END)
+    else:
+        f.seek(start_pos)
     buf = b""
+    buf_pos = f.tell()
 
     try:
         while True:
@@ -140,7 +150,7 @@ async def tail_log_lines(poll_interval=0.5):
             try:
                 size = os.path.getsize(LOG_FILE)
             except OSError:
-                yield None
+                yield buf_pos + len(buf), None
                 continue
 
             pos = f.tell()
@@ -148,9 +158,11 @@ async def tail_log_lines(poll_interval=0.5):
                 f.close()
                 f = open(LOG_FILE, "rb")
                 pos = 0
+                buf = b""
+                buf_pos = 0
 
             if size <= pos:
-                yield None
+                yield buf_pos + len(buf), None
                 continue
 
             f.seek(pos)
@@ -158,11 +170,12 @@ async def tail_log_lines(poll_interval=0.5):
             *complete, buf = buf.split(b"\n")
 
             if not complete:
-                yield None
+                yield buf_pos + len(buf), None
             for raw_line in complete:
+                buf_pos += len(raw_line) + 1
                 text = raw_line.decode("utf-8", errors="replace").rstrip("\r")
                 if text:
-                    yield text
+                    yield buf_pos, text
     finally:
         f.close()
 

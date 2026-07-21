@@ -48,8 +48,8 @@ def _log_task_exception(task):
 
 async def _internal_get(path: str):
     try:
-        # sock_connect is the important cap here: when nothing is listening on the
-        # internal API, the TCP connect attempt should fail almost instantly — but
+        # sock_connect is the important cap here. When nothing is listening on the
+        # internal API, the TCP connect attempt should fail almost instantly, but
         # if it instead hangs (observed on the Windows host), the plain `total`
         # timeout meant every offline page load ate the full multi-second timeout.
         timeout = aiohttp.ClientTimeout(total=2, sock_connect=0.5)
@@ -91,7 +91,7 @@ def create_app(supervisor, web_state):
             cogs = cogs_data["cogs"] if cogs_data else []
         else:
             # Walks the cogs directory and reads every file to check for a setup()
-            # entrypoint — real disk I/O, so keep it off the event loop.
+            # entrypoint. That's real disk I/O, so keep it off the event loop.
             paths = await asyncio.to_thread(discover_cog_paths, COGS_DIR)
             cogs = [{"extension": path, "loaded": False} for path in sorted(paths)]
 
@@ -235,18 +235,24 @@ def create_app(supervisor, web_state):
 
     @app.get("/status/stream")
     async def status_stream(request: Request):
+        server = web_state.web_server
+
         async def event_stream():
             try:
                 timeout = aiohttp.ClientTimeout(total=None, sock_connect=0.5)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.get(f"{INTERNAL_API}/status/stream") as resp:
                         async for line in resp.content:
-                            if await request.is_disconnected():
+                            # Also bail out when this server wants to shut down, e.g. for
+                            # /web/reload, not just on client disconnect. Otherwise a
+                            # never-ending stream like this blocks graceful shutdown
+                            # indefinitely and forces a risky port rebind.
+                            if await request.is_disconnected() or (server and server.should_exit):
                                 break
                             yield line.decode("utf-8")
             except (aiohttp.ClientError, asyncio.TimeoutError):
-                # Bot is offline or internal API isn't listening; tell the page to
-                # show "—" and let the browser's EventSource auto-retry.
+                # Bot is offline or internal API isn't listening. Tell the page to
+                # show the empty dash and let the browser's EventSource auto-retry.
                 yield "data: \n\n"
 
         return StreamingResponse(event_stream(), media_type="text/event-stream", headers={
@@ -268,14 +274,21 @@ def create_app(supervisor, web_state):
 
     @app.get("/console/logs/stream")
     async def console_logs_stream(request: Request):
+        server = web_state.web_server
+        # EventSource remembers the last "id:" it saw and resends it as this header
+        # on reconnect. That lets us resume the tail instead of jumping to "now"
+        # and silently dropping whatever was logged during the gap.
+        last_id = request.headers.get("last-event-id")
+        start_pos = int(last_id) if last_id and last_id.isdigit() else None
+
         async def event_stream():
-            async for line in tail_log_lines():
-                if await request.is_disconnected():
+            async for pos, line in tail_log_lines(start_pos=start_pos):
+                if await request.is_disconnected() or (server and server.should_exit):
                     break
                 if line is None:
                     yield ": keepalive\n\n"
                 else:
-                    yield f"data: {colorize_log_line(line)}\n\n"
+                    yield f"id: {pos}\ndata: {colorize_log_line(line)}\n\n"
 
         return StreamingResponse(event_stream(), media_type="text/event-stream", headers={
             "Cache-Control": "no-cache",
@@ -287,21 +300,33 @@ def create_app(supervisor, web_state):
         since = web_state.web_epoch
 
         async def _reload():
-            server = web_state.web_server
-            if server:
-                server.should_exit = True
-                for _ in range(100):
-                    if web_state.web_server is None:
-                        break
-                    await asyncio.sleep(0.1)
-                else:
-                    logger.warning("Old web server did not shut down in time; reloading anyway.")
+            # A second reload fired while this one is still tearing down the old
+            # server would read and write web_state.web_server concurrently with it.
+            # Queue behind any in-flight reload instead of racing it.
+            async with web_state.reload_lock:
+                server = web_state.web_server
+                if server:
+                    server.should_exit = True
+                    for i in range(100):
+                        if web_state.web_server is None:
+                            logger.info(f"Old web server shut down cleanly after {i * 0.1:.1f}s.")
+                            break
+                        await asyncio.sleep(0.1)
+                    else:
+                        # Starting a new server now would race the still-bound old one for
+                        # port 8000 and, if it lost, orphan that old server permanently.
+                        # web_state.web_server is our only handle on it, and overwriting it
+                        # with a failed new attempt means nothing can ever should_exit it
+                        # again. Bail out instead and leave the reference in place, so the
+                        # next reload attempt still waits on this same instance.
+                        logger.error("Old web server did not shut down in time; aborting reload.")
+                        return
 
-            web_module = sys.modules[__name__]
-            importlib.reload(web_module)
-            new_task = asyncio.create_task(web_module.start(supervisor, web_state))
-            new_task.add_done_callback(_log_task_exception)
-            logger.info("Reloaded web dashboard.")
+                web_module = sys.modules[__name__]
+                importlib.reload(web_module)
+                new_task = asyncio.create_task(web_module.start(supervisor, web_state))
+                new_task.add_done_callback(_log_task_exception)
+                logger.info("Reloaded web dashboard.")
 
         asyncio.create_task(_reload())
         return templates.TemplateResponse(request=request, name="partials/web_reload_result.html", context={
@@ -328,6 +353,31 @@ async def start(supervisor, web_state):
     config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="warning")
     server = uvicorn.Server(config)
     web_state.web_server = server
-    web_state.web_epoch += 1
-    await server.serve()
-    web_state.web_server = None
+
+    # Run serve() as a task and poll server.started (set by uvicorn right after a
+    # successful bind) instead of awaiting it directly, so web_epoch only advances
+    # once the new server is actually live. Otherwise the dashboard's reload
+    # banner would report success the instant a bind is attempted, even if it
+    # then fails a moment later.
+    serve_task = asyncio.create_task(server.serve())
+    try:
+        while not server.started and not serve_task.done():
+            await asyncio.sleep(0.05)
+
+        if not server.started:
+            await serve_task  # propagates the bind failure as SystemExit
+            return
+
+        web_state.web_epoch += 1
+        epoch = web_state.web_epoch
+        logger.info(f"Web server (epoch {epoch}) started.")
+        await serve_task
+        logger.info(f"Web server (epoch {epoch}) stopped.")
+    except SystemExit:
+        # uvicorn's own reaction to a failed bind, e.g. the old server hadn't
+        # released the port yet, is sys.exit(1). Since SystemExit is a BaseException,
+        # asyncio won't swallow it like a normal task error. Left unguarded, it
+        # escapes this background task and takes the whole run.py process down with it.
+        logger.error("Web server failed to start: port 8000 still in use.")
+    finally:
+        web_state.web_server = None

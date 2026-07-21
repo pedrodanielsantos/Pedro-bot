@@ -48,7 +48,7 @@
         <div class="guild-card-row">
             <div>
                 <div class="stat-label">Guilds</div>
-                <div class="stat-value">{{ guild_count if guild_count is not none else "—" }}</div>
+                <div id="guild-count" class="stat-value">{{ guild_count if guild_count is not none else "—" }}</div>
             </div>
             <button id="guild-toggle" class="btn"
                 hx-get="/guilds"
@@ -210,6 +210,17 @@
                 const value = e.data.trim();
                 el.innerHTML = value ? `${value}<span class="stat-unit">ms</span>` : '—';
             };
+
+            source.addEventListener('guilds', (e) => {
+                const value = e.data.trim();
+                document.getElementById('guild-count').textContent = value || '—';
+
+                // Only re-fetch the expandable list if it's currently open.
+                const guildList = document.getElementById('guild-list');
+                if (guildList && guildList.children.length > 0) {
+                    htmx.ajax('GET', '/guilds', { target: '#guild-list', swap: 'innerHTML' });
+                }
+            });
         })();
     </script>
 

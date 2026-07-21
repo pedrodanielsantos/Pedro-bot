@@ -50,7 +50,7 @@ class BotSupervisor:
     async def _watch(self, proc):
         returncode = await proc.wait()
         if self.process is not proc:
-            # Superseded by a newer spawn (e.g. stop+start raced the watcher) — ignore.
+            # Superseded by a newer spawn, e.g. stop+start raced the watcher. Ignore.
             return
 
         if self.status == "stopped":
@@ -93,6 +93,9 @@ class WebState:
     def __init__(self):
         self.web_server = None
         self.web_epoch = 0
+        # Serializes /web/reload attempts so a double-click can't race two
+        # concurrent reloads against each other and each other's server refs.
+        self.reload_lock = asyncio.Lock()
 
 
 async def main():

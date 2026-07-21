@@ -16,6 +16,17 @@ logger = logging.getLogger("internal_api")
 
 def create_internal_app(bot):
     app = FastAPI(docs_url=None, redoc_url=None)
+    guild_change = asyncio.Event()
+
+    @bot.event
+    async def on_guild_join(guild):
+        logger.info(f"Joined guild: {guild.name} ({guild.id})")
+        guild_change.set()
+
+    @bot.event
+    async def on_guild_remove(guild):
+        logger.info(f"Left guild: {guild.name} ({guild.id})")
+        guild_change.set()
 
     @app.get("/status")
     async def status():
@@ -33,15 +44,33 @@ def create_internal_app(bot):
     @app.get("/status/stream")
     async def status_stream():
         async def event_stream():
-            last = "unset"
+            last_latency = "unset"
+            last_guild_count = "unset"
             while True:
+                changed = False
+
                 latency_ms = round(bot.latency * 1000) if bot.is_ready() else None
-                if latency_ms != last:
-                    last = latency_ms
+                if latency_ms != last_latency:
+                    last_latency = latency_ms
+                    changed = True
                     yield f"data: {latency_ms if latency_ms is not None else ''}\n\n"
-                else:
+
+                guild_count = len(bot.guilds) if bot.is_ready() else None
+                if guild_count != last_guild_count:
+                    last_guild_count = guild_count
+                    changed = True
+                    yield f"event: guilds\ndata: {guild_count if guild_count is not None else ''}\n\n"
+
+                if not changed:
                     yield ": keepalive\n\n"
-                await asyncio.sleep(1)
+
+                # Woken instantly by on_guild_join/on_guild_remove, but still polls
+                # once a second so latency (no discord.py event for that) stays live.
+                try:
+                    await asyncio.wait_for(guild_change.wait(), timeout=1)
+                    guild_change.clear()
+                except asyncio.TimeoutError:
+                    pass
 
         return StreamingResponse(event_stream(), media_type="text/event-stream", headers={
             "Cache-Control": "no-cache",
