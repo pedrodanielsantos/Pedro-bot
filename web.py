@@ -233,6 +233,27 @@ def create_app(supervisor, web_state):
     async def bot_status_clear():
         return HTMLResponse("")
 
+    @app.get("/status/stream")
+    async def status_stream(request: Request):
+        async def event_stream():
+            try:
+                timeout = aiohttp.ClientTimeout(total=None, sock_connect=0.5)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.get(f"{INTERNAL_API}/status/stream") as resp:
+                        async for line in resp.content:
+                            if await request.is_disconnected():
+                                break
+                            yield line.decode("utf-8")
+            except (aiohttp.ClientError, asyncio.TimeoutError):
+                # Bot is offline or internal API isn't listening; tell the page to
+                # show "—" and let the browser's EventSource auto-retry.
+                yield "data: \n\n"
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream", headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        })
+
     @app.get("/console", response_class=HTMLResponse)
     async def console(request: Request):
         status = await _status()

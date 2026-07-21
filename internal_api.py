@@ -1,8 +1,10 @@
+import asyncio
 import logging
 import os
 
 import uvicorn
 from fastapi import FastAPI, Body
+from fastapi.responses import StreamingResponse
 
 from utils.cogs import discover_cog_paths
 from utils.uptime import format_uptime
@@ -27,6 +29,24 @@ def create_internal_app(bot):
             "uptime": format_uptime(bot.launch_time),
             "launch_time": bot.launch_time.timestamp() if ready else None,
         }
+
+    @app.get("/status/stream")
+    async def status_stream():
+        async def event_stream():
+            last = "unset"
+            while True:
+                latency_ms = round(bot.latency * 1000) if bot.is_ready() else None
+                if latency_ms != last:
+                    last = latency_ms
+                    yield f"data: {latency_ms if latency_ms is not None else ''}\n\n"
+                else:
+                    yield ": keepalive\n\n"
+                await asyncio.sleep(1)
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream", headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        })
 
     @app.get("/cogs")
     async def cogs():

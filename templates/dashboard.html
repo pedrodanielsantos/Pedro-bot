@@ -34,11 +34,9 @@
         </div>
         <div class="card">
             <div class="stat-label">Latency</div>
-            {% if is_ready %}
-            <div class="stat-value">{{ latency }}<span class="stat-unit">ms</span></div>
-            {% else %}
-            <div class="stat-value">—</div>
-            {% endif %}
+            <div id="latency-value" class="stat-value">
+                {% if is_ready %}{{ latency }}<span class="stat-unit">ms</span>{% else %}—{% endif %}
+            </div>
         </div>
         <div class="card">
             <div class="stat-label">Uptime</div>
@@ -200,6 +198,18 @@
 
             tick();
             setInterval(tick, 1000);
+        })();
+    </script>
+
+    <script>
+        (function() {
+            const el = document.getElementById('latency-value');
+
+            const source = new EventSource('/status/stream');
+            source.onmessage = (e) => {
+                const value = e.data.trim();
+                el.innerHTML = value ? `${value}<span class="stat-unit">ms</span>` : '—';
+            };
         })();
     </script>
 
