@@ -82,7 +82,6 @@ crash or restart.
 | `/embed createjson` | Create an embed using raw JSON |
 | `/embed editjson` | Edit an existing embed using raw JSON |
 | `/embed json` | Get the JSON source of an embed |
-| `/rules` | Displays the server rules |
 | `/serverinfo` | Displays server statistics |
 | `/stats` | Shows technical information about the bot |
 | `/timestamp at` | Generate a timestamp tag for a specific date and time |
