@@ -17,7 +17,7 @@ class BotSupervisor:
 
     def __init__(self):
         self.process = None
-        self.status = "stopped"  # stopped | running | crashed_retrying
+        self.status = "stopped"  # stopped | stopping | running | crashed_retrying
         self._lock = asyncio.Lock()
 
     async def start(self):
@@ -30,11 +30,15 @@ class BotSupervisor:
     async def stop(self):
         async with self._lock:
             proc = self.process
-            self.status = "stopped"
             if proc is None or proc.returncode is not None:
+                self.status = "stopped"
                 self.process = None
                 return False
+            # Set before _terminate, not after. Other tabs should see "stopping"
+            # during the graceful shutdown instead of "stopped" too early.
+            self.status = "stopping"
             await _terminate(proc)
+            self.status = "stopped"
             self.process = None
             return True
 
@@ -53,7 +57,9 @@ class BotSupervisor:
             # Superseded by a newer spawn, e.g. stop+start raced the watcher. Ignore.
             return
 
-        if self.status == "stopped":
+        if self.status in ("stopped", "stopping"):
+            # stop() is already handling this same proc via the same proc.wait().
+            # Let it own the status transition instead of racing it here.
             self.process = None
             return
 
@@ -96,6 +102,8 @@ class WebState:
         # Serializes /web/reload attempts so a double-click can't race two
         # concurrent reloads against each other and each other's server refs.
         self.reload_lock = asyncio.Lock()
+        # Bumped on every cog load/unload/reload so other tabs notice and refresh.
+        self.cogs_epoch = 0
 
 
 async def main():

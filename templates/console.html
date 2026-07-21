@@ -37,6 +37,17 @@
             }
         };
     })();
+
+    (function() {
+        // Keeps the dot and Start/Stop button in sync with other tabs, like dashboard.html.
+        function refreshBotStatus() {
+            htmx.ajax('GET', '/bot/status', { target: '#bot-status-group', swap: 'outerHTML' });
+        }
+
+        const source = new EventSource('/status/stream');
+        source.addEventListener('ready', refreshBotStatus);
+        source.addEventListener('control', refreshBotStatus);
+    })();
 </script>
 
 {% endblock %}

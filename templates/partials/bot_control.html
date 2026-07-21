@@ -1,6 +1,6 @@
 <span id="bot-status-group" style="display: inline-flex; align-items: center; gap: 10px;"
     {% if status != "stopped" and not is_ready %}
-    hx-get="/bot/status" hx-trigger="load delay:1s, every 2s" hx-swap="outerHTML"
+    hx-get="/bot/status?announce=true" hx-trigger="load delay:1s, every 2s" hx-swap="outerHTML"
     {% endif %}>
     <div class="dot {{ 'dot-online' if is_ready else 'dot-offline' }}"></div>
     {% if status == "stopped" %}
@@ -13,8 +13,10 @@
         <span class="btn-label htmx-indicator">Starting…</span>
     </button>
     {% else %}
-    {% if not is_ready %}
-    <span class="badge badge-error">Starting…</span>
+    {% if status == "stopping" %}
+    <span class="badge badge-error">Stopping…</span>
+    {% elif not is_ready %}
+    <span class="badge badge-ok">Starting…</span>
     {% elif just_restarted %}
     <span class="badge badge-ok"
         hx-get="/bot/status/clear"

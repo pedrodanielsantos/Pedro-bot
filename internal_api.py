@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 
@@ -54,16 +55,24 @@ def create_internal_app(bot, state):
         async def event_stream():
             last_latency = "unset"
             last_guild_count = "unset"
+            last_ready = "unset"
             while True:
                 changed = False
 
-                latency_ms = round(bot.latency * 1000) if bot.is_ready() else None
+                ready = bot.is_ready()
+                if ready != last_ready:
+                    last_ready = ready
+                    changed = True
+                    launch_time = bot.launch_time.timestamp() if ready else None
+                    yield f"event: ready\ndata: {json.dumps({'ready': ready, 'launch_time': launch_time})}\n\n"
+
+                latency_ms = round(bot.latency * 1000) if ready else None
                 if latency_ms != last_latency:
                     last_latency = latency_ms
                     changed = True
                     yield f"data: {latency_ms if latency_ms is not None else ''}\n\n"
 
-                guild_count = len(bot.guilds) if bot.is_ready() else None
+                guild_count = len(bot.guilds) if ready else None
                 if guild_count != last_guild_count:
                     last_guild_count = guild_count
                     changed = True

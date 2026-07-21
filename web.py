@@ -81,19 +81,20 @@ def create_app(supervisor, web_state):
         data = await _internal_get("/status")
         return data or {}
 
+    async def _cogs(ready):
+        if ready:
+            cogs_data = await _internal_get("/cogs")
+            return cogs_data["cogs"] if cogs_data else []
+        # Walks the cogs directory and reads every file to check for a setup()
+        # entrypoint. That's real disk I/O, so keep it off the event loop.
+        paths = await asyncio.to_thread(discover_cog_paths, COGS_DIR)
+        return [{"extension": path, "loaded": False} for path in sorted(paths)]
+
     @app.get("/", response_class=HTMLResponse)
     async def dashboard(request: Request):
         status = await _status()
         ready = bool(status.get("ready"))
-
-        if ready:
-            cogs_data = await _internal_get("/cogs")
-            cogs = cogs_data["cogs"] if cogs_data else []
-        else:
-            # Walks the cogs directory and reads every file to check for a setup()
-            # entrypoint. That's real disk I/O, so keep it off the event loop.
-            paths = await asyncio.to_thread(discover_cog_paths, COGS_DIR)
-            cogs = [{"extension": path, "loaded": False} for path in sorted(paths)]
+        cogs = await _cogs(ready)
 
         return templates.TemplateResponse(request=request, name="dashboard.html", context={
             "bot_name": status.get("bot_name") or "Bot",
@@ -122,9 +123,23 @@ def create_app(supervisor, web_state):
             "View</button>"
         )
 
+    @app.get("/cogs/refresh", response_class=HTMLResponse)
+    async def cogs_refresh(request: Request):
+        # Called on a ready-state flip or another tab's cog change. Replaces the
+        # whole table instead of patching rows one by one.
+        status = await _status()
+        cogs = await _cogs(bool(status.get("ready")))
+        return templates.TemplateResponse(request=request, name="partials/cog_rows.html", context={
+            "rows": [
+                {"extension": cog["extension"], "loaded": cog["loaded"], "error": None, "just_reloaded": False}
+                for cog in cogs
+            ],
+        })
+
     @app.post("/cogs/reload/{extension:path}", response_class=HTMLResponse)
     async def reload_cog(request: Request, extension: str):
         result = await _internal_post(f"/cogs/reload/{extension}")
+        web_state.cogs_epoch += 1
         error = result.get("error") if result else "Bot is offline"
         return templates.TemplateResponse(request=request, name="partials/cog_row.html", context={
             "extension": extension,
@@ -140,6 +155,7 @@ def create_app(supervisor, web_state):
     @app.post("/cogs/unload/{extension:path}", response_class=HTMLResponse)
     async def unload_cog(request: Request, extension: str):
         result = await _internal_post(f"/cogs/unload/{extension}")
+        web_state.cogs_epoch += 1
         loaded = bool(result and result.get("loaded"))
         error = result.get("error") if result else "Bot is offline"
         return templates.TemplateResponse(request=request, name="partials/cog_row.html", context={
@@ -151,6 +167,7 @@ def create_app(supervisor, web_state):
     @app.post("/cogs/load/{extension:path}", response_class=HTMLResponse)
     async def load_cog_row(request: Request, extension: str):
         result = await _internal_post(f"/cogs/load/{extension}")
+        web_state.cogs_epoch += 1
         loaded = bool(result and result.get("loaded"))
         error = result.get("error") if result else "Bot is offline"
         return templates.TemplateResponse(request=request, name="partials/cog_row.html", context={
@@ -162,6 +179,7 @@ def create_app(supervisor, web_state):
     @app.post("/cogs/bulk/reload", response_class=HTMLResponse)
     async def bulk_reload_cogs(request: Request, cogs: list[str] = Form(...)):
         result = await _internal_post("/cogs/bulk/reload", json={"cogs": cogs})
+        web_state.cogs_epoch += 1
         rows = result["rows"] if result else [
             {"extension": extension, "loaded": False, "error": "Bot is offline"} for extension in cogs
         ]
@@ -174,6 +192,7 @@ def create_app(supervisor, web_state):
     @app.post("/cogs/bulk/unload", response_class=HTMLResponse)
     async def bulk_unload_cogs(request: Request, cogs: list[str] = Form(...)):
         result = await _internal_post("/cogs/bulk/unload", json={"cogs": cogs})
+        web_state.cogs_epoch += 1
         rows = result["rows"] if result else [
             {"extension": extension, "loaded": False, "error": "Bot is offline"} for extension in cogs
         ]
@@ -184,6 +203,7 @@ def create_app(supervisor, web_state):
     @app.post("/cogs/bulk/load", response_class=HTMLResponse)
     async def bulk_load_cogs(request: Request, cogs: list[str] = Form(...)):
         result = await _internal_post("/cogs/bulk/load", json={"cogs": cogs})
+        web_state.cogs_epoch += 1
         rows = result["rows"] if result else [
             {"extension": extension, "loaded": False, "error": "Bot is offline"} for extension in cogs
         ]
@@ -218,15 +238,17 @@ def create_app(supervisor, web_state):
         })
 
     @app.get("/bot/status", response_class=HTMLResponse)
-    async def bot_status_partial(request: Request):
+    async def bot_status_partial(request: Request, announce: bool = False):
         status = await _status()
         ready = bool(status.get("ready"))
         return templates.TemplateResponse(request=request, name="partials/bot_control.html", context={
             "is_ready": ready,
             "status": supervisor.status,
-            # This route is only ever reached via the poll that fires while not-ready, so a
-            # ready=True result here is by definition the first observation of it coming back up.
-            "just_restarted": ready and supervisor.status == "running",
+            # announce=true only comes from the self-polling trigger below, which only
+            # runs while not ready, so a ready result there is genuinely the first
+            # observation of it coming back up. Without this flag, the SSE-driven
+            # refresh on every reconnect would show the "Started" badge every time.
+            "just_restarted": announce and ready and supervisor.status == "running",
         })
 
     @app.get("/bot/status/clear", response_class=HTMLResponse)
@@ -238,22 +260,58 @@ def create_app(supervisor, web_state):
         server = web_state.web_server
 
         async def event_stream():
+            # supervisor.status lives here, not on the bot, so it can't come from the
+            # internal API's stream. Piggyback a check on each relayed event boundary
+            # instead of polling separately, so an idle tab still learns when another
+            # tab starts or stops the bot.
+            last_status = None
+            last_cogs_epoch = web_state.cogs_epoch
+
+            def status_event():
+                nonlocal last_status
+                if supervisor.status == last_status:
+                    return ""
+                last_status = supervisor.status
+                return f"event: control\ndata: {last_status}\n\n"
+
+            def cogs_event():
+                nonlocal last_cogs_epoch
+                if web_state.cogs_epoch == last_cogs_epoch:
+                    return ""
+                last_cogs_epoch = web_state.cogs_epoch
+                return f"event: cogs\ndata: {last_cogs_epoch}\n\n"
+
             try:
                 timeout = aiohttp.ClientTimeout(total=None, sock_connect=0.5)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.get(f"{INTERNAL_API}/status/stream") as resp:
+                        # A blank line ends an SSE event, so the next line starts a
+                        # fresh one. Only inject our own event there, never mid-event,
+                        # or it would corrupt both.
+                        at_boundary = True
                         async for line in resp.content:
                             # Also bail out when this server wants to shut down, e.g. for
                             # /web/reload, not just on client disconnect. Otherwise a
                             # never-ending stream like this blocks graceful shutdown
                             # indefinitely and forces a risky port rebind.
                             if await request.is_disconnected() or (server and server.should_exit):
-                                break
+                                return
+                            if at_boundary:
+                                yield status_event()
+                                yield cogs_event()
                             yield line.decode("utf-8")
+                            at_boundary = line in (b"\n", b"\r\n")
+                # The internal stream ended on its own, e.g. the bot process died,
+                # rather than us returning above. The browser needs to hear about it
+                # now instead of waiting on a reconnect that lands after the fact.
             except (aiohttp.ClientError, asyncio.TimeoutError):
-                # Bot is offline or internal API isn't listening. Tell the page to
-                # show the empty dash and let the browser's EventSource auto-retry.
-                yield "data: \n\n"
+                pass
+
+            # Reached only when the internal API stream ended or never connected,
+            # meaning the bot isn't reachable right now.
+            yield status_event()
+            yield 'event: ready\ndata: {"ready": false, "launch_time": null}\n\n'
+            yield "data: \n\n"
 
         return StreamingResponse(event_stream(), media_type="text/event-stream", headers={
             "Cache-Control": "no-cache",
