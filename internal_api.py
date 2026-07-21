@@ -14,7 +14,15 @@ COGS_DIR = os.path.join(os.path.dirname(__file__), "cogs")
 logger = logging.getLogger("internal_api")
 
 
-def create_internal_app(bot):
+class InternalState:
+    """Holds the uvicorn server reference so routes defined in create_internal_app
+    can see should_exit, even though the server itself is only created afterward in start()."""
+
+    def __init__(self):
+        self.server = None
+
+
+def create_internal_app(bot, state):
     app = FastAPI(docs_url=None, redoc_url=None)
     guild_change = asyncio.Event()
 
@@ -63,6 +71,14 @@ def create_internal_app(bot):
 
                 if not changed:
                     yield ": keepalive\n\n"
+
+                # Also checked here, not just via client disconnect: this loop would
+                # otherwise run forever, and web.py keeps a proxied connection to it
+                # open indefinitely. Without this, stopping the bot could never finish
+                # this stream, which would keep this uvicorn server's serve() from
+                # returning, which would keep bot.py's own shutdown from ever running.
+                if state.server and state.server.should_exit:
+                    break
 
                 # Woken instantly by on_guild_join/on_guild_remove, but still polls
                 # once a second so latency (no discord.py event for that) stays live.
@@ -187,7 +203,9 @@ def create_internal_app(bot):
 
 
 async def start(bot):
-    app = create_internal_app(bot)
+    state = InternalState()
+    app = create_internal_app(bot, state)
     config = uvicorn.Config(app, host="127.0.0.1", port=8001, log_level="warning")
     server = uvicorn.Server(config)
+    state.server = server
     await server.serve()
