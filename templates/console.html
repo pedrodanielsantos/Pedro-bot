@@ -12,7 +12,7 @@
 </header>
 
 <main>
-    <pre id="console-log" class="card" style="font-family: var(--mono); font-size: 12px; white-space: pre-wrap; max-height: 75vh; overflow-y: auto;"
+    <pre id="console-log" class="card" data-log-pos="{{ log_pos }}" style="font-family: var(--mono); font-size: 12px; white-space: pre-wrap; max-height: 75vh; overflow-y: auto;"
         >{% include "partials/console_log.html" %}</pre>
 </main>
 
@@ -28,25 +28,30 @@
 
         consoleLog.scrollTop = consoleLog.scrollHeight;
 
+        // Starts at the byte offset the static render above already covers, so a
+        // reconnect with nothing received live yet still resumes from there instead
+        // of jumping to "now" and skipping whatever was logged in the gap (e.g. a
+        // web.py reload's own log lines). After the first message, EventSource tracks
+        // Last-Event-ID itself and resends it automatically on every reconnect, so
+        // nothing further needs to be done here for that.
+        const logPos = consoleLog.dataset.logPos;
+        const logSource = new EventSource(logPos ? `/console/logs/stream?last_id=${logPos}` : "/console/logs/stream");
         // Appends instead of replacing, so an active text selection isn't lost.
-        const source = new EventSource("/console/logs/stream");
-        source.onmessage = (e) => {
+        logSource.onmessage = (e) => {
             consoleLog.insertAdjacentHTML("beforeend", e.data + "\n");
             if (stickToBottom) {
                 consoleLog.scrollTop = consoleLog.scrollHeight;
             }
         };
-    })();
 
-    (function() {
         // Keeps the dot and Start/Stop button in sync with other tabs, like dashboard.html.
         function refreshBotStatus() {
             htmx.ajax('GET', '/bot/status', { target: '#bot-status-group', swap: 'outerHTML' });
         }
 
-        const source = new EventSource('/status/stream');
-        source.addEventListener('ready', refreshBotStatus);
-        source.addEventListener('control', refreshBotStatus);
+        const statusSource = new EventSource('/status/stream');
+        statusSource.addEventListener('ready', refreshBotStatus);
+        statusSource.addEventListener('control', refreshBotStatus);
     })();
 </script>
 

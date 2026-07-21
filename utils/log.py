@@ -98,6 +98,13 @@ def setup_logging(level=logging.INFO):
     root.addHandler(file_handler)
 
 
+def log_file_size() -> int:
+    """Current size of bot.log, used as the initial resume point for a live tail so
+    it starts exactly where a static render of tail_log_file() left off, instead of
+    jumping to "now" and risking a gap for whatever gets logged in between."""
+    return os.path.getsize(LOG_FILE) if os.path.exists(LOG_FILE) else 0
+
+
 def tail_log_file(lines=500, chunk_size=8192):
     """Reads only the tail of the log file by scanning backward in chunks, instead
     of the whole file. Matters once the file approaches its rotation size."""

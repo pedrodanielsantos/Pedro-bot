@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from utils.cogs import discover_cog_paths
-from utils.log import colorize_log_line, tail_log_file, tail_log_lines
+from utils.log import colorize_log_line, log_file_size, tail_log_file, tail_log_lines
 
 COGS_DIR = os.path.join(os.path.dirname(__file__), "cogs")
 INTERNAL_API = "http://127.0.0.1:8001"
@@ -320,12 +320,16 @@ def create_app(supervisor, web_state):
     @app.get("/console", response_class=HTMLResponse)
     async def console(request: Request):
         status = await _status()
+        # Read the size first, then the tail, so the live stream's resume point can
+        # never be ahead of what the static render actually shows.
+        log_pos = await asyncio.to_thread(log_file_size)
         logs = await asyncio.to_thread(tail_log_file)
         return templates.TemplateResponse(request=request, name="console.html", context={
             "bot_name": status.get("bot_name") or "Bot",
             "bot_avatar_url": status.get("bot_avatar_url"),
             "is_ready": bool(status.get("ready")),
             "logs": logs,
+            "log_pos": log_pos,
             "supervisor_status": supervisor.status,
         })
 
@@ -333,9 +337,11 @@ def create_app(supervisor, web_state):
     async def console_logs_stream(request: Request):
         server = web_state.web_server
         # EventSource remembers the last "id:" it saw and resends it as this header on
-        # reconnect, so we can resume the tail instead of jumping to "now" and dropping
-        # whatever was logged in the gap.
-        last_id = request.headers.get("last-event-id")
+        # every reconnect, so we can resume the tail instead of jumping to "now" and
+        # dropping whatever was logged in the gap. The very first connection has no id
+        # to send yet, so console.html passes one as a query param instead, seeded from
+        # the byte offset its own static render already covers.
+        last_id = request.headers.get("last-event-id") or request.query_params.get("last_id")
         start_pos = int(last_id) if last_id and last_id.isdigit() else None
 
         async def event_stream():
