@@ -211,8 +211,8 @@
             }
 
             // A stop/start fires several ready/control events in quick succession, each
-            // requesting a refresh. Responses can arrive out of order, so this guard
-            // makes sure only the latest one ever gets applied.
+            // requesting a refresh. Responses can arrive out of order, so this guard makes
+            // sure only the latest one gets applied.
             let cogsRefreshSeq = 0;
             function refreshCogs() {
                 const seq = ++cogsRefreshSeq;
@@ -236,15 +236,15 @@
                 const value = e.data.trim();
                 guildCountEl.textContent = value || '—';
 
-                // Only re-fetch the expandable list if it's currently open.
+                // Only re-fetch the expandable guild list if it's currently open.
                 const guildList = document.getElementById('guild-list');
                 if (guildList && guildList.children.length > 0) {
                     htmx.ajax('GET', '/guilds', { target: '#guild-list', swap: 'innerHTML' });
                 }
             });
 
-            // Fires when the bot's ready state flips, from any tab. Covers everything
-            // derived from is_ready that isn't already handled by latency/guilds above.
+            // Fires when the bot's ready state flips, from any tab. Handles everything
+            // derived from is_ready that latency/guilds above don't already cover.
             source.addEventListener('ready', (e) => {
                 const data = JSON.parse(e.data);
 
@@ -252,9 +252,9 @@
                 statusEl.style.color = data.ready ? 'var(--green)' : 'var(--red)';
 
                 uptimeEl.dataset.launch = data.launch_time || '';
-                // Looked up fresh, not cached: /guilds replaces this button with a new
-                // node (View <-> Hide) via hx-swap-oob, which would make a cached
-                // reference stale.
+                // Looked up fresh each time, not cached: /guilds swaps this button for a
+                // new node (View <-> Hide) via hx-swap-oob, which would make a cached
+                // reference go stale.
                 document.getElementById('guild-toggle').style.display = data.ready ? '' : 'none';
                 if (!data.ready) {
                     uptimeEl.textContent = '—';
@@ -263,23 +263,26 @@
                     document.getElementById('guild-list').innerHTML = '';
                 }
 
-                // Refresh either way: coming online loads the configured cogs,
-                // going offline drops back to "not loaded".
+                // Refresh either way: coming online loads the configured cogs, going
+                // offline drops everything back to "not loaded".
                 refreshCogs();
 
                 refreshBotStatus();
             });
 
-            // Fires when any tab loads, unloads, or reloads a cog, keeping every
-            // tab's table in sync.
+            // Fires when any tab loads, unloads, or reloads a cog, keeping every tab in sync.
             source.addEventListener('cogs', () => {
                 refreshCogs();
             });
 
-            // supervisor.status (start/stop/crash-retry) lives in web.py, separate
-            // from the bot's ready state, so it gets its own event to trigger the
-            // same button-group refresh.
-            source.addEventListener('control', refreshBotStatus);
+            // supervisor.status (start/stop/crash-retry) lives in web.py, separate from
+            // the bot's ready state, so it gets its own event for the same button refresh.
+            // Also nudges the cog table: a fresh spawn loads extensions before the gateway
+            // handshake completes, so this can pick up real state sooner than 'ready' would.
+            source.addEventListener('control', () => {
+                refreshBotStatus();
+                refreshCogs();
+            });
         })();
     </script>
 

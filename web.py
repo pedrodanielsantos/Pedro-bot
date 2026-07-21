@@ -48,10 +48,9 @@ def _log_task_exception(task):
 
 async def _internal_get(path: str):
     try:
-        # sock_connect is the important cap here. When nothing is listening on the
-        # internal API, the TCP connect attempt should fail almost instantly, but
-        # if it instead hangs (observed on the Windows host), the plain `total`
-        # timeout meant every offline page load ate the full multi-second timeout.
+        # sock_connect is the important limit here. If nothing is listening, the connect
+        # should fail almost instantly. On Windows it can hang instead, and the plain
+        # total timeout let every offline page load wait out the full multi-second timeout.
         timeout = aiohttp.ClientTimeout(total=2, sock_connect=0.5)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(f"{INTERNAL_API}{path}") as resp:
@@ -81,12 +80,16 @@ def create_app(supervisor, web_state):
         data = await _internal_get("/status")
         return data or {}
 
-    async def _cogs(ready):
-        if ready:
-            cogs_data = await _internal_get("/cogs")
-            return cogs_data["cogs"] if cogs_data else []
-        # Walks the cogs directory and reads every file to check for a setup()
-        # entrypoint. That's real disk I/O, so keep it off the event loop.
+    async def _cogs():
+        # Based on whether the internal API answers, not bot.is_ready(). bot.py loads
+        # cogs before connecting to Discord, so extensions can be loaded already while
+        # is_ready() is still false. /cogs reads bot.extensions directly and works
+        # either way, so we get accurate state instead of showing "unloaded" too early.
+        cogs_data = await _internal_get("/cogs")
+        if cogs_data:
+            return cogs_data["cogs"]
+        # No response means bot.py isn't running. Walk the cogs directory and check
+        # each file for a setup() entrypoint instead. Real disk I/O, keep off the event loop.
         paths = await asyncio.to_thread(discover_cog_paths, COGS_DIR)
         return [{"extension": path, "loaded": False} for path in sorted(paths)]
 
@@ -94,7 +97,7 @@ def create_app(supervisor, web_state):
     async def dashboard(request: Request):
         status = await _status()
         ready = bool(status.get("ready"))
-        cogs = await _cogs(ready)
+        cogs = await _cogs()
 
         return templates.TemplateResponse(request=request, name="dashboard.html", context={
             "bot_name": status.get("bot_name") or "Bot",
@@ -125,10 +128,9 @@ def create_app(supervisor, web_state):
 
     @app.get("/cogs/refresh", response_class=HTMLResponse)
     async def cogs_refresh(request: Request):
-        # Called on a ready-state flip or another tab's cog change. Replaces the
-        # whole table instead of patching rows one by one.
-        status = await _status()
-        cogs = await _cogs(bool(status.get("ready")))
+        # Called on a ready flip, a control flip, or another tab's cog change.
+        # Replaces the whole table instead of patching rows one by one.
+        cogs = await _cogs()
         return templates.TemplateResponse(request=request, name="partials/cog_rows.html", context={
             "rows": [
                 {"extension": cog["extension"], "loaded": cog["loaded"], "error": None, "just_reloaded": False}
@@ -244,10 +246,10 @@ def create_app(supervisor, web_state):
         return templates.TemplateResponse(request=request, name="partials/bot_control.html", context={
             "is_ready": ready,
             "status": supervisor.status,
-            # announce=true only comes from the self-polling trigger below, which only
-            # runs while not ready, so a ready result there is genuinely the first
-            # observation of it coming back up. Without this flag, the SSE-driven
-            # refresh on every reconnect would show the "Started" badge every time.
+            # announce=true only comes from the self-poll below, which only runs while
+            # not ready, so a ready result there really is the first time we've seen it
+            # come back. Without this flag, the SSE refresh on every reconnect would
+            # show the "Started" badge every time.
             "just_restarted": announce and ready and supervisor.status == "running",
         })
 
@@ -260,10 +262,9 @@ def create_app(supervisor, web_state):
         server = web_state.web_server
 
         async def event_stream():
-            # supervisor.status lives here, not on the bot, so it can't come from the
-            # internal API's stream. Piggyback a check on each relayed event boundary
-            # instead of polling separately, so an idle tab still learns when another
-            # tab starts or stops the bot.
+            # supervisor.status lives here, not on the bot, so the internal API's stream
+            # can't carry it. Check it at each relayed event boundary instead of polling
+            # separately, so an idle tab still learns when another tab starts or stops the bot.
             last_status = None
             last_cogs_epoch = web_state.cogs_epoch
 
@@ -285,15 +286,13 @@ def create_app(supervisor, web_state):
                 timeout = aiohttp.ClientTimeout(total=None, sock_connect=0.5)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.get(f"{INTERNAL_API}/status/stream") as resp:
-                        # A blank line ends an SSE event, so the next line starts a
-                        # fresh one. Only inject our own event there, never mid-event,
-                        # or it would corrupt both.
+                        # A blank line ends an SSE event, so the next line starts a new one.
+                        # Only inject our own events there, never mid-event, or both get corrupted.
                         at_boundary = True
                         async for line in resp.content:
-                            # Also bail out when this server wants to shut down, e.g. for
-                            # /web/reload, not just on client disconnect. Otherwise a
-                            # never-ending stream like this blocks graceful shutdown
-                            # indefinitely and forces a risky port rebind.
+                            # Also stop when this server wants to shut down, e.g. for /web/reload,
+                            # not just on client disconnect. Otherwise this stream never ends,
+                            # graceful shutdown blocks forever, and we're forced into a risky port rebind.
                             if await request.is_disconnected() or (server and server.should_exit):
                                 return
                             if at_boundary:
@@ -301,13 +300,13 @@ def create_app(supervisor, web_state):
                                 yield cogs_event()
                             yield line.decode("utf-8")
                             at_boundary = line in (b"\n", b"\r\n")
-                # The internal stream ended on its own, e.g. the bot process died,
-                # rather than us returning above. The browser needs to hear about it
-                # now instead of waiting on a reconnect that lands after the fact.
+                # If we get here, the internal stream ended on its own, e.g. the bot process
+                # died, instead of us returning above. Tell the browser now instead of
+                # waiting for a reconnect that would arrive after the fact.
             except (aiohttp.ClientError, asyncio.TimeoutError):
                 pass
 
-            # Reached only when the internal API stream ended or never connected,
+            # Only reached if the internal API stream ended or never connected,
             # meaning the bot isn't reachable right now.
             yield status_event()
             yield 'event: ready\ndata: {"ready": false, "launch_time": null}\n\n'
@@ -333,9 +332,9 @@ def create_app(supervisor, web_state):
     @app.get("/console/logs/stream")
     async def console_logs_stream(request: Request):
         server = web_state.web_server
-        # EventSource remembers the last "id:" it saw and resends it as this header
-        # on reconnect. That lets us resume the tail instead of jumping to "now"
-        # and silently dropping whatever was logged during the gap.
+        # EventSource remembers the last "id:" it saw and resends it as this header on
+        # reconnect, so we can resume the tail instead of jumping to "now" and dropping
+        # whatever was logged in the gap.
         last_id = request.headers.get("last-event-id")
         start_pos = int(last_id) if last_id and last_id.isdigit() else None
 
@@ -358,9 +357,9 @@ def create_app(supervisor, web_state):
         since = web_state.web_epoch
 
         async def _reload():
-            # A second reload fired while this one is still tearing down the old
-            # server would read and write web_state.web_server concurrently with it.
-            # Queue behind any in-flight reload instead of racing it.
+            # A second reload fired while this one is still tearing down the old server
+            # would touch web_state.web_server at the same time. Queue behind any
+            # in-flight reload instead of racing it.
             async with web_state.reload_lock:
                 server = web_state.web_server
                 if server:
@@ -372,11 +371,10 @@ def create_app(supervisor, web_state):
                         await asyncio.sleep(0.1)
                     else:
                         # Starting a new server now would race the still-bound old one for
-                        # port 8000 and, if it lost, orphan that old server permanently.
-                        # web_state.web_server is our only handle on it, and overwriting it
-                        # with a failed new attempt means nothing can ever should_exit it
-                        # again. Bail out instead and leave the reference in place, so the
-                        # next reload attempt still waits on this same instance.
+                        # port 8000, and losing that race would orphan the old server for good:
+                        # web_state.web_server is our only handle on it, and overwriting it here
+                        # means nothing could ever call should_exit on it again. Bail out and
+                        # leave the reference in place so the next reload attempt waits on it instead.
                         logger.error("Old web server did not shut down in time; aborting reload.")
                         return
 
@@ -413,17 +411,16 @@ async def start(supervisor, web_state):
     web_state.web_server = server
 
     # Run serve() as a task and poll server.started (set by uvicorn right after a
-    # successful bind) instead of awaiting it directly, so web_epoch only advances
-    # once the new server is actually live. Otherwise the dashboard's reload
-    # banner would report success the instant a bind is attempted, even if it
-    # then fails a moment later.
+    # successful bind) instead of awaiting it directly, so web_epoch only advances once
+    # the new server is actually live. Otherwise the reload banner could report success
+    # the instant a bind is attempted, even if it fails a moment later.
     serve_task = asyncio.create_task(server.serve())
     try:
         while not server.started and not serve_task.done():
             await asyncio.sleep(0.05)
 
         if not server.started:
-            await serve_task  # propagates the bind failure as SystemExit
+            await serve_task  # re-raises the bind failure as SystemExit
             return
 
         web_state.web_epoch += 1
@@ -432,10 +429,10 @@ async def start(supervisor, web_state):
         await serve_task
         logger.info(f"Web server (epoch {epoch}) stopped.")
     except SystemExit:
-        # uvicorn's own reaction to a failed bind, e.g. the old server hadn't
-        # released the port yet, is sys.exit(1). Since SystemExit is a BaseException,
-        # asyncio won't swallow it like a normal task error. Left unguarded, it
-        # escapes this background task and takes the whole run.py process down with it.
+        # uvicorn reacts to a failed bind (e.g. the old server hasn't released the port
+        # yet) with sys.exit(1). SystemExit is a BaseException, so asyncio won't swallow
+        # it like a normal task error. Left unguarded, it would escape this background
+        # task and take the whole run.py process down with it.
         logger.error("Web server failed to start: port 8000 still in use.")
     finally:
         web_state.web_server = None
