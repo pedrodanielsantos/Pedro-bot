@@ -1,6 +1,7 @@
 from typing import Optional
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 from config.constants import ERROR_COLOR, SUCCESS_COLOR
 from db.database import get_guild_embed_color
@@ -40,8 +41,8 @@ class Rules(commands.Cog):
         embed = discord.Embed(description=message, color=ERROR_COLOR)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @discord.app_commands.command(name="rules", description="Displays the server rules")
-    @discord.app_commands.describe(
+    @app_commands.command(name="rules", description="Displays the server rules")
+    @app_commands.describe(
         message_id="ID of an existing rules message to update instead of sending a new one (admin only)",
         channel="Channel the message is in, if not this one",
     )

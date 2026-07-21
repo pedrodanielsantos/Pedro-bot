@@ -82,6 +82,8 @@ crash or restart.
 | `/embed createjson` | Create an embed using raw JSON |
 | `/embed editjson` | Edit an existing embed using raw JSON |
 | `/embed json` | Get the JSON source of an embed |
+| `/help` | Displays the help message with all available commands |
+| `/rules` | Displays the server rules |
 | `/serverinfo` | Displays server statistics |
 | `/stats` | Shows technical information about the bot |
 | `/timestamp at` | Generate a timestamp tag for a specific date and time |
@@ -130,12 +132,6 @@ crash or restart.
 | `/setup logs` | Setup or disable the command log channel |
 | `/setup welcome` | Setup or disable the welcome message channel |
 | `/test welcome` | Simulate a member joining to test the welcome message |
-
-### Other
-
-| Command | Description |
-| --- | --- |
-| `/help` | Displays the help message with all available commands |
 
 <!-- COMMANDS:END -->
 

@@ -15,6 +15,7 @@ COMMAND_CATEGORIES = {
     "8ball": "Fun",
     "choice": "Fun",
 
+    "help": "Utility",
     "rules": "Utility",
     "avatar": "Utility",
     "userinfo": "Utility",
@@ -171,8 +172,6 @@ class HelpCog(commands.Cog):
         for cmd in self.bot.tree.walk_commands():
             if not isinstance(cmd, app_commands.Command):
                 continue  # skip Group containers; their leaves are walked too
-            if cmd.qualified_name == "help":
-                continue  # the help command doesn't need to list itself
             category = self._category_for(cmd.qualified_name)
             desc = cmd.description or "No description provided."
             line = f"**/{cmd.qualified_name}**: *{desc}*\n"
