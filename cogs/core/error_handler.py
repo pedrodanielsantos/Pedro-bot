@@ -18,6 +18,13 @@ class ErrorHandler(commands.Cog):
         # Unregister the handler when the cog is unloaded
         self.bot.tree.on_error = None
 
+    @commands.Cog.listener()
+    async def on_command_error(self, ctx, error):
+        # Any message starting with the prefix that isn't a real command lands here; ignore.
+        if isinstance(error, commands.CommandNotFound):
+            return
+        raise error
+
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         # Unwrap CommandInvokeError (errors that happen inside the command function)
         if isinstance(error, app_commands.CommandInvokeError):
