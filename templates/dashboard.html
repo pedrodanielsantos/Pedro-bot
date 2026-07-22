@@ -26,7 +26,7 @@
     <div class="stat-grid">
         <div class="card">
             <div class="stat-label">Status</div>
-            <div id="status-value" class="stat-value" style="color: var({{ 'green' if is_ready else 'red' }});">
+            <div id="status-value" class="stat-value" style="color: var(--{{ 'green' if is_ready else 'red' }});">
                 {{ "Online" if is_ready else "Offline" }}
             </div>
         </div>
