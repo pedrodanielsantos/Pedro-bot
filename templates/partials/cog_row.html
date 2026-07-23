@@ -3,7 +3,7 @@
         <input type="checkbox" name="cogs" value="{{ extension }}" data-loaded="{{ 'true' if loaded else 'false' }}">
     </td>
     <td class="mono">
-        {{ extension }}
+        {{ extension | replace('cogs.', '', 1) }}
         {% if error %}
             <span class="badge badge-error">Error</span>
             <span class="error-msg">{{ error }}</span>
