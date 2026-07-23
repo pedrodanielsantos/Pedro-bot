@@ -3,7 +3,7 @@
 
 <header>
     <div class="header-left">
-        {% with is_ready=is_ready, status=supervisor_status %}{% include "partials/bot_control.html" %}{% endwith %}
+        <div id="header-status-dot" class="dot {{ 'dot-online' if is_ready else 'dot-offline' }}"></div>
         <span class="header-title">{{ bot_name }}</span>
         <span class="header-sub">/ Dashboard</span>
         <button class="icon-btn" style="margin-left: -8px;"
@@ -56,6 +56,10 @@
             </button>
         </div>
         <div id="guild-list"></div>
+    </div>
+
+    <div class="card">
+        {% with is_ready=is_ready, status=supervisor_status %}{% include "partials/bot_control.html" %}{% endwith %}
     </div>
 
     <div class="card">

@@ -1,38 +1,53 @@
-<span id="bot-status-group" style="display: inline-flex; align-items: center; gap: 10px;"
+<span id="bot-status-group" class="guild-card-row"
     {% if status != "stopped" and not is_ready %}
     hx-get="/bot/status?announce=true" hx-trigger="load delay:1s, every 2s" hx-swap="outerHTML"
     {% endif %}>
-    <div class="dot {{ 'dot-online' if is_ready else 'dot-offline' }}"></div>
-    {% if status == "stopped" %}
-    <button class="btn btn-success"
-        hx-post="/bot/start"
-        hx-target="#bot-status-group"
-        hx-swap="outerHTML"
-        hx-disabled-elt="this">
-        <span class="btn-label">Start</span>
-        <span class="btn-label htmx-indicator">Starting…</span>
-    </button>
-    {% else %}
-    {% if status == "stopping" %}
-    <span class="badge badge-error">Stopping…</span>
-    {% elif not is_ready %}
-    <span class="badge badge-ok">Starting…</span>
-    {% elif just_restarted %}
-    <span class="badge badge-ok"
-        hx-get="/bot/status/clear"
-        hx-trigger="load delay:2s"
-        hx-target="this"
-        hx-swap="outerHTML">
-        Started
-    </span>
-    {% endif %}
-    <button class="btn btn-danger"
-        hx-post="/bot/stop"
-        hx-target="#bot-status-group"
-        hx-swap="outerHTML"
-        hx-disabled-elt="this">
-        <span class="btn-label">Stop</span>
-        <span class="btn-label htmx-indicator">Stopping…</span>
-    </button>
-    {% endif %}
+    <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="stat-label" style="margin-bottom: 0;">Bot</div>
+        {% if status == "stopping" %}
+        <span class="badge badge-error">Stopping…</span>
+        {% elif status != "stopped" and not is_ready %}
+        <span class="badge badge-ok">Starting…</span>
+        {% elif just_restarted %}
+        <span class="badge badge-ok"
+            hx-get="/bot/status/clear"
+            hx-trigger="load delay:2s"
+            hx-target="this"
+            hx-swap="outerHTML">
+            Started
+        </span>
+        {% endif %}
+    </div>
+    <div style="display: flex; gap: 8px;">
+        {% if status == "stopped" %}
+        <button class="btn btn-success"
+            hx-post="/bot/start"
+            hx-target="#bot-status-group"
+            hx-swap="outerHTML"
+            hx-disabled-elt="this">
+            <span class="btn-label">Start</span>
+            <span class="btn-label htmx-indicator">Starting…</span>
+        </button>
+        {% else %}
+        <button class="btn"
+            hx-post="/bot/reload"
+            hx-target="#bot-status-group"
+            hx-swap="outerHTML"
+            hx-disabled-elt="this">
+            <span class="btn-label">Reload</span>
+            <span class="btn-label htmx-indicator">Reloading…</span>
+        </button>
+        <button class="btn btn-danger"
+            hx-post="/bot/stop"
+            hx-target="#bot-status-group"
+            hx-swap="outerHTML"
+            hx-disabled-elt="this">
+            <span class="btn-label">Stop</span>
+            <span class="btn-label htmx-indicator">Stopping…</span>
+        </button>
+        {% endif %}
+    </div>
 </span>
+{% if oob %}
+<div id="header-status-dot" class="dot {{ 'dot-online' if is_ready else 'dot-offline' }}" hx-swap-oob="true"></div>
+{% endif %}

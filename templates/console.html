@@ -4,7 +4,7 @@
 
 <header>
     <div class="header-left">
-        {% with is_ready=is_ready, status=supervisor_status %}{% include "partials/bot_control.html" %}{% endwith %}
+        <div id="header-status-dot" class="dot {{ 'dot-online' if is_ready else 'dot-offline' }}"></div>
         <span class="header-title">{{ bot_name }}</span>
         <span class="header-sub">/ Console</span>
     </div>
@@ -44,14 +44,13 @@
             }
         };
 
-        // Keeps the dot and Start/Stop button in sync with other tabs, like dashboard.html.
-        function refreshBotStatus() {
-            htmx.ajax('GET', '/bot/status', { target: '#bot-status-group', swap: 'outerHTML' });
-        }
-
+        // Mirrors the header dot across tabs.
+        const statusDot = document.getElementById('header-status-dot');
         const statusSource = new EventSource('/status/stream');
-        statusSource.addEventListener('ready', refreshBotStatus);
-        statusSource.addEventListener('control', refreshBotStatus);
+        statusSource.addEventListener('ready', (e) => {
+            const data = JSON.parse(e.data);
+            statusDot.className = `dot ${data.ready ? 'dot-online' : 'dot-offline'}`;
+        });
     })();
 </script>
 

@@ -42,6 +42,10 @@ class BotSupervisor:
             self.process = None
             return True
 
+    async def restart(self):
+        await self.stop()
+        await self.start()
+
     async def _spawn(self):
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
         logger.info("Starting bot...")

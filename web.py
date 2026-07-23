@@ -229,6 +229,7 @@ def create_app(supervisor, web_state):
         return templates.TemplateResponse(request=request, name="partials/bot_control.html", context={
             "is_ready": False,
             "status": supervisor.status,
+            "oob": True,
         })
 
     @app.post("/bot/stop", response_class=HTMLResponse)
@@ -237,6 +238,16 @@ def create_app(supervisor, web_state):
         return templates.TemplateResponse(request=request, name="partials/bot_control.html", context={
             "is_ready": False,
             "status": supervisor.status,
+            "oob": True,
+        })
+
+    @app.post("/bot/reload", response_class=HTMLResponse)
+    async def bot_reload(request: Request):
+        await supervisor.restart()
+        return templates.TemplateResponse(request=request, name="partials/bot_control.html", context={
+            "is_ready": False,
+            "status": supervisor.status,
+            "oob": True,
         })
 
     @app.get("/bot/status", response_class=HTMLResponse)
@@ -251,6 +262,7 @@ def create_app(supervisor, web_state):
             # come back. Without this flag, the SSE refresh on every reconnect would
             # show the "Started" badge every time.
             "just_restarted": announce and ready and supervisor.status == "running",
+            "oob": True,
         })
 
     @app.get("/bot/status/clear", response_class=HTMLResponse)
