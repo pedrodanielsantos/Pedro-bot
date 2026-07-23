@@ -93,7 +93,7 @@ class DeveloperTools(commands.Cog):
             for extension in list(self.bot.extensions):
                 try:
                     await self.bot.reload_extension(extension)
-                    logger.info(f"Reloaded extension: {extension}")
+                    logger.info(f"Reloaded: {extension}")
                 except Exception as e:
                     failed.append((extension, e))
                     logger.error(f"Failed to reload extension {extension}: {e}")
@@ -118,7 +118,7 @@ class DeveloperTools(commands.Cog):
             await self.bot.reload_extension(extension)
             embed = discord.Embed(description=f"Reloaded `{extension}`", color=SUCCESS_COLOR)
             await ctx.reply(embed=embed)
-            logger.info(f"Reloaded extension: {extension}")
+            logger.info(f"Reloaded: {extension}")
         except Exception as e:
             embed = discord.Embed(description=f"Failed to reload `{extension}`:\n```py\n{e}\n```", color=ERROR_COLOR)
             await ctx.reply(embed=embed)
@@ -141,7 +141,7 @@ class DeveloperTools(commands.Cog):
             await self.bot.load_extension(extension)
             embed = discord.Embed(description=f"Loaded `{extension}`", color=SUCCESS_COLOR)
             await ctx.reply(embed=embed)
-            logger.info(f"Loaded extension: {extension}")
+            logger.info(f"Loaded: {extension}")
         except Exception as e:
             embed = discord.Embed(description=f"Failed to load `{extension}`:\n```py\n{e}\n```", color=ERROR_COLOR)
             await ctx.reply(embed=embed)
@@ -164,7 +164,7 @@ class DeveloperTools(commands.Cog):
             await self.bot.unload_extension(extension)
             embed = discord.Embed(description=f"Unloaded `{extension}`", color=SUCCESS_COLOR)
             await ctx.reply(embed=embed)
-            logger.info(f"Unloaded extension: {extension}")
+            logger.info(f"Unloaded: {extension}")
         except Exception as e:
             embed = discord.Embed(description=f"Failed to unload `{extension}`:\n```py\n{e}\n```", color=ERROR_COLOR)
             await ctx.reply(embed=embed)
