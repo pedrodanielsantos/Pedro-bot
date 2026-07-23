@@ -44,7 +44,7 @@ without a restart.
 
 Runs at **http://localhost:8000**, hosted by `run.py` as its own always-on
 process, separate from the bot. Shows real-time status, latency, uptime, and
-guild count, with a **Start/Stop** control, a **Cog Manager**, and a **Sync**
+guild count, with **Start/Stop/Reload** control, a **Cog Manager**, and a **Sync**
 button for slash commands.
 
 A separate **Console** page (`/console`) shows a live, auto-scrolling, color-coded
@@ -53,8 +53,8 @@ crash or restart.
 
 ## Command Reference
 
-> Generated from the cogs by `scripts/gen_readme.py`, so don't edit by hand. Stays
-> in sync with the bot's own `/help` command automatically.
+> Generated from the cogs by `scripts/gen_readme.py`.
+> Stays in sync with the bot's own `/help` command automatically.
 
 <!-- COMMANDS:START -->
 

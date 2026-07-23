@@ -17,10 +17,19 @@
             Started
         </span>
         {% endif %}
+        <span id="sync-status"></span>
     </div>
     <div style="display: flex; gap: 8px;">
+        <button class="btn btn-primary btn-fixed-width"
+            hx-post="/commands/sync"
+            hx-target="#sync-status"
+            hx-swap="outerHTML"
+            hx-disabled-elt="this">
+            <span class="btn-label">Sync</span>
+            <span class="btn-label htmx-indicator">Syncing…</span>
+        </button>
         {% if status == "stopped" %}
-        <button class="btn btn-success"
+        <button class="btn btn-success btn-fixed-width"
             hx-post="/bot/start"
             hx-target="#bot-status-group"
             hx-swap="outerHTML"
@@ -29,7 +38,7 @@
             <span class="btn-label htmx-indicator">Starting…</span>
         </button>
         {% else %}
-        <button class="btn"
+        <button class="btn btn-fixed-width"
             hx-post="/bot/reload"
             hx-target="#bot-status-group"
             hx-swap="outerHTML"
@@ -37,7 +46,7 @@
             <span class="btn-label">Reload</span>
             <span class="btn-label htmx-indicator">Reloading…</span>
         </button>
-        <button class="btn btn-danger"
+        <button class="btn btn-danger btn-fixed-width"
             hx-post="/bot/stop"
             hx-target="#bot-status-group"
             hx-swap="outerHTML"

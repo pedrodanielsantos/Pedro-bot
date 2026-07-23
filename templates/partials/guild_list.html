@@ -4,7 +4,7 @@
     <span class="guild-meta">{{ guild.members }} members &middot; {{ guild.id }}</span>
 </div>
 {% endfor %}
-<button id="guild-toggle" class="btn" hx-swap-oob="true"
+<button id="guild-toggle" class="btn btn-fixed-width" hx-swap-oob="true"
     hx-get="/guilds/clear"
     hx-target="#guild-list"
     hx-swap="innerHTML">

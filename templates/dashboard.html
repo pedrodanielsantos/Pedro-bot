@@ -18,7 +18,7 @@
         </button>
         <span id="web-reload-status"></span>
     </div>
-    <a href="/console" class="btn">Console</a>
+    <a href="/console" class="btn btn-fixed-width">Console</a>
 </header>
 
 <main>
@@ -48,7 +48,7 @@
                 <div class="stat-label">Guilds</div>
                 <div id="guild-count" class="stat-value">{{ guild_count if guild_count is not none else "—" }}</div>
             </div>
-            <button id="guild-toggle" class="btn"
+            <button id="guild-toggle" class="btn btn-fixed-width"
                 hx-get="/guilds"
                 hx-target="#guild-list"
                 hx-swap="innerHTML">
@@ -60,23 +60,6 @@
 
     <div class="card">
         {% with is_ready=is_ready, status=supervisor_status %}{% include "partials/bot_control.html" %}{% endwith %}
-    </div>
-
-    <div class="card">
-        <div class="guild-card-row">
-            <div>
-                <div class="stat-label">Slash Commands</div>
-                <span id="sync-status"></span>
-            </div>
-            <button class="btn btn-primary"
-                hx-post="/commands/sync"
-                hx-target="#sync-status"
-                hx-swap="outerHTML"
-                hx-disabled-elt="this">
-                <span class="btn-label">Sync</span>
-                <span class="btn-label htmx-indicator">Syncing…</span>
-            </button>
-        </div>
     </div>
 
     <div>
