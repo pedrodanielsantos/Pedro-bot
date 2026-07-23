@@ -1,3 +1,4 @@
+import io
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
@@ -103,17 +104,31 @@ class Setup(commands.GroupCog, group_name="setup"):
         color = await get_guild_embed_color(member.guild.id)
 
         description = (
-            f"Hey! {member.mention}\n\n"
-            "Read the https://discord.com/channels/1240063556217733141/1240063556289040449 and assign your "
-            "https://discord.com/channels/1240063556217733141/1240063556289040450 to get started."
+            f"Welcome to {member.guild.name} {member.mention}!\n\n"
+            "Check out https://discord.com/channels/1240063556217733141/1240063556289040449 and <id:customize>."
         )
 
+        ext = "gif" if member.display_avatar.is_animated() else "png"
+        author_icon_name = f"author_icon.{ext}"
+        thumbnail_name = f"thumbnail.{ext}"
+
         embed = discord.Embed(description=description, color=color)
-        embed.set_author(name="Welcome to Pedro's!", icon_url=member.guild.icon.url if member.guild.icon else None)
-        embed.set_thumbnail(url=member.display_avatar.with_size(1024).url)
+        embed.set_author(name=member.display_name, icon_url=f"attachment://{author_icon_name}")
+        embed.set_thumbnail(url=f"attachment://{thumbnail_name}")
 
         try:
-            await channel.send(embed=embed)
+            author_icon_bytes = await member.display_avatar.with_size(128).read()
+            thumbnail_bytes = await member.display_avatar.with_size(1024).read()
+        except discord.HTTPException:
+            return
+
+        files = [
+            discord.File(io.BytesIO(author_icon_bytes), filename=author_icon_name),
+            discord.File(io.BytesIO(thumbnail_bytes), filename=thumbnail_name),
+        ]
+
+        try:
+            await channel.send(embed=embed, files=files)
         except (discord.Forbidden, discord.HTTPException):
             pass
 
