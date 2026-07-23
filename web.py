@@ -121,7 +121,7 @@ def create_app(supervisor, web_state):
     @app.get("/guilds/clear", response_class=HTMLResponse)
     async def guild_list_clear():
         return HTMLResponse(
-            '<button id="guild-toggle" class="btn" hx-swap-oob="true" '
+            '<button id="guild-toggle" class="btn btn-fixed-width" hx-swap-oob="true" '
             'hx-get="/guilds" hx-target="#guild-list" hx-swap="innerHTML">'
             "View</button>"
         )
