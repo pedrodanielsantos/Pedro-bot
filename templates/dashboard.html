@@ -24,25 +24,25 @@
 <main>
 
     <div class="stat-grid">
-        <div class="card">
+        <div class="card card-stat">
             <div class="stat-label">Status</div>
             <div id="status-value" class="stat-value" style="color: var(--{{ 'green' if is_ready else 'red' }});">
                 {{ "Online" if is_ready else "Offline" }}
             </div>
         </div>
-        <div class="card">
+        <div class="card card-stat">
             <div class="stat-label">Latency</div>
             <div id="latency-value" class="stat-value">
                 {% if is_ready %}{{ latency }}<span class="stat-unit">ms</span>{% else %}—{% endif %}
             </div>
         </div>
-        <div class="card">
+        <div class="card card-stat">
             <div class="stat-label">Uptime</div>
             <div id="uptime-value" class="stat-value" data-launch="{{ launch_time or '' }}">{{ uptime }}</div>
         </div>
     </div>
 
-    <div class="card">
+    <div class="card card-stat">
         <div class="guild-card-row">
             <div>
                 <div class="stat-label">Guilds</div>
@@ -58,7 +58,7 @@
         <div id="guild-list"></div>
     </div>
 
-    <div class="card">
+    <div class="card card-stat card-stat-center">
         {% with is_ready=is_ready, status=supervisor_status %}{% include "partials/bot_control.html" %}{% endwith %}
     </div>
 
