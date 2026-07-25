@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import sys
+import threading
 from collections import deque
 from logging.handlers import RotatingFileHandler
 
@@ -74,6 +75,30 @@ class BufferHandler(logging.Handler):
         LOG_BUFFER.append(self.format(record))
 
 
+def _install_excepthooks():
+    """Routes exceptions that reach the top of the process (main thread or a raw
+    thread) into the logger instead of only the terminal. Doesn't affect asyncio task
+    exceptions, which already go through logging.getLogger("asyncio") by default."""
+    uncaught = logging.getLogger("uncaught")
+
+    def _on_exception(exc_type, exc_value, exc_tb):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+            return
+        uncaught.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_tb))
+
+    def _on_thread_exception(args):
+        if issubclass(args.exc_type, SystemExit):
+            return  # matches default threading.excepthook: sys.exit() in a thread isn't a crash
+        uncaught.critical(
+            f"Uncaught exception in thread {args.thread.name}",
+            exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+        )
+
+    sys.excepthook = _on_exception
+    threading.excepthook = _on_thread_exception
+
+
 def setup_logging(level=logging.INFO):
     fmt = logging.Formatter(
         "[%(asctime)s] %(levelname)s %(name)s: %(message)s",
@@ -96,6 +121,15 @@ def setup_logging(level=logging.INFO):
     root.addHandler(stream_handler)
     root.addHandler(buffer_handler)
     root.addHandler(file_handler)
+
+    _install_excepthooks()
+
+
+def quiet_uvicorn_logging():
+    """Pair with uvicorn.Config(log_config=None), which lets uvicorn's loggers
+    propagate to root instead of uvicorn's default private, non-propagating stderr
+    handler. Mutes the resulting per-request uvicorn.access noise."""
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 
 def log_file_size() -> int:

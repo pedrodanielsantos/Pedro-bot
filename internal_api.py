@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import math
 import os
 
 import uvicorn
@@ -8,11 +9,19 @@ from fastapi import FastAPI, Body
 from fastapi.responses import StreamingResponse
 
 from utils.cogs import discover_cog_paths
+from utils.log import quiet_uvicorn_logging
 from utils.uptime import format_uptime
 
 COGS_DIR = os.path.join(os.path.dirname(__file__), "cogs")
 
 logger = logging.getLogger("internal_api")
+
+
+def _latency_ms(bot):
+    """bot.latency is inf/nan until the first heartbeat ACK, even once is_ready()
+    is True, so round() on it can raise OverflowError/ValueError."""
+    latency = bot.latency
+    return round(latency * 1000) if math.isfinite(latency) else None
 
 
 class InternalState:
@@ -44,7 +53,7 @@ def create_internal_app(bot, state):
             "ready": ready,
             "bot_name": bot.user.name if bot.user else None,
             "bot_avatar_url": str(bot.user.display_avatar.url) if bot.user else None,
-            "latency_ms": round(bot.latency * 1000) if ready else None,
+            "latency_ms": _latency_ms(bot) if ready else None,
             "guild_count": len(bot.guilds) if ready else None,
             "uptime": format_uptime(bot.launch_time),
             "launch_time": bot.launch_time.timestamp() if ready else None,
@@ -66,7 +75,7 @@ def create_internal_app(bot, state):
                     launch_time = bot.launch_time.timestamp() if ready else None
                     yield f"event: ready\ndata: {json.dumps({'ready': ready, 'launch_time': launch_time})}\n\n"
 
-                latency_ms = round(bot.latency * 1000) if ready else None
+                latency_ms = _latency_ms(bot) if ready else None
                 if latency_ms != last_latency:
                     last_latency = latency_ms
                     changed = True
@@ -214,7 +223,8 @@ def create_internal_app(bot, state):
 async def start(bot):
     state = InternalState()
     app = create_internal_app(bot, state)
-    config = uvicorn.Config(app, host="127.0.0.1", port=8001, log_level="warning")
+    config = uvicorn.Config(app, host="127.0.0.1", port=8001, log_config=None)
+    quiet_uvicorn_logging()
     server = uvicorn.Server(config)
     state.server = server
     await server.serve()

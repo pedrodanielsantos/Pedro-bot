@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from utils.cogs import discover_cog_paths
-from utils.log import colorize_log_line, log_file_size, tail_log_file, tail_log_lines
+from utils.log import colorize_log_line, log_file_size, quiet_uvicorn_logging, tail_log_file, tail_log_lines
 
 COGS_DIR = os.path.join(os.path.dirname(__file__), "cogs")
 INTERNAL_API = "http://127.0.0.1:8001"
@@ -424,7 +424,8 @@ def create_app(supervisor, web_state):
 
 async def start(supervisor, web_state):
     app = create_app(supervisor, web_state)
-    config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="warning")
+    config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_config=None)
+    quiet_uvicorn_logging()
     server = uvicorn.Server(config)
     web_state.web_server = server
 
