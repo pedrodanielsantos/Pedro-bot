@@ -28,6 +28,13 @@
 
         consoleLog.scrollTop = consoleLog.scrollHeight;
 
+        // max-height is in vh, so resizing the window changes clientHeight without
+        // firing a scroll event. Only re-pins if already stuck to the bottom, so a
+        // reader scrolled up through history isn't yanked back down.
+        window.addEventListener("resize", () => {
+            if (stickToBottom) consoleLog.scrollTop = consoleLog.scrollHeight;
+        });
+
         // Starts at the byte offset the static render above already covers, so a
         // reconnect with nothing received live yet still resumes from there instead
         // of jumping to "now" and skipping whatever was logged in the gap (e.g. a
