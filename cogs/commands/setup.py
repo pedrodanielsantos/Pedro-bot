@@ -113,7 +113,7 @@ class Setup(commands.GroupCog, group_name="setup"):
         thumbnail_name = f"thumbnail.{ext}"
 
         embed = discord.Embed(description=description, color=color)
-        embed.set_author(name=member.display_name, icon_url=f"attachment://{author_icon_name}")
+        embed.set_author(name=member.name, icon_url=f"attachment://{author_icon_name}")
         embed.set_thumbnail(url=f"attachment://{thumbnail_name}")
 
         try:
