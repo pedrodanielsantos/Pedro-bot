@@ -28,8 +28,8 @@ class Test(commands.GroupCog, group_name="test"):
 
         await interaction.response.defer(ephemeral=True)
 
-        # Simulate the bot joining by calling the listener directly
-        await setup_cog.on_member_join(interaction.guild.me)
+        # Bypass the on_member_join bot-guard since this is an explicit test invocation
+        await setup_cog._send_welcome(interaction.guild.me)
 
         embed = discord.Embed(description="Simulated `on_member_join` event with the bot as the member.", color=SUCCESS_COLOR)
         await interaction.followup.send(embed=embed, ephemeral=True)

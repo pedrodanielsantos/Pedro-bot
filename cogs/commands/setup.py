@@ -93,6 +93,11 @@ class Setup(commands.GroupCog, group_name="setup"):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
+        if member.bot:
+            return
+        await self._send_welcome(member)
+
+    async def _send_welcome(self, member: discord.Member):
         channel_id = await get_welcome_channel(member.guild.id)
         if not channel_id:
             return
