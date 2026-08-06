@@ -238,6 +238,12 @@ Pedro-bot/
 └── scripts/            # Dev tooling (e.g. README generation)
 ```
 
+## License
+
+Licensed under the [GNU AGPLv3](LICENSE). If you run a modified version of
+this bot for others to use over a network, you must make your modified
+source available to them.
+
 ## Maintaining the docs
 
 The command table above is generated from the cogs:
