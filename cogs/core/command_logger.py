@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 
-from db.database import get_log_channel, get_guild_embed_color
+from db.database import get_commands_log_channel, get_guild_embed_color
 
 class CommandLogger(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -12,7 +12,7 @@ class CommandLogger(commands.Cog):
         if interaction.command is None or interaction.guild is None:
             return True
 
-        log_channel_id = await get_log_channel(interaction.guild_id)
+        log_channel_id = await get_commands_log_channel(interaction.guild_id)
         if not log_channel_id:
             return True
 
@@ -29,6 +29,7 @@ class CommandLogger(commands.Cog):
 
         color = await get_guild_embed_color(interaction.guild_id)
         embed = discord.Embed(description=description, color=color)
+        embed.timestamp = discord.utils.utcnow()
         embed.set_footer(text=f"User ID: {interaction.user.id}")
 
         try:

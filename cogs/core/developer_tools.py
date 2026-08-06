@@ -6,7 +6,7 @@ import discord
 from discord.ext import commands
 import os
 from config.constants import SUCCESS_COLOR, ERROR_COLOR
-from db.database import get_guild_embed_color
+from db.database import get_guild_embed_color, reset_case_counter
 
 logger = logging.getLogger("dev")
 WEB_DASHBOARD = "http://127.0.0.1:8000"
@@ -250,6 +250,23 @@ class DeveloperTools(commands.Cog):
         except Exception as e:
             embed = discord.Embed(description=f"Error: {e}", color=ERROR_COLOR)
             await ctx.reply(embed=embed, delete_after=5)
+
+    @commands.command(name="resetcases", hidden=True)
+    async def resetcases(self, ctx: commands.Context, guild_id: int = None):
+        """
+        Wipes moderation case history and resets the case counter for a guild, for testing purposes
+        Usage: ç!resetcases [guild_id]
+        """
+        target_guild_id = guild_id or (ctx.guild.id if ctx.guild else None)
+        if target_guild_id is None:
+            embed = discord.Embed(description="No guild specified and this wasn't run in a guild.", color=ERROR_COLOR)
+            await ctx.reply(embed=embed)
+            return
+
+        await reset_case_counter(target_guild_id)
+        embed = discord.Embed(description=f"Wiped case history and reset the case counter for guild `{target_guild_id}`.", color=SUCCESS_COLOR)
+        await ctx.reply(embed=embed)
+        logger.info(f"Reset case counter for guild {target_guild_id}.")
 
     @commands.command(name="reloadweb", hidden=True)
     async def reloadweb(self, ctx: commands.Context):

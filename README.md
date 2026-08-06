@@ -129,9 +129,20 @@ crash or restart.
 | `/autorole remove` | Removes a role from the autorole list |
 | `/set embedcolor` | Set or reset the server's embed color |
 | `/setup lobbies` | Setup temporary voice-chat system with user-created lobbies |
-| `/setup logs` | Setup or disable the command log channel |
 | `/setup welcome` | Setup or disable the welcome message channel |
 | `/test welcome` | Simulate a member joining to test the welcome message |
+
+### Other
+
+| Command | Description |
+| --- | --- |
+| `/log commands` | Setup or disable the log channel for every command used |
+| `/log moderation` | Setup or disable the moderation log channel |
+| `/moderation ban` | Bans a user from the server |
+| `/moderation kick` | Kicks a member from the server |
+| `/moderation removetimeout` | Removes an active timeout from a member |
+| `/moderation timeout` | Times out a member |
+| `/moderation unban` | Unbans a user from the server |
 
 <!-- COMMANDS:END -->
 
