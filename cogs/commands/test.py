@@ -20,16 +20,16 @@ class Test(commands.GroupCog, group_name="test"):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
-        setup_cog = self.bot.get_cog("Setup")
-        if not setup_cog:
-            embed = discord.Embed(description="Setup cog is not loaded.", color=ERROR_COLOR)
+        greeter_cog = self.bot.get_cog("WelcomeGreeter")
+        if not greeter_cog:
+            embed = discord.Embed(description="WelcomeGreeter cog is not loaded.", color=ERROR_COLOR)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
         await interaction.response.defer(ephemeral=True)
 
         # Bypass the on_member_join bot-guard since this is an explicit test invocation
-        await setup_cog._send_welcome(interaction.guild.me)
+        await greeter_cog._send_welcome(interaction.guild.me)
 
         embed = discord.Embed(description="Simulated `on_member_join` event with the bot as the member.", color=SUCCESS_COLOR)
         await interaction.followup.send(embed=embed, ephemeral=True)

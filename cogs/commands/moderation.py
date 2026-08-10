@@ -41,7 +41,7 @@ class Moderation(commands.GroupCog, group_name="moderation"):
         # Starting this from cog_load races bot.start(): load_cogs() runs to completion
         # before bot.start() is even scheduled, so wait_until_ready() would hit self._ready
         # while it's still MISSING and die immediately. on_ready only fires once the client
-        # is already ready, so it sidesteps that race the same way Setup.cleanup_lobbies does.
+        # is already ready, so it sidesteps that race the same way LobbyManager.cleanup_lobbies does.
         if not self.check_temp_bans.is_running():
             self.check_temp_bans.start()
 
