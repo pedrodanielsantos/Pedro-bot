@@ -33,17 +33,12 @@ class Moderation(commands.GroupCog, group_name="moderation"):
         super().__init__()
         self.bot = bot
 
-    def cog_unload(self):
-        self.check_temp_bans.cancel()
-
-    @commands.Cog.listener()
-    async def on_ready(self):
-        # Starting this from cog_load races bot.start(): load_cogs() runs to completion
-        # before bot.start() is even scheduled, so wait_until_ready() would hit self._ready
-        # while it's still MISSING and die immediately. on_ready only fires once the client
-        # is already ready, so it sidesteps that race the same way LobbyManager.cleanup_lobbies does.
+    async def cog_load(self):
         if not self.check_temp_bans.is_running():
             self.check_temp_bans.start()
+
+    def cog_unload(self):
+        self.check_temp_bans.cancel()
 
     async def _check_permission(self, interaction: discord.Interaction, command_name: str) -> bool:
         required = PERMISSIONS[command_name]
@@ -231,6 +226,13 @@ class Moderation(commands.GroupCog, group_name="moderation"):
 
     @tasks.loop(seconds=60)
     async def check_temp_bans(self):
+        # Guards against ticking before the guild cache is populated: is_ready()
+        # is a plain attribute check, safe even before login (unlike
+        # wait_until_ready(), which would raise if called this early during
+        # the very first cog_load, since bot.start() hasn't run yet at that point).
+        if not self.bot.is_ready():
+            return
+
         now_ts = int(discord.utils.utcnow().timestamp())
         for guild_id, user_id, case_number in await temp_bans_due(now_ts):
             # Isolated per row: tasks.loop only auto-retries on network errors, so any

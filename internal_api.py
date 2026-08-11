@@ -8,7 +8,7 @@ import uvicorn
 from fastapi import FastAPI, Body
 from fastapi.responses import StreamingResponse
 
-from utils.cogs import discover_cog_paths
+from utils.cogs import discover_cog_paths, reload_shared_modules
 from utils.log import quiet_uvicorn_logging
 from utils.uptime import format_uptime
 
@@ -129,6 +129,7 @@ def create_internal_app(bot, state):
     async def reload_cog(extension: str):
         error = None
         try:
+            reload_shared_modules()
             await bot.reload_extension(extension)
             logger.info(f"Reloaded: {extension}")
         except Exception as e:
@@ -151,6 +152,7 @@ def create_internal_app(bot, state):
     async def load_cog(extension: str):
         error = None
         try:
+            reload_shared_modules()
             await bot.load_extension(extension)
             logger.info(f"Loaded: {extension}")
         except Exception as e:
@@ -161,6 +163,7 @@ def create_internal_app(bot, state):
     @app.post("/cogs/bulk/reload")
     async def bulk_reload_cogs(cogs: list[str] = Body(embed=True)):
         rows = []
+        reload_shared_modules()
         for extension in cogs:
             error = None
             try:
@@ -191,6 +194,7 @@ def create_internal_app(bot, state):
     @app.post("/cogs/bulk/load")
     async def bulk_load_cogs(cogs: list[str] = Body(embed=True)):
         rows = []
+        reload_shared_modules()
         for extension in cogs:
             if extension in bot.extensions:
                 continue

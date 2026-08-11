@@ -9,6 +9,10 @@ class LobbyManager(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    async def cog_load(self):
+        if not self.cleanup_lobbies.is_running():
+            self.cleanup_lobbies.start()
+
     def cog_unload(self):
         self.cleanup_lobbies.cancel()
 
@@ -52,6 +56,13 @@ class LobbyManager(commands.Cog):
 
     @tasks.loop(seconds=60)
     async def cleanup_lobbies(self):
+        # Guards against ticking before the guild cache is populated: is_ready()
+        # is a plain attribute check, safe even before login (unlike
+        # wait_until_ready(), which would raise if called this early during
+        # the very first cog_load, since bot.start() hasn't run yet at that point).
+        if not self.bot.is_ready():
+            return
+
         for guild_id, channel_id in await lobbies_all():
             guild = self.bot.get_guild(guild_id)
             if not guild:
@@ -68,11 +79,6 @@ class LobbyManager(commands.Cog):
                     await ch.delete(reason="Empty user lobby (periodic cleanup)")
                 finally:
                     await lobby_delete(channel_id)
-
-    @commands.Cog.listener()
-    async def on_ready(self):
-        if not self.cleanup_lobbies.is_running():
-            self.cleanup_lobbies.start()
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(LobbyManager(bot))

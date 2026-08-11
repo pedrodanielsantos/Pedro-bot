@@ -12,7 +12,7 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
-from utils.cogs import discover_cog_paths
+from utils.cogs import discover_cog_paths, reload_shared_modules
 from utils.log import colorize_log_line, log_file_size, quiet_uvicorn_logging, tail_log_file, tail_log_lines
 
 COGS_DIR = os.path.join(os.path.dirname(__file__), "cogs")
@@ -396,6 +396,7 @@ def create_app(supervisor, web_state):
                         logger.error("Old web server did not shut down in time; aborting reload.")
                         return
 
+                reload_shared_modules()
                 web_module = sys.modules[__name__]
                 importlib.reload(web_module)
                 new_task = asyncio.create_task(web_module.start(supervisor, web_state))

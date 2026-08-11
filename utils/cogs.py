@@ -1,4 +1,30 @@
+import importlib
 import os
+import sys
+
+# Modules cogs import from but that aren't extensions themselves (no setup()),
+# so bot.reload_extension()/load_extension() never touches them and they'd
+# otherwise stay stale in sys.modules until the whole process restarts.
+_SHARED_MODULES = ("config", "db", "utils", "cogs.core.mixins")
+_SHARED_MODULE_PREFIXES = tuple(f"{name}." for name in _SHARED_MODULES)
+
+
+def reload_shared_modules():
+    """Reloads db/config/utils/mixins modules so a cog reload picks up fresh
+    dependency code instead of whatever was cached at process startup."""
+    for name in sorted(sys.modules):
+        if name in _SHARED_MODULES or name.startswith(_SHARED_MODULE_PREFIXES):
+            module = sys.modules[name]
+            if name == "db.database":
+                # module-level `db` holds the live aiosqlite connection singleton,
+                # set once by initialize_databases(). A reload re-executes the file
+                # top to bottom and would reset it to None, breaking every cog's DB
+                # access until a full process restart, so carry it across the reload.
+                live_connection = getattr(module, "db", None)
+                importlib.reload(module)
+                module.db = live_connection
+            else:
+                importlib.reload(module)
 
 
 def _has_setup_entrypoint(file_path: str) -> bool:

@@ -7,6 +7,7 @@ from discord.ext import commands
 import os
 from config.constants import SUCCESS_COLOR, ERROR_COLOR
 from db.database import get_guild_embed_color, reset_case_counter
+from utils.cogs import reload_shared_modules
 
 logger = logging.getLogger("dev")
 WEB_DASHBOARD = "http://127.0.0.1:8000"
@@ -90,6 +91,7 @@ class DeveloperTools(commands.Cog):
         """
         if cog is None:
             failed = []
+            reload_shared_modules()
             for extension in list(self.bot.extensions):
                 try:
                     await self.bot.reload_extension(extension)
@@ -115,6 +117,7 @@ class DeveloperTools(commands.Cog):
             return
 
         try:
+            reload_shared_modules()
             await self.bot.reload_extension(extension)
             embed = discord.Embed(description=f"Reloaded `{extension}`", color=SUCCESS_COLOR)
             await ctx.reply(embed=embed)
@@ -138,6 +141,7 @@ class DeveloperTools(commands.Cog):
             return
 
         try:
+            reload_shared_modules()
             await self.bot.load_extension(extension)
             embed = discord.Embed(description=f"Loaded `{extension}`", color=SUCCESS_COLOR)
             await ctx.reply(embed=embed)
