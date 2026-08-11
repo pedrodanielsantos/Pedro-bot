@@ -38,13 +38,13 @@
             <span class="btn-label htmx-indicator">Starting…</span>
         </button>
         {% else %}
-        <button class="btn btn-fixed-width"
+        <button class="btn btn-warning btn-fixed-width"
             hx-post="/bot/reload"
             hx-target="#bot-status-group"
             hx-swap="outerHTML"
             hx-disabled-elt="this">
-            <span class="btn-label">Reload</span>
-            <span class="btn-label htmx-indicator">Reloading…</span>
+            <span class="btn-label">Restart</span>
+            <span class="btn-label htmx-indicator">Restarting…</span>
         </button>
         <button class="btn btn-danger btn-fixed-width"
             hx-post="/bot/stop"
