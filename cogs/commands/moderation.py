@@ -10,6 +10,7 @@ from db.database import (
     get_guild_embed_color, get_moderation_log_channel,
     next_case_number, add_mod_case,
     temp_ban_add, temp_ban_remove, temp_bans_due,
+    add_warning, get_warnings, count_warnings, get_all_warnings, clear_warnings,
 )
 from utils.duration import parse_duration
 from config.constants import SUCCESS_COLOR, ERROR_COLOR
@@ -24,9 +25,15 @@ PERMISSIONS = {
     "kick": "administrator",
     "timeout": "moderate_members",
     "removetimeout": "moderate_members",
+    "warn": "moderate_members",
+    "warnings": "moderate_members",
+    "clearwarnings": "administrator",
 }
 
 MAX_TIMEOUT_DURATION = timedelta(days=28)
+WARN_TIMEOUT_DURATION = timedelta(hours=24)
+WARN_TIMEOUT_THRESHOLD = 2
+WARN_BAN_THRESHOLD = 3
 
 class Moderation(commands.GroupCog, group_name="moderation"):
     def __init__(self, bot: commands.Bot):
@@ -222,6 +229,97 @@ class Moderation(commands.GroupCog, group_name="moderation"):
         await self._log_case(interaction.guild, "Timeout Removed", member.id, interaction.user.id, reason, None)
 
         embed = discord.Embed(description=f"Removed timeout from {member.mention} (`{member.id}`).", color=SUCCESS_COLOR)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @app_commands.command(name="warn", description="Warns a member")
+    @app_commands.describe(member="The member to warn", reason="Reason for the warning")
+    async def warn(self, interaction: discord.Interaction, member: discord.Member, reason: str):
+        if not await self._check_permission(interaction, "warn"):
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        case_number = await self._log_case(interaction.guild, "Warn", member.id, interaction.user.id, reason, None)
+        await add_warning(interaction.guild_id, case_number, member.id, interaction.user.id, reason)
+        count = await count_warnings(interaction.guild_id, member.id)
+
+        description = f"Warned {member.mention} (`{member.id}`). This is warning **#{count}**."
+
+        if count == WARN_TIMEOUT_THRESHOLD:
+            try:
+                await member.timeout(WARN_TIMEOUT_DURATION, reason="Auto: 2nd warning")
+                await self._log_case(interaction.guild, "Timeout", member.id, self.bot.user.id, "Auto: 2nd warning", "24h")
+                description += "\nAuto-escalation: member has been **timed out for 24h**."
+            except discord.Forbidden:
+                description += "\nAuto-escalation failed: I don't have permission to time out that member."
+        elif count >= WARN_BAN_THRESHOLD:
+            try:
+                await member.ban(reason="Auto: 3rd warning", delete_message_seconds=0)
+                await self._log_case(interaction.guild, "Ban", member.id, self.bot.user.id, "Auto: 3rd warning", None)
+                description += "\nAuto-escalation: member has been **banned**."
+            except discord.Forbidden:
+                description += "\nAuto-escalation failed: I don't have permission to ban that member."
+
+        embed = discord.Embed(description=description, color=SUCCESS_COLOR)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @app_commands.command(name="warnings", description="Lists warnings for a member, or every member currently in the server")
+    @app_commands.describe(member="Leave empty to list warnings for every member currently in the server")
+    async def warnings(self, interaction: discord.Interaction, member: Optional[discord.Member] = None):
+        if not await self._check_permission(interaction, "warnings"):
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        if member is not None:
+            rows = await get_warnings(interaction.guild_id, member.id)
+            if not rows:
+                return await self._send_error(interaction, f"{member.mention} has no warnings.", deferred=True)
+
+            lines = [f"`#{case}` <t:{created_at}:R> by <@{mod_id}>: {reason}" for case, mod_id, reason, created_at in rows]
+            embed = discord.Embed(
+                title=f"Warnings for {member}",
+                description="\n".join(lines),
+                color=await get_guild_embed_color(interaction.guild_id),
+            )
+            return await interaction.followup.send(embed=embed, ephemeral=True)
+
+        rows = await get_all_warnings(interaction.guild_id)
+        member_ids = {m.id for m in interaction.guild.members}
+
+        grouped: dict[int, list] = {}
+        for case, target_id, mod_id, reason, created_at in rows:
+            if target_id not in member_ids:
+                continue
+            grouped.setdefault(target_id, []).append((case, mod_id, reason, created_at))
+
+        if not grouped:
+            return await self._send_error(interaction, "No members currently in the server have any warnings.", deferred=True)
+
+        lines = [f"<@{target_id}>: **{len(entries)}** warning(s)" for target_id, entries in grouped.items()]
+        embed = discord.Embed(
+            title="Warnings",
+            description="\n".join(lines),
+            color=await get_guild_embed_color(interaction.guild_id),
+        )
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @app_commands.command(name="clearwarnings", description="Clears every warning for a member")
+    @app_commands.describe(member="The member whose warnings should be cleared")
+    async def clearwarnings(self, interaction: discord.Interaction, member: discord.Member):
+        if not await self._check_permission(interaction, "clearwarnings"):
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        count = await count_warnings(interaction.guild_id, member.id)
+        if count == 0:
+            return await self._send_error(interaction, f"{member.mention} has no warnings to clear.", deferred=True)
+
+        await clear_warnings(interaction.guild_id, member.id)
+        await self._log_case(interaction.guild, "Warnings Cleared", member.id, interaction.user.id, f"Cleared {count} warning(s)", None)
+
+        embed = discord.Embed(description=f"Cleared **{count}** warning(s) for {member.mention}.", color=SUCCESS_COLOR)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @tasks.loop(seconds=60)

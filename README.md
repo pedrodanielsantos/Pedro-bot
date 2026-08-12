@@ -139,10 +139,13 @@ crash or restart.
 | `/log commands` | Setup or disable the log channel for every command used |
 | `/log moderation` | Setup or disable the moderation log channel |
 | `/moderation ban` | Bans a user from the server |
+| `/moderation clearwarnings` | Clears every warning for a member |
 | `/moderation kick` | Kicks a member from the server |
 | `/moderation removetimeout` | Removes an active timeout from a member |
 | `/moderation timeout` | Times out a member |
 | `/moderation unban` | Unbans a user from the server |
+| `/moderation warn` | Warns a member |
+| `/moderation warnings` | Lists warnings for a member, or every member currently in the server |
 
 <!-- COMMANDS:END -->
 

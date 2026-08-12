@@ -100,6 +100,18 @@ async def initialize_databases():
         )
     """)
 
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS warnings (
+            guild_id     INTEGER NOT NULL,
+            case_number  INTEGER NOT NULL,
+            target_id    INTEGER NOT NULL,
+            moderator_id INTEGER NOT NULL,
+            reason       TEXT NOT NULL,
+            created_at   INTEGER NOT NULL,
+            PRIMARY KEY (guild_id, case_number)
+        )
+    """)
+
     await db.commit()
 
 async def close_all_databases():
@@ -241,6 +253,48 @@ async def reset_case_counter(guild_id: int):
 async def temp_bans_due(now_ts: int):
     async with db.execute("SELECT guild_id, user_id, case_number FROM temp_bans WHERE unban_at <= ?", (now_ts,)) as cursor:
         return await cursor.fetchall()
+
+async def add_warning(guild_id: int, case_number: int, target_id: int, moderator_id: int, reason: str):
+    await db.execute(
+        """
+        INSERT INTO warnings (guild_id, case_number, target_id, moderator_id, reason, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (guild_id, case_number, target_id, moderator_id, reason, int(time.time()))
+    )
+    await db.commit()
+
+async def get_warnings(guild_id: int, target_id: int):
+    async with db.execute(
+        """
+        SELECT case_number, moderator_id, reason, created_at FROM warnings
+        WHERE guild_id = ? AND target_id = ? ORDER BY case_number
+        """,
+        (guild_id, target_id)
+    ) as cursor:
+        return await cursor.fetchall()
+
+async def count_warnings(guild_id: int, target_id: int) -> int:
+    async with db.execute(
+        "SELECT COUNT(*) FROM warnings WHERE guild_id = ? AND target_id = ?",
+        (guild_id, target_id)
+    ) as cursor:
+        result = await cursor.fetchone()
+        return result[0]
+
+async def get_all_warnings(guild_id: int):
+    async with db.execute(
+        """
+        SELECT case_number, target_id, moderator_id, reason, created_at FROM warnings
+        WHERE guild_id = ? ORDER BY target_id, case_number
+        """,
+        (guild_id,)
+    ) as cursor:
+        return await cursor.fetchall()
+
+async def clear_warnings(guild_id: int, target_id: int):
+    await db.execute("DELETE FROM warnings WHERE guild_id = ? AND target_id = ?", (guild_id, target_id))
+    await db.commit()
 
 async def add_autorole(guild_id: int, role_id: int):
     await db.execute(
