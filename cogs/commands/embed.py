@@ -4,7 +4,8 @@ from discord.ext import commands
 import io
 import json
 from typing import Optional
-from utils.embeds import send_error, success_embed
+from utils.embeds import success_embed
+from utils.errors import UserError
 
 MESSAGE_NOT_FOUND = "That message isn't in this channel. Specify which channel it's in."
 
@@ -13,27 +14,22 @@ class Embed(commands.GroupCog, group_name="embed"):
         super().__init__()
         self.bot = bot
 
-    async def _send_error(self, interaction: discord.Interaction, message: str):
-        await send_error(interaction, message)
-
     async def _resolve_message(
         self,
         interaction: discord.Interaction,
         channel: Optional[discord.TextChannel],
         message_id: str,
-    ) -> Optional[discord.Message]:
+    ) -> discord.Message:
         try:
             msg_id = int(message_id)
         except ValueError:
-            await self._send_error(interaction, "Invalid Message ID. Please enter a numeric ID.")
-            return None
+            raise UserError("Invalid Message ID. Please enter a numeric ID.")
 
         target_channel = channel or interaction.channel
         try:
             return await target_channel.fetch_message(msg_id)
         except discord.NotFound:
-            await self._send_error(interaction, MESSAGE_NOT_FOUND)
-            return None
+            raise UserError(MESSAGE_NOT_FOUND)
 
     def _parse_embed_json(self, data: str) -> tuple[Optional[discord.Embed], Optional[str]]:
         try:
@@ -48,12 +44,9 @@ class Embed(commands.GroupCog, group_name="embed"):
     @app_commands.describe(message_id="ID of the message containing the embed", channel="Channel the message is in, if not this one")
     async def json(self, interaction: discord.Interaction, message_id: str, channel: Optional[discord.TextChannel] = None):
         message = await self._resolve_message(interaction, channel, message_id)
-        if message is None:
-            return
 
         if not message.embeds:
-            await self._send_error(interaction, "The specified message does not contain an embed.")
-            return
+            raise UserError("The specified message does not contain an embed.")
 
         embed_data = message.embeds[0].to_dict()
         json_output = json.dumps(embed_data, indent=4)
@@ -70,8 +63,7 @@ class Embed(commands.GroupCog, group_name="embed"):
     async def createjson(self, interaction: discord.Interaction, data: str, channel: Optional[discord.TextChannel] = None):
         embed, error = self._parse_embed_json(data)
         if error:
-            await self._send_error(interaction, error)
-            return
+            raise UserError(error)
 
         target_channel = channel or interaction.channel
         await target_channel.send(embed=embed)
@@ -82,17 +74,13 @@ class Embed(commands.GroupCog, group_name="embed"):
     @app_commands.describe(message_id="ID of the message to edit", data="New JSON data for the embed", channel="Channel the message is in, if not this one")
     async def editjson(self, interaction: discord.Interaction, message_id: str, data: str, channel: Optional[discord.TextChannel] = None):
         message = await self._resolve_message(interaction, channel, message_id)
-        if message is None:
-            return
 
         if message.author != self.bot.user:
-            await self._send_error(interaction, "I can only edit my own messages.")
-            return
+            raise UserError("I can only edit my own messages.")
 
         embed, error = self._parse_embed_json(data)
         if error:
-            await self._send_error(interaction, error)
-            return
+            raise UserError(error)
 
         await message.edit(embed=embed)
         confirm_embed = success_embed(f"Message {message_id} updated.")

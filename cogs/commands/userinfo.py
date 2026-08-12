@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from db.database import get_guild_embed_color
-from utils.embeds import error_embed
+from utils.errors import UserError
 
 class UserInfo(commands.Cog):
     def __init__(self, bot):
@@ -24,9 +24,7 @@ class UserInfo(commands.Cog):
             try:
                 uid = int(user_id)
             except ValueError:
-                embed = error_embed("That doesn't look like a valid user ID.")
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-                return
+                raise UserError("That doesn't look like a valid user ID.")
 
             guild_member = interaction.guild.get_member(uid) if interaction.guild else None
             if guild_member:
@@ -36,13 +34,9 @@ class UserInfo(commands.Cog):
                 try:
                     target = await self.bot.fetch_user(uid)
                 except discord.NotFound:
-                    embed = error_embed("No user found with that ID.")
-                    await interaction.response.send_message(embed=embed, ephemeral=True)
-                    return
+                    raise UserError("No user found with that ID.")
                 except discord.HTTPException:
-                    embed = error_embed("Failed to fetch that user's information.")
-                    await interaction.response.send_message(embed=embed, ephemeral=True)
-                    return
+                    raise UserError("Failed to fetch that user's information.")
         else:
             target = interaction.user
             is_member = isinstance(target, discord.Member)

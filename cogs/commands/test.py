@@ -1,7 +1,9 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from utils.embeds import error_embed, success_embed
+from utils.embeds import success_embed
+from utils.errors import UserError
+from utils.permissions import require_permission
 
 class Test(commands.GroupCog, group_name="test"):
     def __init__(self, bot: commands.Bot):
@@ -11,20 +13,13 @@ class Test(commands.GroupCog, group_name="test"):
     @app_commands.command(name="welcome", description="Simulate a member joining to test the welcome message")
     async def welcome(self, interaction: discord.Interaction):
         if not interaction.guild:
-            embed = error_embed("This command can only be used in a server.")
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
+            raise UserError("This command can only be used in a server.")
 
-        if not interaction.user.guild_permissions.administrator:
-            embed = error_embed("You need **Administrator** permission to use this command.")
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
+        await require_permission(interaction, "administrator")
 
         greeter_cog = self.bot.get_cog("WelcomeGreeter")
         if not greeter_cog:
-            embed = error_embed("WelcomeGreeter cog is not loaded.")
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
+            raise UserError("WelcomeGreeter cog is not loaded.")
 
         await interaction.response.defer(ephemeral=True)
 

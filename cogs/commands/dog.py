@@ -4,7 +4,7 @@ from discord.ext import commands
 from discord import app_commands
 from dotenv import load_dotenv
 from utils.mixins import SessionMixin
-from utils.embeds import error_embed
+from utils.errors import UserError
 
 load_dotenv()
 DOG_API_KEY = os.getenv("DOG_API_KEY")
@@ -28,8 +28,7 @@ class Dog(SessionMixin, commands.Cog):
                 image_url = data[0]["url"]
                 await interaction.followup.send(image_url)
             else:
-                embed = error_embed("No image found.")
-                await interaction.followup.send(embed=embed)
+                raise UserError("No image found.")
 
 
 async def setup(bot: commands.Bot):

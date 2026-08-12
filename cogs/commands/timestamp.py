@@ -4,7 +4,7 @@ from discord.ext import commands
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, available_timezones
 from db.database import get_guild_embed_color
-from utils.embeds import send_error
+from utils.errors import UserError
 
 ALL_TIMEZONES = sorted(available_timezones())
 
@@ -38,9 +38,6 @@ class Timestamp(commands.GroupCog, group_name="timestamp"):
         super().__init__()
         self.bot = bot
 
-    async def _send_error(self, interaction: discord.Interaction, message: str):
-        await send_error(interaction, message)
-
     async def _reply_with_tag(self, interaction: discord.Interaction, epoch: int, style: str):
         tag = f"<t:{epoch}:{style}>"
         color = await get_guild_embed_color(interaction.guild_id)
@@ -64,8 +61,7 @@ class Timestamp(commands.GroupCog, group_name="timestamp"):
         try:
             zone = ZoneInfo(timezone)
         except (ValueError, KeyError):
-            await self._send_error(interaction, "Unknown timezone. Pick one from the autocomplete list.")
-            return
+            raise UserError("Unknown timezone. Pick one from the autocomplete list.")
 
         naive = None
         for time_format in ("%H:%M:%S", "%H:%M"):
@@ -76,8 +72,7 @@ class Timestamp(commands.GroupCog, group_name="timestamp"):
                 continue
 
         if naive is None:
-            await self._send_error(interaction, "Invalid date/time. Use YYYY-MM-DD for the date and HH:MM or HH:MM:SS (24h) for the time.")
-            return
+            raise UserError("Invalid date/time. Use YYYY-MM-DD for the date and HH:MM or HH:MM:SS (24h) for the time.")
 
         epoch = int(naive.replace(tzinfo=zone).timestamp())
         await self._reply_with_tag(interaction, epoch, style)

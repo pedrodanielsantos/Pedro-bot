@@ -7,6 +7,7 @@ from typing import Optional
 from config.constants import LOBBY_EMOJI, VOICE_NAME_MAX_LENGTH
 from utils.mixins import LobbyMixin
 from utils.embeds import success_embed
+from utils.errors import UserError
 
 class Rename(LobbyMixin, commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -18,22 +19,19 @@ class Rename(LobbyMixin, commands.Cog):
         await interaction.response.defer(ephemeral=True)
 
         channel = await self._get_lobby_channel(interaction)
-        if channel is None:
-            return
 
         name = new_name.strip()
         final = f"{LOBBY_EMOJI} {name}"
 
         if len(final) > VOICE_NAME_MAX_LENGTH:
-            await self._send_error(interaction, f"Name too long ({len(final)}/{VOICE_NAME_MAX_LENGTH}).")
-            return
+            raise UserError(f"Name too long ({len(final)}/{VOICE_NAME_MAX_LENGTH}).")
 
         try:
             await asyncio.wait_for(channel.edit(name=final, reason=f"Lobby rename by {interaction.user}"), timeout=5.0)
             embed = success_embed(f"Lobby renamed to **{name}**.")
             await interaction.followup.send(embed=embed, ephemeral=True)
         except asyncio.TimeoutError:
-            await self._send_error(interaction, "Rate limited. Discord limits channel renames to **2 per 10 minutes**, try again later.")
+            raise UserError("Rate limited. Discord limits channel renames to **2 per 10 minutes**, try again later.")
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Rename(bot))

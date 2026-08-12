@@ -5,7 +5,8 @@ from typing import Optional
 
 from db.database import set_welcome_channel
 from config.constants import NEW_LOBBY_TRIGGER, VOICE_VQM, VOICE_REGION
-from utils.embeds import error_embed, success_embed
+from utils.embeds import success_embed
+from utils.permissions import require_permission
 
 class Setup(commands.GroupCog, group_name="setup"):
     def __init__(self, bot: commands.Bot):
@@ -18,10 +19,7 @@ class Setup(commands.GroupCog, group_name="setup"):
     @app_commands.command(name="lobbies", description="Setup temporary voice-chat system with user-created lobbies")
     @app_commands.describe(category="The category where lobby channels will be created")
     async def lobbies(self, interaction: discord.Interaction, category: discord.CategoryChannel):
-        if not interaction.user.guild_permissions.manage_channels:
-            embed = error_embed("You need **Manage Channels** permission to use this command.")
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
+        await require_permission(interaction, "manage_channels")
 
         await interaction.response.defer(ephemeral=True)
 
@@ -41,10 +39,7 @@ class Setup(commands.GroupCog, group_name="setup"):
     @app_commands.command(name="welcome", description="Setup or disable the welcome message channel")
     @app_commands.describe(channel="The channel to send welcome messages in (leave empty to disable)")
     async def welcome(self, interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
-        if not interaction.user.guild_permissions.administrator:
-            embed = error_embed("You need **Administrator** permission to use this command.")
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
+        await require_permission(interaction, "administrator")
 
         if channel is None:
             await set_welcome_channel(interaction.guild_id, None)

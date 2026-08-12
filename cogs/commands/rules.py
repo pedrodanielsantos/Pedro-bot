@@ -4,7 +4,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from db.database import get_guild_embed_color
-from utils.embeds import send_error, success_embed
+from utils.embeds import success_embed
+from utils.errors import UserError
+from utils.permissions import require_permission
 
 RULES = [
     ("#1 | Be Civil", "Keep arguments off the server."),
@@ -37,9 +39,6 @@ class Rules(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def _send_error(self, interaction: discord.Interaction, message: str):
-        await send_error(interaction, message)
-
     @app_commands.command(name="rules", description="Displays the server rules")
     @app_commands.describe(
         message_id="ID of an existing rules message to update instead of sending a new one (admin only)",
@@ -57,26 +56,21 @@ class Rules(commands.Cog):
             await interaction.response.send_message(view=RulesView(color))
             return
 
-        if not (isinstance(interaction.user, discord.Member) and interaction.user.guild_permissions.administrator):
-            await self._send_error(interaction, "You need Administrator permission to edit an existing rules message.")
-            return
+        await require_permission(interaction, "administrator")
 
         try:
             target_id = int(message_id)
         except ValueError:
-            await self._send_error(interaction, "Invalid Message ID. Please enter a numeric ID.")
-            return
+            raise UserError("Invalid Message ID. Please enter a numeric ID.")
 
         target_channel = channel or interaction.channel
         try:
             message = await target_channel.fetch_message(target_id)
         except discord.NotFound:
-            await self._send_error(interaction, "That message isn't in this channel. Specify which channel it's in.")
-            return
+            raise UserError("That message isn't in this channel. Specify which channel it's in.")
 
         if message.author != self.bot.user:
-            await self._send_error(interaction, "I can only edit my own messages.")
-            return
+            raise UserError("I can only edit my own messages.")
 
         await message.edit(content=None, embed=None, view=RulesView(color))
         confirm_embed = success_embed(f"Rules message updated in {target_channel.mention}.")

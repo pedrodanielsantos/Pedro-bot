@@ -4,25 +4,18 @@ from discord.ext import commands
 from typing import Optional
 
 from db.database import set_commands_log_channel, set_moderation_log_channel
-from utils.embeds import error_embed, success_embed
+from utils.embeds import success_embed
+from utils.permissions import require_permission
 
-@app_commands.default_permissions(administrator=True)
 class Log(commands.GroupCog, group_name="log"):
     def __init__(self, bot: commands.Bot):
         super().__init__()
         self.bot = bot
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Gate all /log subcommands to admins only."""
-        if interaction.user.guild_permissions.administrator:
-            return True
-        embed = error_embed("You must be an **administrator** to use `/log` commands.")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        return False
-
     @app_commands.command(name="commands", description="Setup or disable the log channel for every command used")
     @app_commands.describe(channel="The channel to send command logs in (leave empty to disable)")
     async def commands_log(self, interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
+        await require_permission(interaction, "administrator")
         if channel is None:
             await set_commands_log_channel(interaction.guild_id, None)
             embed = success_embed("Command logging has been disabled.")
@@ -34,6 +27,7 @@ class Log(commands.GroupCog, group_name="log"):
     @app_commands.command(name="moderation", description="Setup or disable the moderation log channel")
     @app_commands.describe(channel="The channel to send moderation logs in (leave empty to disable)")
     async def moderation(self, interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
+        await require_permission(interaction, "administrator")
         if channel is None:
             await set_moderation_log_channel(interaction.guild_id, None)
             embed = success_embed("Moderation logging has been disabled.")

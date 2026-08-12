@@ -13,7 +13,9 @@ from db.database import (
     add_warning, get_warnings, count_warnings, get_all_warnings, clear_warnings,
 )
 from utils.duration import parse_duration
-from utils.embeds import error_embed, send_error, success_embed
+from utils.embeds import success_embed
+from utils.errors import UserError
+from utils.permissions import require_permission
 
 logger = logging.getLogger("moderation")
 
@@ -47,15 +49,8 @@ class Moderation(commands.GroupCog, group_name="moderation"):
     def cog_unload(self):
         self.check_temp_bans.cancel()
 
-    async def _check_permission(self, interaction: discord.Interaction, command_name: str) -> bool:
-        required = PERMISSIONS[command_name]
-        if getattr(interaction.user.guild_permissions, required):
-            return True
-
-        label = required.replace("_", " ").title()
-        embed = error_embed(f"You need the **{label}** permission to use this command.")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        return False
+    async def _check_permission(self, interaction: discord.Interaction, command_name: str):
+        await require_permission(interaction, PERMISSIONS[command_name])
 
     async def _log_case(
         self, guild: discord.Guild, action: str, target_id: int,
@@ -96,29 +91,28 @@ class Moderation(commands.GroupCog, group_name="moderation"):
         duration="How long the ban should last, e.g. 30m, 12h, 7d (leave empty for a permanent ban)",
     )
     async def ban(self, interaction: discord.Interaction, user_id: str, reason: str, duration: Optional[str] = None):
-        if not await self._check_permission(interaction, "ban"):
-            return
+        await self._check_permission(interaction, "ban")
 
         try:
             target_id = int(user_id)
         except ValueError:
-            return await send_error(interaction, "Invalid user ID. Please enter a numeric Discord user ID.")
+            raise UserError("Invalid user ID. Please enter a numeric Discord user ID.")
 
         parsed_duration = None
         if duration is not None:
             try:
                 parsed_duration = parse_duration(duration)
             except ValueError as e:
-                return await send_error(interaction, str(e))
+                raise UserError(str(e))
 
         await interaction.response.defer(ephemeral=True)
 
         try:
             await interaction.guild.ban(discord.Object(id=target_id), reason=reason, delete_message_seconds=0)
         except discord.NotFound:
-            return await send_error(interaction, "That user doesn't exist.")
+            raise UserError("That user doesn't exist.")
         except discord.Forbidden:
-            return await send_error(interaction, "I don't have permission to ban that user.")
+            raise UserError("I don't have permission to ban that user.")
 
         if parsed_duration:
             unban_at = int((discord.utils.utcnow() + parsed_duration).timestamp())
@@ -135,22 +129,21 @@ class Moderation(commands.GroupCog, group_name="moderation"):
     @app_commands.command(name="unban", description="Unbans a user from the server")
     @app_commands.describe(user_id="The ID of the user to unban", reason="Reason for the unban")
     async def unban(self, interaction: discord.Interaction, user_id: str, reason: str):
-        if not await self._check_permission(interaction, "unban"):
-            return
+        await self._check_permission(interaction, "unban")
 
         try:
             target_id = int(user_id)
         except ValueError:
-            return await send_error(interaction, "Invalid user ID. Please enter a numeric Discord user ID.")
+            raise UserError("Invalid user ID. Please enter a numeric Discord user ID.")
 
         await interaction.response.defer(ephemeral=True)
 
         try:
             await interaction.guild.unban(discord.Object(id=target_id), reason=reason)
         except discord.NotFound:
-            return await send_error(interaction, "That user isn't banned.")
+            raise UserError("That user isn't banned.")
         except discord.Forbidden:
-            return await send_error(interaction, "I don't have permission to unban that user.")
+            raise UserError("I don't have permission to unban that user.")
 
         await temp_ban_remove(interaction.guild_id, target_id)
         await self._log_case(interaction.guild, "Unban", target_id, interaction.user.id, reason, None)
@@ -161,15 +154,14 @@ class Moderation(commands.GroupCog, group_name="moderation"):
     @app_commands.command(name="kick", description="Kicks a member from the server")
     @app_commands.describe(member="The member to kick", reason="Reason for the kick")
     async def kick(self, interaction: discord.Interaction, member: discord.Member, reason: str):
-        if not await self._check_permission(interaction, "kick"):
-            return
+        await self._check_permission(interaction, "kick")
 
         await interaction.response.defer(ephemeral=True)
 
         try:
             await member.kick(reason=reason)
         except discord.Forbidden:
-            return await send_error(interaction, "I don't have permission to kick that member.")
+            raise UserError("I don't have permission to kick that member.")
 
         await self._log_case(interaction.guild, "Kick", member.id, interaction.user.id, reason, None)
 
@@ -183,23 +175,22 @@ class Moderation(commands.GroupCog, group_name="moderation"):
         duration="How long to time out for, e.g. 10m, 1h, 7d (max 28 days)",
     )
     async def timeout(self, interaction: discord.Interaction, member: discord.Member, reason: str, duration: str):
-        if not await self._check_permission(interaction, "timeout"):
-            return
+        await self._check_permission(interaction, "timeout")
 
         try:
             parsed_duration = parse_duration(duration)
         except ValueError as e:
-            return await send_error(interaction, str(e))
+            raise UserError(str(e))
 
         if parsed_duration > MAX_TIMEOUT_DURATION:
-            return await send_error(interaction, "Timeout duration cannot exceed 28 days.")
+            raise UserError("Timeout duration cannot exceed 28 days.")
 
         await interaction.response.defer(ephemeral=True)
 
         try:
             await member.timeout(parsed_duration, reason=reason)
         except discord.Forbidden:
-            return await send_error(interaction, "I don't have permission to time out that member.")
+            raise UserError("I don't have permission to time out that member.")
 
         await self._log_case(interaction.guild, "Timeout", member.id, interaction.user.id, reason, duration)
 
@@ -209,15 +200,14 @@ class Moderation(commands.GroupCog, group_name="moderation"):
     @app_commands.command(name="removetimeout", description="Removes an active timeout from a member")
     @app_commands.describe(member="The member to remove the timeout from", reason="Reason for removing the timeout")
     async def removetimeout(self, interaction: discord.Interaction, member: discord.Member, reason: str):
-        if not await self._check_permission(interaction, "removetimeout"):
-            return
+        await self._check_permission(interaction, "removetimeout")
 
         await interaction.response.defer(ephemeral=True)
 
         try:
             await member.timeout(None, reason=reason)
         except discord.Forbidden:
-            return await send_error(interaction, "I don't have permission to remove that member's timeout.")
+            raise UserError("I don't have permission to remove that member's timeout.")
 
         await self._log_case(interaction.guild, "Timeout Removed", member.id, interaction.user.id, reason, None)
 
@@ -227,8 +217,7 @@ class Moderation(commands.GroupCog, group_name="moderation"):
     @app_commands.command(name="warn", description="Warns a member")
     @app_commands.describe(member="The member to warn", reason="Reason for the warning")
     async def warn(self, interaction: discord.Interaction, member: discord.Member, reason: str):
-        if not await self._check_permission(interaction, "warn"):
-            return
+        await self._check_permission(interaction, "warn")
 
         await interaction.response.defer(ephemeral=True)
 
@@ -259,15 +248,14 @@ class Moderation(commands.GroupCog, group_name="moderation"):
     @app_commands.command(name="warnings", description="Lists warnings for a member, or every member currently in the server")
     @app_commands.describe(member="Leave empty to list warnings for every member currently in the server")
     async def warnings(self, interaction: discord.Interaction, member: Optional[discord.Member] = None):
-        if not await self._check_permission(interaction, "warnings"):
-            return
+        await self._check_permission(interaction, "warnings")
 
         await interaction.response.defer(ephemeral=True)
 
         if member is not None:
             rows = await get_warnings(interaction.guild_id, member.id)
             if not rows:
-                return await send_error(interaction, f"{member.mention} has no warnings.")
+                raise UserError(f"{member.mention} has no warnings.")
 
             lines = [f"`#{case}` <t:{created_at}:R> by <@{mod_id}>: {reason}" for case, mod_id, reason, created_at in rows]
             embed = discord.Embed(
@@ -287,7 +275,7 @@ class Moderation(commands.GroupCog, group_name="moderation"):
             grouped.setdefault(target_id, []).append((case, mod_id, reason, created_at))
 
         if not grouped:
-            return await send_error(interaction, "No members currently in the server have any warnings.")
+            raise UserError("No members currently in the server have any warnings.")
 
         lines = [f"<@{target_id}>: **{len(entries)}** warning(s)" for target_id, entries in grouped.items()]
         embed = discord.Embed(
@@ -300,14 +288,13 @@ class Moderation(commands.GroupCog, group_name="moderation"):
     @app_commands.command(name="clearwarnings", description="Clears every warning for a member")
     @app_commands.describe(member="The member whose warnings should be cleared")
     async def clearwarnings(self, interaction: discord.Interaction, member: discord.Member):
-        if not await self._check_permission(interaction, "clearwarnings"):
-            return
+        await self._check_permission(interaction, "clearwarnings")
 
         await interaction.response.defer(ephemeral=True)
 
         count = await count_warnings(interaction.guild_id, member.id)
         if count == 0:
-            return await send_error(interaction, f"{member.mention} has no warnings to clear.")
+            raise UserError(f"{member.mention} has no warnings to clear.")
 
         await clear_warnings(interaction.guild_id, member.id)
         await self._log_case(interaction.guild, "Warnings Cleared", member.id, interaction.user.id, f"Cleared {count} warning(s)", None)

@@ -5,9 +5,9 @@ import aiohttp
 import discord
 from discord.ext import commands
 import os
-from config.constants import SUCCESS_COLOR, ERROR_COLOR
 from db.database import get_guild_embed_color, reset_case_counter
 from utils.cogs import reload_shared_modules
+from utils.embeds import error_embed, success_embed
 
 logger = logging.getLogger("dev")
 WEB_DASHBOARD = "http://127.0.0.1:8000"
@@ -18,13 +18,13 @@ class DeveloperTools(commands.Cog):
 
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
         if isinstance(error, commands.CheckFailure):
-            embed = discord.Embed(description="You are not authorized to use this command.", color=ERROR_COLOR)
+            embed = error_embed("You are not authorized to use this command.")
             await self._reply_or_dm(ctx, embed, delete_after=5)
         elif isinstance(error, commands.MissingRequiredArgument):
-            embed = discord.Embed(description=f"Missing required argument: `{error.param.name}`", color=ERROR_COLOR)
+            embed = error_embed(f"Missing required argument: `{error.param.name}`")
             await self._reply_or_dm(ctx, embed)
         else:
-            embed = discord.Embed(description=f"An error occurred: {error}", color=ERROR_COLOR)
+            embed = error_embed(f"An error occurred: {error}")
             await self._reply_or_dm(ctx, embed)
             logger.error(f"Error in command: {error}")
 
@@ -102,28 +102,28 @@ class DeveloperTools(commands.Cog):
 
             if failed:
                 details = "\n".join(f"`{ext}`: {e}" for ext, e in failed)
-                embed = discord.Embed(description=f"Reloaded all extensions, but {len(failed)} failed:\n```py\n{details}\n```", color=ERROR_COLOR)
+                embed = error_embed(f"Reloaded all extensions, but {len(failed)} failed:\n```py\n{details}\n```")
                 await ctx.reply(embed=embed)
             else:
-                embed = discord.Embed(description=f"Reloaded all `{len(self.bot.extensions)}` extensions", color=SUCCESS_COLOR)
+                embed = success_embed(f"Reloaded all `{len(self.bot.extensions)}` extensions")
                 await ctx.reply(embed=embed)
             return
 
         extension = self.find_extension(cog)
 
         if not extension:
-            embed = discord.Embed(description=f"Could not find extension matching `{cog}`.", color=ERROR_COLOR)
+            embed = error_embed(f"Could not find extension matching `{cog}`.")
             await ctx.reply(embed=embed)
             return
 
         try:
             reload_shared_modules()
             await self.bot.reload_extension(extension)
-            embed = discord.Embed(description=f"Reloaded `{extension}`", color=SUCCESS_COLOR)
+            embed = success_embed(f"Reloaded `{extension}`")
             await ctx.reply(embed=embed)
             logger.info(f"Reloaded: {extension}")
         except Exception as e:
-            embed = discord.Embed(description=f"Failed to reload `{extension}`:\n```py\n{e}\n```", color=ERROR_COLOR)
+            embed = error_embed(f"Failed to reload `{extension}`:\n```py\n{e}\n```")
             await ctx.reply(embed=embed)
             logger.error(f"Failed to reload extension {extension}: {e}")
 
@@ -136,18 +136,18 @@ class DeveloperTools(commands.Cog):
         extension = self.find_extension(cog)
 
         if not extension:
-            embed = discord.Embed(description=f"Could not find extension matching `{cog}`.", color=ERROR_COLOR)
+            embed = error_embed(f"Could not find extension matching `{cog}`.")
             await ctx.reply(embed=embed)
             return
 
         try:
             reload_shared_modules()
             await self.bot.load_extension(extension)
-            embed = discord.Embed(description=f"Loaded `{extension}`", color=SUCCESS_COLOR)
+            embed = success_embed(f"Loaded `{extension}`")
             await ctx.reply(embed=embed)
             logger.info(f"Loaded: {extension}")
         except Exception as e:
-            embed = discord.Embed(description=f"Failed to load `{extension}`:\n```py\n{e}\n```", color=ERROR_COLOR)
+            embed = error_embed(f"Failed to load `{extension}`:\n```py\n{e}\n```")
             await ctx.reply(embed=embed)
             logger.error(f"Failed to load extension {extension}: {e}")
 
@@ -160,17 +160,17 @@ class DeveloperTools(commands.Cog):
         extension = self.find_extension(cog)
 
         if not extension:
-            embed = discord.Embed(description=f"Could not find extension matching `{cog}`.", color=ERROR_COLOR)
+            embed = error_embed(f"Could not find extension matching `{cog}`.")
             await ctx.reply(embed=embed)
             return
 
         try:
             await self.bot.unload_extension(extension)
-            embed = discord.Embed(description=f"Unloaded `{extension}`", color=SUCCESS_COLOR)
+            embed = success_embed(f"Unloaded `{extension}`")
             await ctx.reply(embed=embed)
             logger.info(f"Unloaded: {extension}")
         except Exception as e:
-            embed = discord.Embed(description=f"Failed to unload `{extension}`:\n```py\n{e}\n```", color=ERROR_COLOR)
+            embed = error_embed(f"Failed to unload `{extension}`:\n```py\n{e}\n```")
             await ctx.reply(embed=embed)
             logger.error(f"Failed to unload extension {extension}: {e}")
 
@@ -197,11 +197,11 @@ class DeveloperTools(commands.Cog):
 
         try:
             synced = await self.bot.tree.sync(guild=target)
-            embed = discord.Embed(description=f"Synced {len(synced)} commands {target_desc}.", color=SUCCESS_COLOR)
+            embed = success_embed(f"Synced {len(synced)} commands {target_desc}.")
             await ctx.reply(embed=embed)
             logger.info(f"Synced {len(synced)} commands {target_desc}.")
         except Exception as e:
-            embed = discord.Embed(description=f"Sync failed: {e}", color=ERROR_COLOR)
+            embed = error_embed(f"Sync failed: {e}")
             await ctx.reply(embed=embed)
             logger.error(f"Sync failed: {e}")
 
@@ -246,13 +246,13 @@ class DeveloperTools(commands.Cog):
             await msg.delete()
             logger.info(f"Deleted message {message_id}.")
         except discord.NotFound:
-            embed = discord.Embed(description=f"Message `{message_id}` not found.", color=ERROR_COLOR)
+            embed = error_embed(f"Message `{message_id}` not found.")
             await ctx.reply(embed=embed, delete_after=5)
         except discord.Forbidden:
-            embed = discord.Embed(description="I don't have permission to delete that message.", color=ERROR_COLOR)
+            embed = error_embed("I don't have permission to delete that message.")
             await ctx.reply(embed=embed, delete_after=5)
         except Exception as e:
-            embed = discord.Embed(description=f"Error: {e}", color=ERROR_COLOR)
+            embed = error_embed(f"Error: {e}")
             await ctx.reply(embed=embed, delete_after=5)
 
     @commands.command(name="resetcases", hidden=True)
@@ -263,12 +263,12 @@ class DeveloperTools(commands.Cog):
         """
         target_guild_id = guild_id or (ctx.guild.id if ctx.guild else None)
         if target_guild_id is None:
-            embed = discord.Embed(description="No guild specified and this wasn't run in a guild.", color=ERROR_COLOR)
+            embed = error_embed("No guild specified and this wasn't run in a guild.")
             await ctx.reply(embed=embed)
             return
 
         await reset_case_counter(target_guild_id)
-        embed = discord.Embed(description=f"Wiped case history and reset the case counter for guild `{target_guild_id}`.", color=SUCCESS_COLOR)
+        embed = success_embed(f"Wiped case history and reset the case counter for guild `{target_guild_id}`.")
         await ctx.reply(embed=embed)
         logger.info(f"Reset case counter for guild {target_guild_id}.")
 
@@ -285,13 +285,13 @@ class DeveloperTools(commands.Cog):
                 async with session.post(f"{WEB_DASHBOARD}/web/reload") as resp:
                     resp.raise_for_status()
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-            embed = discord.Embed(description=f"Failed to reach the web dashboard: {e}", color=ERROR_COLOR)
+            embed = error_embed(f"Failed to reach the web dashboard: {e}")
             await ctx.reply(embed=embed)
             logger.error(f"Failed to reload web dashboard: {e}")
             return
 
         logger.info("Triggered web dashboard reload.")
-        embed = discord.Embed(description="Web dashboard reload triggered.", color=SUCCESS_COLOR)
+        embed = success_embed("Web dashboard reload triggered.")
         await ctx.reply(embed=embed)
 
 async def setup(bot: commands.Bot):

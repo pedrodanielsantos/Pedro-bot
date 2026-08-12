@@ -6,26 +6,17 @@ from typing import Optional
 from db.database import set_embed_color
 from config.constants import EMBED_COLOR
 from utils.transformers import HexColorTransformer
-from utils.embeds import error_embed
+from utils.permissions import require_permission
 
-@app_commands.default_permissions(administrator=True)
 class Set(commands.GroupCog, group_name="set"):
     def __init__(self, bot: commands.Bot):
         super().__init__()
         self.bot = bot
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Gate all /set subcommands to admins only."""
-        if interaction.user.guild_permissions.administrator:
-            return True
-        # must respond to the interaction or it errors
-        embed = error_embed("You must be an **administrator** to use `/set` commands.")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        return False
-
     @app_commands.command(name="embedcolor", description="Set or reset the server's embed color")
     @app_commands.describe(hex_code="The hex color code (leave empty to reset)")
     async def embed_color(self, interaction: discord.Interaction, hex_code: app_commands.Transform[discord.Color, HexColorTransformer] = None):
+        await require_permission(interaction, "administrator")
         if not hex_code:
             await set_embed_color(interaction.guild_id, None, interaction.user.id)
             embed = discord.Embed(description="Embed color has been reset to default.", color=discord.Color(EMBED_COLOR))

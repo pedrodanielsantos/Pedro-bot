@@ -1,10 +1,8 @@
-from typing import Optional
-
 import aiohttp
 import discord
 
 from db.database import lobby_is_tracked
-from utils.embeds import send_error
+from utils.errors import UserError
 
 
 class SessionMixin:
@@ -17,17 +15,12 @@ class SessionMixin:
 
 
 class LobbyMixin:
-    async def _send_error(self, interaction: discord.Interaction, message: str):
-        await send_error(interaction, message)
-
-    async def _get_lobby_channel(self, interaction: discord.Interaction) -> Optional[discord.VoiceChannel]:
+    async def _get_lobby_channel(self, interaction: discord.Interaction) -> discord.VoiceChannel:
         if not interaction.user.voice or not interaction.user.voice.channel:
-            await self._send_error(interaction, "You must be connected to a lobby voice-channel.")
-            return None
+            raise UserError("You must be connected to a lobby voice-channel.")
 
         ch = interaction.user.voice.channel
         if not await lobby_is_tracked(ch.id):
-            await self._send_error(interaction, "This channel isn’t a lobby voice-channel.")
-            return None
+            raise UserError("This channel isn’t a lobby voice-channel.")
 
         return ch

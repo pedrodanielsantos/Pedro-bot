@@ -8,7 +8,7 @@ from typing import Optional
 from dotenv import load_dotenv
 import os
 from utils.mixins import SessionMixin
-from utils.embeds import error_embed
+from utils.errors import UserError
 
 load_dotenv()
 
@@ -60,8 +60,7 @@ def _make_simple_effect(name: str, endpoint: str, filename: str, description: st
     ):
         image_url, error = self._resolve_single_source(user, url, image)
         if error:
-            await interaction.response.send_message(embed=error_embed(error), ephemeral=True)
-            return
+            raise UserError(error)
 
         await interaction.response.defer(thinking=True)
         await self._fetch_jeyy(interaction, endpoint, {"image_url": image_url}, filename)
@@ -158,18 +157,10 @@ class image(SessionMixin, commands.GroupCog, group_name="image"):
         ]
 
         if not resolved:
-            await interaction.response.send_message(
-                embed=error_embed("No image specified. Please provide at least one image source."),
-                ephemeral=True,
-            )
-            return
+            raise UserError("No image specified. Please provide at least one image source.")
 
         if len(resolved) > 2:
-            await interaction.response.send_message(
-                embed=error_embed("Please provide at most two image sources."),
-                ephemeral=True,
-            )
-            return
+            raise UserError("Please provide at most two image sources.")
 
         await interaction.response.defer(thinking=True)
         params: dict = {"image_url": resolved[0]}
@@ -200,11 +191,7 @@ class image(SessionMixin, commands.GroupCog, group_name="image"):
         text: str,
     ):
         if len(text) > 240:
-            await interaction.response.send_message(
-                embed=error_embed("Text must be at most 240 characters."),
-                ephemeral=True,
-            )
-            return
+            raise UserError("Text must be at most 240 characters.")
 
         await interaction.response.defer(thinking=True)
         await self._fetch_jeyy(
@@ -232,8 +219,7 @@ class image(SessionMixin, commands.GroupCog, group_name="image"):
     ):
         image_url, error = self._resolve_single_source(user, url, image)
         if error:
-            await interaction.response.send_message(embed=error_embed(error), ephemeral=True)
-            return
+            raise UserError(error)
 
         await interaction.response.defer(thinking=True)
         await self._fetch_jeyy(
@@ -258,8 +244,7 @@ class image(SessionMixin, commands.GroupCog, group_name="image"):
     ):
         image_url, error = self._resolve_single_source(user, url, image)
         if error:
-            await interaction.response.send_message(embed=error_embed(error), ephemeral=True)
-            return
+            raise UserError(error)
 
         await interaction.response.defer(thinking=True)
         await self._fetch_jeyy(
@@ -287,8 +272,7 @@ class image(SessionMixin, commands.GroupCog, group_name="image"):
     ):
         image_url, error = self._resolve_single_source(user, url, image)
         if error:
-            await interaction.response.send_message(embed=error_embed(error), ephemeral=True)
-            return
+            raise UserError(error)
 
         await interaction.response.defer(thinking=True)
         await self._fetch_jeyy(

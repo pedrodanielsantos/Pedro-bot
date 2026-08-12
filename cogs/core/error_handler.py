@@ -4,7 +4,8 @@ from discord.ext import commands
 import logging
 import asyncio
 import aiohttp
-from config.constants import ERROR_COLOR
+from utils.embeds import send_error
+from utils.errors import UserError
 
 logger = logging.getLogger("errors")
 
@@ -30,8 +31,11 @@ class ErrorHandler(commands.Cog):
         if isinstance(error, app_commands.CommandInvokeError):
             error = error.original
 
+        # Expected, user-facing validation failures raised deliberately by commands: never logged as a bug.
+        if isinstance(error, UserError):
+            message = str(error)
         # Handle Transformer Errors (Validation failures like invalid Hex codes)
-        if isinstance(error, app_commands.TransformerError):
+        elif isinstance(error, app_commands.TransformerError):
             # The original ValueError is stored in error.__cause__
             message = f"{error.__cause__}" if error.__cause__ else "Invalid input provided."
         elif isinstance(error, discord.Forbidden):
@@ -60,13 +64,7 @@ class ErrorHandler(commands.Cog):
             logger.error(f"Ignoring exception in command {interaction.command}:", exc_info=error)
             message = f"An unexpected error occurred: {error}"
 
-        embed = discord.Embed(description=message, color=ERROR_COLOR)
-
-        # Send the error message to the user
-        if not interaction.response.is_done():
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-        else:
-            await interaction.followup.send(embed=embed, ephemeral=True)
+        await send_error(interaction, message)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(ErrorHandler(bot))
