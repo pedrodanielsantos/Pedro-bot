@@ -8,7 +8,7 @@ from typing import Optional
 from dotenv import load_dotenv
 import os
 from config.constants import ERROR_COLOR
-from cogs.core.mixins import SessionMixin
+from utils.mixins import SessionMixin
 
 load_dotenv()
 

@@ -5,7 +5,7 @@ import asyncio
 from typing import Optional
 
 from config.constants import LOBBY_EMOJI, VOICE_NAME_MAX_LENGTH, SUCCESS_COLOR
-from cogs.core.mixins import LobbyMixin
+from utils.mixins import LobbyMixin
 
 class Rename(LobbyMixin, commands.Cog):
     def __init__(self, bot: commands.Bot):

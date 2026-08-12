@@ -5,7 +5,7 @@ import sys
 # Modules cogs import from but that aren't extensions themselves (no setup()),
 # so bot.reload_extension()/load_extension() never touches them and they'd
 # otherwise stay stale in sys.modules until the whole process restarts.
-_SHARED_MODULES = ("config", "db", "utils", "cogs.core.mixins")
+_SHARED_MODULES = ("config", "db", "utils")
 _SHARED_MODULE_PREFIXES = tuple(f"{name}." for name in _SHARED_MODULES)
 
 

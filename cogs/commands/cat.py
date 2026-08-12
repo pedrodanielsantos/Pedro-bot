@@ -4,7 +4,7 @@ from discord.ext import commands
 from discord import app_commands
 from dotenv import load_dotenv
 from config.constants import ERROR_COLOR
-from cogs.core.mixins import SessionMixin
+from utils.mixins import SessionMixin
 
 load_dotenv()
 CAT_API_KEY = os.getenv("CAT_API_KEY")
