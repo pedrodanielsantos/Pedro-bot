@@ -14,6 +14,12 @@ def reload_shared_modules():
     dependency code instead of whatever was cached at process startup."""
     for name in sorted(sys.modules):
         if name in _SHARED_MODULES or name.startswith(_SHARED_MODULE_PREFIXES):
+            if name == "utils.errors":
+                # UserError is isinstance-checked from error_handler.py, which may not be
+                # reloaded in the same pass; reloading this module would mint a new class
+                # and break that check.
+                continue
+
             module = sys.modules[name]
             if name == "db.database":
                 # module-level `db` holds the live aiosqlite connection singleton,
