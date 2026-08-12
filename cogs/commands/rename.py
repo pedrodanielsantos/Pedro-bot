@@ -4,8 +4,9 @@ from discord.ext import commands
 import asyncio
 from typing import Optional
 
-from config.constants import LOBBY_EMOJI, VOICE_NAME_MAX_LENGTH, SUCCESS_COLOR
+from config.constants import LOBBY_EMOJI, VOICE_NAME_MAX_LENGTH
 from utils.mixins import LobbyMixin
+from utils.embeds import success_embed
 
 class Rename(LobbyMixin, commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -29,7 +30,7 @@ class Rename(LobbyMixin, commands.Cog):
 
         try:
             await asyncio.wait_for(channel.edit(name=final, reason=f"Lobby rename by {interaction.user}"), timeout=5.0)
-            embed = discord.Embed(description=f"Lobby renamed to **{name}**.", color=SUCCESS_COLOR)
+            embed = success_embed(f"Lobby renamed to **{name}**.")
             await interaction.followup.send(embed=embed, ephemeral=True)
         except asyncio.TimeoutError:
             await self._send_error(interaction, "Rate limited. Discord limits channel renames to **2 per 10 minutes**, try again later.")

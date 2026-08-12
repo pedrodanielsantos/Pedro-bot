@@ -7,8 +7,8 @@ import logging
 from typing import Optional
 from dotenv import load_dotenv
 import os
-from config.constants import ERROR_COLOR
 from utils.mixins import SessionMixin
+from utils.embeds import error_embed
 
 load_dotenv()
 
@@ -60,9 +60,7 @@ def _make_simple_effect(name: str, endpoint: str, filename: str, description: st
     ):
         image_url, error = self._resolve_single_source(user, url, image)
         if error:
-            await interaction.response.send_message(
-                embed=discord.Embed(description=error, color=ERROR_COLOR), ephemeral=True
-            )
+            await interaction.response.send_message(embed=error_embed(error), ephemeral=True)
             return
 
         await interaction.response.defer(thinking=True)
@@ -161,14 +159,14 @@ class image(SessionMixin, commands.GroupCog, group_name="image"):
 
         if not resolved:
             await interaction.response.send_message(
-                embed=discord.Embed(description="No image specified. Please provide at least one image source.", color=ERROR_COLOR),
+                embed=error_embed("No image specified. Please provide at least one image source."),
                 ephemeral=True,
             )
             return
 
         if len(resolved) > 2:
             await interaction.response.send_message(
-                embed=discord.Embed(description="Please provide at most two image sources.", color=ERROR_COLOR),
+                embed=error_embed("Please provide at most two image sources."),
                 ephemeral=True,
             )
             return
@@ -203,7 +201,7 @@ class image(SessionMixin, commands.GroupCog, group_name="image"):
     ):
         if len(text) > 240:
             await interaction.response.send_message(
-                embed=discord.Embed(description="Text must be at most 240 characters.", color=ERROR_COLOR),
+                embed=error_embed("Text must be at most 240 characters."),
                 ephemeral=True,
             )
             return
@@ -234,9 +232,7 @@ class image(SessionMixin, commands.GroupCog, group_name="image"):
     ):
         image_url, error = self._resolve_single_source(user, url, image)
         if error:
-            await interaction.response.send_message(
-                embed=discord.Embed(description=error, color=ERROR_COLOR), ephemeral=True
-            )
+            await interaction.response.send_message(embed=error_embed(error), ephemeral=True)
             return
 
         await interaction.response.defer(thinking=True)
@@ -262,9 +258,7 @@ class image(SessionMixin, commands.GroupCog, group_name="image"):
     ):
         image_url, error = self._resolve_single_source(user, url, image)
         if error:
-            await interaction.response.send_message(
-                embed=discord.Embed(description=error, color=ERROR_COLOR), ephemeral=True
-            )
+            await interaction.response.send_message(embed=error_embed(error), ephemeral=True)
             return
 
         await interaction.response.defer(thinking=True)
@@ -293,9 +287,7 @@ class image(SessionMixin, commands.GroupCog, group_name="image"):
     ):
         image_url, error = self._resolve_single_source(user, url, image)
         if error:
-            await interaction.response.send_message(
-                embed=discord.Embed(description=error, color=ERROR_COLOR), ephemeral=True
-            )
+            await interaction.response.send_message(embed=error_embed(error), ephemeral=True)
             return
 
         await interaction.response.defer(thinking=True)

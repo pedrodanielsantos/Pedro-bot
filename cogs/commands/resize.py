@@ -3,8 +3,8 @@ from discord import app_commands
 from discord.ext import commands
 from typing import Optional
 
-from config.constants import SUCCESS_COLOR
 from utils.mixins import LobbyMixin
+from utils.embeds import success_embed
 
 class Resize(LobbyMixin, commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -25,7 +25,7 @@ class Resize(LobbyMixin, commands.Cog):
 
         await channel.edit(user_limit=max_users)
         label = "unlimited" if max_users == 0 else str(max_users)
-        embed = discord.Embed(description=f"Lobby resized to **{label}** maximum users.", color=SUCCESS_COLOR)
+        embed = success_embed(f"Lobby resized to **{label}** maximum users.")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 async def setup(bot: commands.Bot):

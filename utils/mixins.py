@@ -4,7 +4,7 @@ import aiohttp
 import discord
 
 from db.database import lobby_is_tracked
-from config.constants import ERROR_COLOR
+from utils.embeds import send_error
 
 
 class SessionMixin:
@@ -18,8 +18,7 @@ class SessionMixin:
 
 class LobbyMixin:
     async def _send_error(self, interaction: discord.Interaction, message: str):
-        embed = discord.Embed(description=message, color=ERROR_COLOR)
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        await send_error(interaction, message)
 
     async def _get_lobby_channel(self, interaction: discord.Interaction) -> Optional[discord.VoiceChannel]:
         if not interaction.user.voice or not interaction.user.voice.channel:

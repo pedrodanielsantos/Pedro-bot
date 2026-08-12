@@ -3,8 +3,8 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from dotenv import load_dotenv
-from config.constants import ERROR_COLOR
 from utils.mixins import SessionMixin
+from utils.embeds import error_embed
 
 load_dotenv()
 CAT_API_KEY = os.getenv("CAT_API_KEY")
@@ -28,7 +28,7 @@ class Cat(SessionMixin, commands.Cog):
                 image_url = data[0]["url"]
                 await interaction.followup.send(image_url)
             else:
-                embed = discord.Embed(description="No image found.", color=ERROR_COLOR)
+                embed = error_embed("No image found.")
                 await interaction.followup.send(embed=embed)
 
 

@@ -3,8 +3,8 @@ from discord import app_commands
 from discord.ext import commands
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, available_timezones
-from config.constants import ERROR_COLOR
 from db.database import get_guild_embed_color
+from utils.embeds import send_error
 
 ALL_TIMEZONES = sorted(available_timezones())
 
@@ -39,8 +39,7 @@ class Timestamp(commands.GroupCog, group_name="timestamp"):
         self.bot = bot
 
     async def _send_error(self, interaction: discord.Interaction, message: str):
-        embed = discord.Embed(description=message, color=ERROR_COLOR)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await send_error(interaction, message)
 
     async def _reply_with_tag(self, interaction: discord.Interaction, epoch: int, style: str):
         tag = f"<t:{epoch}:{style}>"

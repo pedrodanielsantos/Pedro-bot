@@ -4,7 +4,7 @@ from discord.ext import commands
 from typing import Optional
 
 from db.database import set_commands_log_channel, set_moderation_log_channel
-from config.constants import SUCCESS_COLOR, ERROR_COLOR
+from utils.embeds import error_embed, success_embed
 
 @app_commands.default_permissions(administrator=True)
 class Log(commands.GroupCog, group_name="log"):
@@ -16,10 +16,7 @@ class Log(commands.GroupCog, group_name="log"):
         """Gate all /log subcommands to admins only."""
         if interaction.user.guild_permissions.administrator:
             return True
-        embed = discord.Embed(
-            description="You must be an **administrator** to use `/log` commands.",
-            color=ERROR_COLOR
-        )
+        embed = error_embed("You must be an **administrator** to use `/log` commands.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return False
 
@@ -28,10 +25,10 @@ class Log(commands.GroupCog, group_name="log"):
     async def commands_log(self, interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
         if channel is None:
             await set_commands_log_channel(interaction.guild_id, None)
-            embed = discord.Embed(description="Command logging has been disabled.", color=SUCCESS_COLOR)
+            embed = success_embed("Command logging has been disabled.")
         else:
             await set_commands_log_channel(interaction.guild_id, channel.id)
-            embed = discord.Embed(description=f"Commands will now be logged in {channel.mention}.", color=SUCCESS_COLOR)
+            embed = success_embed(f"Commands will now be logged in {channel.mention}.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="moderation", description="Setup or disable the moderation log channel")
@@ -39,10 +36,10 @@ class Log(commands.GroupCog, group_name="log"):
     async def moderation(self, interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
         if channel is None:
             await set_moderation_log_channel(interaction.guild_id, None)
-            embed = discord.Embed(description="Moderation logging has been disabled.", color=SUCCESS_COLOR)
+            embed = success_embed("Moderation logging has been disabled.")
         else:
             await set_moderation_log_channel(interaction.guild_id, channel.id)
-            embed = discord.Embed(description=f"Moderation actions will now be logged in {channel.mention}.", color=SUCCESS_COLOR)
+            embed = success_embed(f"Moderation actions will now be logged in {channel.mention}.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 async def setup(bot: commands.Bot):

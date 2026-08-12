@@ -4,8 +4,9 @@ from discord.ext import commands
 from typing import Optional
 
 from db.database import set_embed_color
-from config.constants import EMBED_COLOR, ERROR_COLOR
+from config.constants import EMBED_COLOR
 from utils.transformers import HexColorTransformer
+from utils.embeds import error_embed
 
 @app_commands.default_permissions(administrator=True)
 class Set(commands.GroupCog, group_name="set"):
@@ -18,10 +19,7 @@ class Set(commands.GroupCog, group_name="set"):
         if interaction.user.guild_permissions.administrator:
             return True
         # must respond to the interaction or it errors
-        embed = discord.Embed(
-            description="You must be an **administrator** to use `/set` commands.",
-            color=ERROR_COLOR
-        )
+        embed = error_embed("You must be an **administrator** to use `/set` commands.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return False
 

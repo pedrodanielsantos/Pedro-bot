@@ -4,7 +4,7 @@ from discord.ext import commands
 import io
 import json
 from typing import Optional
-from config.constants import SUCCESS_COLOR, ERROR_COLOR
+from utils.embeds import send_error, success_embed
 
 MESSAGE_NOT_FOUND = "That message isn't in this channel. Specify which channel it's in."
 
@@ -14,8 +14,7 @@ class Embed(commands.GroupCog, group_name="embed"):
         self.bot = bot
 
     async def _send_error(self, interaction: discord.Interaction, message: str):
-        embed = discord.Embed(description=message, color=ERROR_COLOR)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await send_error(interaction, message)
 
     async def _resolve_message(
         self,
@@ -76,7 +75,7 @@ class Embed(commands.GroupCog, group_name="embed"):
 
         target_channel = channel or interaction.channel
         await target_channel.send(embed=embed)
-        confirm_embed = discord.Embed(description=f"Embed sent to {target_channel.mention}.", color=SUCCESS_COLOR)
+        confirm_embed = success_embed(f"Embed sent to {target_channel.mention}.")
         await interaction.response.send_message(embed=confirm_embed, ephemeral=True)
 
     @app_commands.command(name="editjson", description="Edit an existing embed using raw JSON")
@@ -96,7 +95,7 @@ class Embed(commands.GroupCog, group_name="embed"):
             return
 
         await message.edit(embed=embed)
-        confirm_embed = discord.Embed(description=f"Message {message_id} updated.", color=SUCCESS_COLOR)
+        confirm_embed = success_embed(f"Message {message_id} updated.")
         await interaction.response.send_message(embed=confirm_embed, ephemeral=True)
 
 async def setup(bot: commands.Bot):

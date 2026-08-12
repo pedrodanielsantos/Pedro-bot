@@ -1,8 +1,8 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from config.constants import SUCCESS_COLOR, ERROR_COLOR
 from db.database import get_guild_embed_color, add_autorole, remove_autorole, get_autoroles
+from utils.embeds import error_embed, success_embed
 
 @app_commands.default_permissions(manage_roles=True)
 class Autorole(commands.GroupCog, group_name="autorole"):
@@ -16,10 +16,7 @@ class Autorole(commands.GroupCog, group_name="autorole"):
             return True
         
         # must respond to the interaction or it errors
-        embed = discord.Embed(
-            description="You must have the **Manage Roles** permission to use `/autorole` commands.",
-            color=ERROR_COLOR
-        )
+        embed = error_embed("You must have the **Manage Roles** permission to use `/autorole` commands.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return False
 
@@ -54,11 +51,8 @@ class Autorole(commands.GroupCog, group_name="autorole"):
     async def add(self, interaction: discord.Interaction, role: discord.Role):
         """Adds an autorole to the database."""
         await add_autorole(interaction.guild_id, role.id)
-        
-        embed = discord.Embed(
-            description=f"Successfully added {role.mention} to the autorole list.",
-            color=SUCCESS_COLOR
-        )
+
+        embed = success_embed(f"Successfully added {role.mention} to the autorole list.")
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="remove", description="Removes a role from the autorole list")
@@ -66,11 +60,8 @@ class Autorole(commands.GroupCog, group_name="autorole"):
     async def remove(self, interaction: discord.Interaction, role: discord.Role):
         """Removes an autorole from the database."""
         await remove_autorole(interaction.guild_id, role.id)
-        
-        embed = discord.Embed(
-            description=f"Successfully removed {role.mention} from the autorole list.",
-            color=SUCCESS_COLOR
-        )
+
+        embed = success_embed(f"Successfully removed {role.mention} from the autorole list.")
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="list", description="Lists all currently configured autoroles")
@@ -81,10 +72,7 @@ class Autorole(commands.GroupCog, group_name="autorole"):
         
         # Handle case where no roles are configured
         if not role_ids:
-            embed = discord.Embed(
-                description="There are currently no autoroles configured for this server.",
-                color=ERROR_COLOR
-            )
+            embed = error_embed("There are currently no autoroles configured for this server.")
             return await interaction.response.send_message(embed=embed)
 
         # Format the role IDs into pingable mentions for readability

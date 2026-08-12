@@ -4,7 +4,8 @@ from discord.ext import commands
 from typing import Optional
 
 from db.database import set_welcome_channel
-from config.constants import NEW_LOBBY_TRIGGER, VOICE_VQM, VOICE_REGION, SUCCESS_COLOR, ERROR_COLOR
+from config.constants import NEW_LOBBY_TRIGGER, VOICE_VQM, VOICE_REGION
+from utils.embeds import error_embed, success_embed
 
 class Setup(commands.GroupCog, group_name="setup"):
     def __init__(self, bot: commands.Bot):
@@ -18,7 +19,7 @@ class Setup(commands.GroupCog, group_name="setup"):
     @app_commands.describe(category="The category where lobby channels will be created")
     async def lobbies(self, interaction: discord.Interaction, category: discord.CategoryChannel):
         if not interaction.user.guild_permissions.manage_channels:
-            embed = discord.Embed(description="You need **Manage Channels** permission to use this command.", color=ERROR_COLOR)
+            embed = error_embed("You need **Manage Channels** permission to use this command.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
@@ -34,27 +35,24 @@ class Setup(commands.GroupCog, group_name="setup"):
                 rtc_region=VOICE_REGION,
             )
 
-        embed = discord.Embed(
-            description=f"Lobby system set in **{category.name}**:\n- {trigger.mention}",
-            color=SUCCESS_COLOR
-        )
+        embed = success_embed(f"Lobby system set in **{category.name}**:\n- {trigger.mention}")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="welcome", description="Setup or disable the welcome message channel")
     @app_commands.describe(channel="The channel to send welcome messages in (leave empty to disable)")
     async def welcome(self, interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
         if not interaction.user.guild_permissions.administrator:
-            embed = discord.Embed(description="You need **Administrator** permission to use this command.", color=ERROR_COLOR)
+            embed = error_embed("You need **Administrator** permission to use this command.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
         if channel is None:
             await set_welcome_channel(interaction.guild_id, None)
-            embed = discord.Embed(description="Welcome messages have been disabled.", color=SUCCESS_COLOR)
+            embed = success_embed("Welcome messages have been disabled.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
         else:
             await set_welcome_channel(interaction.guild_id, channel.id)
-            embed = discord.Embed(description=f"Welcome messages will now be sent in {channel.mention}.", color=SUCCESS_COLOR)
+            embed = success_embed(f"Welcome messages will now be sent in {channel.mention}.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
 async def setup(bot: commands.Bot):

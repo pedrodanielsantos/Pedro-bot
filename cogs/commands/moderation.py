@@ -13,7 +13,7 @@ from db.database import (
     add_warning, get_warnings, count_warnings, get_all_warnings, clear_warnings,
 )
 from utils.duration import parse_duration
-from config.constants import SUCCESS_COLOR, ERROR_COLOR
+from utils.embeds import error_embed, send_error, success_embed
 
 logger = logging.getLogger("moderation")
 
@@ -53,16 +53,9 @@ class Moderation(commands.GroupCog, group_name="moderation"):
             return True
 
         label = required.replace("_", " ").title()
-        embed = discord.Embed(description=f"You need the **{label}** permission to use this command.", color=ERROR_COLOR)
+        embed = error_embed(f"You need the **{label}** permission to use this command.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return False
-
-    async def _send_error(self, interaction: discord.Interaction, message: str, deferred: bool = False):
-        embed = discord.Embed(description=message, color=ERROR_COLOR)
-        if deferred:
-            await interaction.followup.send(embed=embed, ephemeral=True)
-        else:
-            await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def _log_case(
         self, guild: discord.Guild, action: str, target_id: int,
@@ -109,23 +102,23 @@ class Moderation(commands.GroupCog, group_name="moderation"):
         try:
             target_id = int(user_id)
         except ValueError:
-            return await self._send_error(interaction, "Invalid user ID. Please enter a numeric Discord user ID.")
+            return await send_error(interaction, "Invalid user ID. Please enter a numeric Discord user ID.")
 
         parsed_duration = None
         if duration is not None:
             try:
                 parsed_duration = parse_duration(duration)
             except ValueError as e:
-                return await self._send_error(interaction, str(e))
+                return await send_error(interaction, str(e))
 
         await interaction.response.defer(ephemeral=True)
 
         try:
             await interaction.guild.ban(discord.Object(id=target_id), reason=reason, delete_message_seconds=0)
         except discord.NotFound:
-            return await self._send_error(interaction, "That user doesn't exist.", deferred=True)
+            return await send_error(interaction, "That user doesn't exist.")
         except discord.Forbidden:
-            return await self._send_error(interaction, "I don't have permission to ban that user.", deferred=True)
+            return await send_error(interaction, "I don't have permission to ban that user.")
 
         if parsed_duration:
             unban_at = int((discord.utils.utcnow() + parsed_duration).timestamp())
@@ -136,7 +129,7 @@ class Moderation(commands.GroupCog, group_name="moderation"):
             await self._log_case(interaction.guild, "Ban", target_id, interaction.user.id, reason, None)
             description = f"Banned <@{target_id}> (`{target_id}`)."
 
-        embed = discord.Embed(description=description, color=SUCCESS_COLOR)
+        embed = success_embed(description)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="unban", description="Unbans a user from the server")
@@ -148,21 +141,21 @@ class Moderation(commands.GroupCog, group_name="moderation"):
         try:
             target_id = int(user_id)
         except ValueError:
-            return await self._send_error(interaction, "Invalid user ID. Please enter a numeric Discord user ID.")
+            return await send_error(interaction, "Invalid user ID. Please enter a numeric Discord user ID.")
 
         await interaction.response.defer(ephemeral=True)
 
         try:
             await interaction.guild.unban(discord.Object(id=target_id), reason=reason)
         except discord.NotFound:
-            return await self._send_error(interaction, "That user isn't banned.", deferred=True)
+            return await send_error(interaction, "That user isn't banned.")
         except discord.Forbidden:
-            return await self._send_error(interaction, "I don't have permission to unban that user.", deferred=True)
+            return await send_error(interaction, "I don't have permission to unban that user.")
 
         await temp_ban_remove(interaction.guild_id, target_id)
         await self._log_case(interaction.guild, "Unban", target_id, interaction.user.id, reason, None)
 
-        embed = discord.Embed(description=f"Unbanned <@{target_id}> (`{target_id}`).", color=SUCCESS_COLOR)
+        embed = success_embed(f"Unbanned <@{target_id}> (`{target_id}`).")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="kick", description="Kicks a member from the server")
@@ -176,11 +169,11 @@ class Moderation(commands.GroupCog, group_name="moderation"):
         try:
             await member.kick(reason=reason)
         except discord.Forbidden:
-            return await self._send_error(interaction, "I don't have permission to kick that member.", deferred=True)
+            return await send_error(interaction, "I don't have permission to kick that member.")
 
         await self._log_case(interaction.guild, "Kick", member.id, interaction.user.id, reason, None)
 
-        embed = discord.Embed(description=f"Kicked {member.mention} (`{member.id}`).", color=SUCCESS_COLOR)
+        embed = success_embed(f"Kicked {member.mention} (`{member.id}`).")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="timeout", description="Times out a member")
@@ -196,21 +189,21 @@ class Moderation(commands.GroupCog, group_name="moderation"):
         try:
             parsed_duration = parse_duration(duration)
         except ValueError as e:
-            return await self._send_error(interaction, str(e))
+            return await send_error(interaction, str(e))
 
         if parsed_duration > MAX_TIMEOUT_DURATION:
-            return await self._send_error(interaction, "Timeout duration cannot exceed 28 days.")
+            return await send_error(interaction, "Timeout duration cannot exceed 28 days.")
 
         await interaction.response.defer(ephemeral=True)
 
         try:
             await member.timeout(parsed_duration, reason=reason)
         except discord.Forbidden:
-            return await self._send_error(interaction, "I don't have permission to time out that member.", deferred=True)
+            return await send_error(interaction, "I don't have permission to time out that member.")
 
         await self._log_case(interaction.guild, "Timeout", member.id, interaction.user.id, reason, duration)
 
-        embed = discord.Embed(description=f"Timed out {member.mention} (`{member.id}`) for `{duration}`.", color=SUCCESS_COLOR)
+        embed = success_embed(f"Timed out {member.mention} (`{member.id}`) for `{duration}`.")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="removetimeout", description="Removes an active timeout from a member")
@@ -224,11 +217,11 @@ class Moderation(commands.GroupCog, group_name="moderation"):
         try:
             await member.timeout(None, reason=reason)
         except discord.Forbidden:
-            return await self._send_error(interaction, "I don't have permission to remove that member's timeout.", deferred=True)
+            return await send_error(interaction, "I don't have permission to remove that member's timeout.")
 
         await self._log_case(interaction.guild, "Timeout Removed", member.id, interaction.user.id, reason, None)
 
-        embed = discord.Embed(description=f"Removed timeout from {member.mention} (`{member.id}`).", color=SUCCESS_COLOR)
+        embed = success_embed(f"Removed timeout from {member.mention} (`{member.id}`).")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="warn", description="Warns a member")
@@ -260,7 +253,7 @@ class Moderation(commands.GroupCog, group_name="moderation"):
             except discord.Forbidden:
                 description += "\nAuto-escalation failed: I don't have permission to ban that member."
 
-        embed = discord.Embed(description=description, color=SUCCESS_COLOR)
+        embed = success_embed(description)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="warnings", description="Lists warnings for a member, or every member currently in the server")
@@ -274,7 +267,7 @@ class Moderation(commands.GroupCog, group_name="moderation"):
         if member is not None:
             rows = await get_warnings(interaction.guild_id, member.id)
             if not rows:
-                return await self._send_error(interaction, f"{member.mention} has no warnings.", deferred=True)
+                return await send_error(interaction, f"{member.mention} has no warnings.")
 
             lines = [f"`#{case}` <t:{created_at}:R> by <@{mod_id}>: {reason}" for case, mod_id, reason, created_at in rows]
             embed = discord.Embed(
@@ -294,7 +287,7 @@ class Moderation(commands.GroupCog, group_name="moderation"):
             grouped.setdefault(target_id, []).append((case, mod_id, reason, created_at))
 
         if not grouped:
-            return await self._send_error(interaction, "No members currently in the server have any warnings.", deferred=True)
+            return await send_error(interaction, "No members currently in the server have any warnings.")
 
         lines = [f"<@{target_id}>: **{len(entries)}** warning(s)" for target_id, entries in grouped.items()]
         embed = discord.Embed(
@@ -314,12 +307,12 @@ class Moderation(commands.GroupCog, group_name="moderation"):
 
         count = await count_warnings(interaction.guild_id, member.id)
         if count == 0:
-            return await self._send_error(interaction, f"{member.mention} has no warnings to clear.", deferred=True)
+            return await send_error(interaction, f"{member.mention} has no warnings to clear.")
 
         await clear_warnings(interaction.guild_id, member.id)
         await self._log_case(interaction.guild, "Warnings Cleared", member.id, interaction.user.id, f"Cleared {count} warning(s)", None)
 
-        embed = discord.Embed(description=f"Cleared **{count}** warning(s) for {member.mention}.", color=SUCCESS_COLOR)
+        embed = success_embed(f"Cleared **{count}** warning(s) for {member.mention}.")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @tasks.loop(seconds=60)

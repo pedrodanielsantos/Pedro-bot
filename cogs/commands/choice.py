@@ -1,8 +1,8 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from config.constants import ERROR_COLOR
 from db.database import get_guild_embed_color
+from utils.embeds import error_embed
 import random
 
 class Choice(commands.Cog):
@@ -27,7 +27,7 @@ class Choice(commands.Cog):
         all_options = [opt.strip() for opt in options.split(",") if opt.strip()]
 
         if len(all_options) < 2:
-            embed = discord.Embed(description="Please provide at least two options separated by commas.", color=ERROR_COLOR)
+            embed = error_embed("Please provide at least two options separated by commas.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
         

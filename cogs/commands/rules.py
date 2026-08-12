@@ -3,8 +3,8 @@ from typing import Optional
 import discord
 from discord import app_commands
 from discord.ext import commands
-from config.constants import ERROR_COLOR, SUCCESS_COLOR
 from db.database import get_guild_embed_color
+from utils.embeds import send_error, success_embed
 
 RULES = [
     ("#1 | Be Civil", "Keep arguments off the server."),
@@ -38,8 +38,7 @@ class Rules(commands.Cog):
         self.bot = bot
 
     async def _send_error(self, interaction: discord.Interaction, message: str):
-        embed = discord.Embed(description=message, color=ERROR_COLOR)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await send_error(interaction, message)
 
     @app_commands.command(name="rules", description="Displays the server rules")
     @app_commands.describe(
@@ -80,7 +79,7 @@ class Rules(commands.Cog):
             return
 
         await message.edit(content=None, embed=None, view=RulesView(color))
-        confirm_embed = discord.Embed(description=f"Rules message updated in {target_channel.mention}.", color=SUCCESS_COLOR)
+        confirm_embed = success_embed(f"Rules message updated in {target_channel.mention}.")
         await interaction.response.send_message(embed=confirm_embed, ephemeral=True)
 
 async def setup(bot: commands.Bot):
