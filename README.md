@@ -47,9 +47,9 @@ process, separate from the bot. Shows real-time status, latency, uptime, and
 guild count, with **Start/Stop/Reload** control, a **Cog Manager**, and a **Sync**
 button for slash commands.
 
-A separate **Console** page (`/console`) shows a live, auto-scrolling, color-coded
-view of the bot's logs, read from `logs/bot.log` so it stays visible across a
-crash or restart.
+A separate **Console** page (`/console`) is a live, auto-scrolling mirror of both
+processes' raw stdout/stderr (not just logged output), rendered client-side from
+`logs/console.raw` so it stays visible across a crash or restart.
 
 ## Command Reference
 
@@ -127,15 +127,6 @@ crash or restart.
 | `/autorole add` | Adds a role to be automatically given to new members |
 | `/autorole list` | Lists all currently configured autoroles |
 | `/autorole remove` | Removes a role from the autorole list |
-| `/set embedcolor` | Set or reset the server's embed color |
-| `/setup lobbies` | Setup temporary voice-chat system with user-created lobbies |
-| `/setup welcome` | Setup or disable the welcome message channel |
-| `/test welcome` | Simulate a member joining to test the welcome message |
-
-### Other
-
-| Command | Description |
-| --- | --- |
 | `/log commands` | Setup or disable the log channel for every command used |
 | `/log moderation` | Setup or disable the moderation log channel |
 | `/moderation ban` | Bans a user from the server |
@@ -146,6 +137,10 @@ crash or restart.
 | `/moderation unban` | Unbans a user from the server |
 | `/moderation warn` | Warns a member |
 | `/moderation warnings` | Lists warnings for a member, or every member currently in the server |
+| `/set embedcolor` | Set or reset the server's embed color |
+| `/setup lobbies` | Setup temporary voice-chat system with user-created lobbies |
+| `/setup welcome` | Setup or disable the welcome message channel |
+| `/test welcome` | Simulate a member joining to test the welcome message |
 
 <!-- COMMANDS:END -->
 

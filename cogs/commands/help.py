@@ -30,6 +30,8 @@ COMMAND_CATEGORIES = {
     "autorole": "Administration",
     "setup": "Administration",
     "test": "Administration",
+    "log": "Administration",
+    "moderation": "Administration",
 }
 
 # Render order; categories not listed here (including DEFAULT_CATEGORY) are appended after.
