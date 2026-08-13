@@ -12,15 +12,31 @@
 </header>
 
 <main>
-    <pre id="console-log" class="card" data-log-pos="{{ log_pos }}" style="font-family: var(--mono); font-size: 12px; white-space: pre-wrap; max-height: 75vh; overflow-y: auto;"
-        >{% include "partials/console_log.html" %}</pre>
+    <pre id="console-log" class="card" data-log-pos="{{ log_pos }}" style="font-family: var(--mono); font-size: 12px; white-space: pre-wrap; max-height: 75vh; overflow-y: auto;"></pre>
 </main>
+{% include "partials/console_log.html" %}
 
-<script>
-    (function() {
+<script type="module">
+    // ansi_up 6+ is ESM-only (no UMD/global build), hence the module import.
+    import { AnsiUp } from "https://unpkg.com/ansi_up@6/ansi_up.js";
+
+    document.addEventListener("DOMContentLoaded", () => {
         const consoleLog = document.getElementById("console-log");
+        const ansiUp = new AnsiUp();
+        ansiUp.use_classes = false;
+
         const stickThreshold = 24;
         let stickToBottom = true;
+
+        // Shared by the initial static tail and every live SSE line.
+        function appendLine(rawLine) {
+            consoleLog.insertAdjacentHTML("beforeend", ansiUp.ansi_to_html(rawLine) + "\n");
+        }
+
+        const initialData = document.getElementById("console-log-initial");
+        if (initialData) {
+            for (const line of JSON.parse(initialData.textContent)) appendLine(line);
+        }
 
         consoleLog.addEventListener("scroll", () => {
             stickToBottom = consoleLog.scrollHeight - consoleLog.scrollTop - consoleLog.clientHeight < stickThreshold;
@@ -43,9 +59,8 @@
         // nothing further needs to be done here for that.
         const logPos = consoleLog.dataset.logPos;
         const logSource = new EventSource(logPos ? `/console/logs/stream?last_id=${logPos}` : "/console/logs/stream");
-        // Appends instead of replacing, so an active text selection isn't lost.
         logSource.onmessage = (e) => {
-            consoleLog.insertAdjacentHTML("beforeend", e.data + "\n");
+            appendLine(e.data);
             if (stickToBottom) {
                 consoleLog.scrollTop = consoleLog.scrollHeight;
             }
@@ -58,7 +73,7 @@
             const data = JSON.parse(e.data);
             statusDot.className = `dot ${data.ready ? 'dot-online' : 'dot-offline'}`;
         });
-    })();
+    });
 </script>
 
 {% endblock %}

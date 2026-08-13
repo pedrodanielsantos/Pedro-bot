@@ -13,14 +13,13 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from utils.cogs import discover_cog_paths, reload_shared_modules
-from utils.log import colorize_log_line, log_file_size, quiet_uvicorn_logging, tail_log_file, tail_log_lines
+from utils.log import CONSOLE_RAW_FILE, log_file_size, quiet_uvicorn_logging, tail_log_file, tail_log_lines
 
 COGS_DIR = os.path.join(os.path.dirname(__file__), "cogs")
 INTERNAL_API = "http://127.0.0.1:8001"
 
 templates = Jinja2Templates(directory="templates")
 templates.env.globals["discord_version"] = discord.__version__
-templates.env.filters["colorize_log"] = colorize_log_line
 
 
 def _commit_hash() -> str | None:
@@ -334,8 +333,8 @@ def create_app(supervisor, web_state):
         status = await _status()
         # Read the size first, then the tail, so the live stream's resume point can
         # never be ahead of what the static render actually shows.
-        log_pos = await asyncio.to_thread(log_file_size)
-        logs = await asyncio.to_thread(tail_log_file)
+        log_pos = await asyncio.to_thread(log_file_size, CONSOLE_RAW_FILE)
+        logs = await asyncio.to_thread(tail_log_file, CONSOLE_RAW_FILE)
         return templates.TemplateResponse(request=request, name="console.html", context={
             "bot_name": status.get("bot_name") or "Bot",
             "bot_avatar_url": status.get("bot_avatar_url"),
@@ -357,13 +356,13 @@ def create_app(supervisor, web_state):
         start_pos = int(last_id) if last_id and last_id.isdigit() else None
 
         async def event_stream():
-            async for pos, line in tail_log_lines(start_pos=start_pos):
+            async for pos, line in tail_log_lines(CONSOLE_RAW_FILE, start_pos=start_pos):
                 if await request.is_disconnected() or (server and server.should_exit):
                     break
                 if line is None:
                     yield ": keepalive\n\n"
                 else:
-                    yield f"id: {pos}\ndata: {colorize_log_line(line)}\n\n"
+                    yield f"id: {pos}\ndata: {line}\n\n"
 
         return StreamingResponse(event_stream(), media_type="text/event-stream", headers={
             "Cache-Control": "no-cache",

@@ -7,8 +7,6 @@ import threading
 from collections import deque
 from logging.handlers import RotatingFileHandler
 
-from markupsafe import Markup, escape
-
 LOG_BUFFER = deque(maxlen=100_000)
 
 _LOG_LINE_RE = re.compile(
@@ -18,6 +16,8 @@ _LOG_LINE_RE = re.compile(
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
 LOG_FILE = os.path.join(LOG_DIR, "bot.log")
+CONSOLE_RAW_FILE = os.path.join(LOG_DIR, "console.raw")
+CONSOLE_RAW_MAX_BYTES = 5_000_000
 
 _MUTED = "\x1b[38;2;114;118;125m"
 _ACCENT = "\x1b[38;2;88;101;242m"
@@ -51,7 +51,7 @@ def _enable_windows_vt():
 
 
 class ColorFormatter(logging.Formatter):
-    """Same colors as colorize_log_line, as ANSI escapes for the terminal."""
+    """Formats log lines with ANSI color escapes for the terminal."""
 
     def format(self, record):
         line = super().format(record)
@@ -73,6 +73,33 @@ class BufferHandler(logging.Handler):
 
     def emit(self, record):
         LOG_BUFFER.append(self.format(record))
+
+
+class RawConsoleSink:
+    """Writer for logs/console.raw, the raw stdout/stderr tee for the web console's
+    live view. Separate from bot.log. Truncates on construction and past max_bytes."""
+
+    def __init__(self, path=CONSOLE_RAW_FILE, max_bytes=CONSOLE_RAW_MAX_BYTES):
+        self.max_bytes = max_bytes
+        self._lock = threading.Lock()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        self._fh = open(path, "wb", buffering=0)
+        self._size = 0
+
+    def write(self, data: bytes):
+        if not data:
+            return
+        with self._lock:
+            if self._size + len(data) > self.max_bytes:
+                self._fh.seek(0)
+                self._fh.truncate(0)
+                self._size = 0
+            self._fh.write(data)
+            self._size += len(data)
+
+    def close(self):
+        with self._lock:
+            self._fh.close()
 
 
 def _install_excepthooks():
@@ -132,20 +159,21 @@ def quiet_uvicorn_logging():
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 
-def log_file_size() -> int:
-    """Current size of bot.log, used as the initial resume point for a live tail so
-    it starts exactly where a static render of tail_log_file() left off, instead of
-    jumping to "now" and risking a gap for whatever gets logged in between."""
-    return os.path.getsize(LOG_FILE) if os.path.exists(LOG_FILE) else 0
+def log_file_size(path=LOG_FILE) -> int:
+    """Current size of the log file, used as the initial resume point for a live
+    tail so it starts exactly where a static render of tail_log_file() left off,
+    instead of jumping to "now" and risking a gap for whatever gets logged in
+    between."""
+    return os.path.getsize(path) if os.path.exists(path) else 0
 
 
-def tail_log_file(lines=500, chunk_size=8192):
+def tail_log_file(path=LOG_FILE, lines=500, chunk_size=8192):
     """Reads only the tail of the log file by scanning backward in chunks, instead
     of the whole file. Matters once the file approaches its rotation size."""
-    if not os.path.exists(LOG_FILE):
+    if not os.path.exists(path):
         return []
 
-    with open(LOG_FILE, "rb") as f:
+    with open(path, "rb") as f:
         f.seek(0, os.SEEK_END)
         pos = f.tell()
         data = b""
@@ -163,19 +191,20 @@ def tail_log_file(lines=500, chunk_size=8192):
     return text.splitlines()[-lines:]
 
 
-async def tail_log_lines(poll_interval=0.5, start_pos=None):
-    """Yields (pos, line) as bot.log grows, or (pos, None) on an idle poll. pos is
-    the byte offset just after the most recently consumed line, so a reconnecting
-    SSE client can resume from there via Last-Event-ID instead of jumping to "now"
-    and silently missing whatever was logged while it was disconnected.
-    Tails the file (not LOG_BUFFER) since bot.py is a separate process from
-    web.py's. Reopens on rotation, detected by the file shrinking."""
-    while not os.path.exists(LOG_FILE):
+async def tail_log_lines(path=LOG_FILE, poll_interval=0.5, start_pos=None):
+    """Yields (pos, line) as the log file grows, or (pos, None) on an idle poll. pos
+    is the byte offset just after the most recently consumed line, so a
+    reconnecting SSE client can resume from there via Last-Event-ID instead of
+    jumping to "now" and silently missing whatever was logged while it was
+    disconnected. Tails the file (not LOG_BUFFER) since bot.py is a separate
+    process from web.py's. Reopens on rotation/truncation, detected by the file
+    shrinking."""
+    while not os.path.exists(path):
         yield None, None
         await asyncio.sleep(poll_interval)
 
-    f = open(LOG_FILE, "rb")
-    size = os.path.getsize(LOG_FILE)
+    f = open(path, "rb")
+    size = os.path.getsize(path)
     # A stale offset from before a rotation could point past the new file's end,
     # or into a stale earlier generation entirely. Safest fallback is "now".
     if start_pos is None or start_pos > size:
@@ -189,7 +218,7 @@ async def tail_log_lines(poll_interval=0.5, start_pos=None):
         while True:
             await asyncio.sleep(poll_interval)
             try:
-                size = os.path.getsize(LOG_FILE)
+                size = os.path.getsize(path)
             except OSError:
                 yield buf_pos + len(buf), None
                 continue
@@ -197,7 +226,7 @@ async def tail_log_lines(poll_interval=0.5, start_pos=None):
             pos = f.tell()
             if size < pos:
                 f.close()
-                f = open(LOG_FILE, "rb")
+                f = open(path, "rb")
                 pos = 0
                 buf = b""
                 buf_pos = 0
@@ -219,24 +248,3 @@ async def tail_log_lines(poll_interval=0.5, start_pos=None):
                     yield buf_pos, text
     finally:
         f.close()
-
-
-def colorize_log_line(line: str) -> Markup:
-    """Wraps a formatted log line's timestamp/level/logger in spans so the web
-    console can color it the way a log-highlighter extension colors bot.log in an editor."""
-    match = _LOG_LINE_RE.match(line)
-    if not match:
-        return Markup(escape(line))
-
-    level = match["level"]
-    return Markup(
-        '<span class="log-ts">[{ts}]</span> '
-        '<span class="log-level log-level-{level_class}">{level}</span> '
-        '<span class="log-logger">{logger}:</span> {msg}'
-    ).format(
-        ts=escape(match["ts"]),
-        level_class=escape(level.lower()),
-        level=escape(level),
-        logger=escape(match["logger"]),
-        msg=escape(match["msg"]),
-    )

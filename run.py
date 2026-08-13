@@ -1,12 +1,43 @@
 import asyncio
 import logging
+import os
 import signal
 import subprocess
 import sys
 
 import web
-from utils.log import setup_logging
+from utils.log import RawConsoleSink, setup_logging
 
+
+class _TeeStream:
+    """Wraps stdout/stderr: writes go to the original stream and to the raw
+    console sink. Replaces sys.stdout/sys.stderr wholesale so print(), logging,
+    and traceback output all pass through it."""
+
+    def __init__(self, original, sink):
+        self._original = original
+        self._sink = sink
+
+    def write(self, s):
+        n = self._original.write(s)
+        self._original.flush()
+        self._sink.write(s.encode("utf-8", errors="replace"))
+        return n
+
+    def flush(self):
+        self._original.flush()
+
+    def __getattr__(self, name):
+        return getattr(self._original, name)
+
+
+_console_sink = RawConsoleSink()  # creates/truncates logs/console.raw
+_real_stdout = sys.stdout  # pre-wrap, used by the bot.py output pump
+sys.stdout = _TeeStream(sys.stdout, _console_sink)
+sys.stderr = _TeeStream(sys.stderr, _console_sink)
+
+# Must install the tee before setup_logging(): logging.StreamHandler() snapshots
+# sys.stderr at construction, so installing the tee later would bypass it.
 setup_logging()
 logger = logging.getLogger("run")
 
@@ -15,9 +46,11 @@ class BotSupervisor:
     """Owns the bot.py child process: spawns it, watches it, and decides whether
     a dead child gets restarted (crash) or left alone (clean exit / user stop)."""
 
-    def __init__(self):
+    def __init__(self, sink, host_stdout):
         self.process = None
         self.status = "stopped"  # stopped | stopping | running | crashed_retrying
+        self.sink = sink
+        self.host_stdout = host_stdout
         self._lock = asyncio.Lock()
 
     async def start(self):
@@ -49,11 +82,30 @@ class BotSupervisor:
     async def _spawn(self):
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
         logger.info("Starting bot...")
+        # Piped (not a real console) means PEP 528's UTF-8-for-console default no
+        # longer applies; force UTF-8 explicitly to match what the sink expects.
+        env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
         self.process = await asyncio.create_subprocess_exec(
-            sys.executable, "bot.py", creationflags=creationflags,
+            sys.executable, "bot.py", creationflags=creationflags, env=env,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
         )
         self.status = "running"
+        asyncio.create_task(self._pump_output(self.process))
         asyncio.create_task(self._watch(self.process))
+
+    async def _pump_output(self, proc):
+        """Forwards bot.py's merged stdout+stderr to the real host stdout and to
+        the raw console sink. Reads in chunks, not lines, to preserve \\r bytes."""
+        try:
+            while True:
+                chunk = await proc.stdout.read(4096)
+                if not chunk:
+                    break
+                self.host_stdout.buffer.write(chunk)
+                self.host_stdout.buffer.flush()
+                self.sink.write(chunk)
+        except Exception:
+            logger.exception("Error pumping bot.py output")
 
     async def _watch(self, proc):
         returncode = await proc.wait()
@@ -111,7 +163,7 @@ class WebState:
 
 
 async def main():
-    supervisor = BotSupervisor()
+    supervisor = BotSupervisor(_console_sink, _real_stdout)
     web_state = WebState()
     await supervisor.start()
 
@@ -124,6 +176,7 @@ async def main():
         await asyncio.Future()  # run until interrupted (Ctrl+C / CTRL_BREAK_EVENT)
     finally:
         await supervisor.stop()
+        _console_sink.close()
 
 
 if __name__ == "__main__":
