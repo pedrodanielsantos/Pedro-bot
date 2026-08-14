@@ -6,6 +6,7 @@ import json
 from typing import Optional
 from utils.embeds import success_embed
 from utils.errors import UserError
+from utils.permissions import require_permission
 
 MESSAGE_NOT_FOUND = "That message isn't in this channel. Specify which channel it's in."
 
@@ -43,6 +44,8 @@ class Embed(commands.GroupCog, group_name="embed"):
     @app_commands.command(name="json", description="Get the JSON source of an embed")
     @app_commands.describe(message_id="ID of the message containing the embed", channel="Channel the message is in, if not this one")
     async def json(self, interaction: discord.Interaction, message_id: str, channel: Optional[discord.TextChannel] = None):
+        await require_permission(interaction, "manage_guild")
+
         message = await self._resolve_message(interaction, channel, message_id)
 
         if not message.embeds:
@@ -61,6 +64,8 @@ class Embed(commands.GroupCog, group_name="embed"):
     @app_commands.command(name="createjson", description="Create an embed using raw JSON")
     @app_commands.describe(data="JSON data for the embed", channel="Channel to send the embed to, if not this one")
     async def createjson(self, interaction: discord.Interaction, data: str, channel: Optional[discord.TextChannel] = None):
+        await require_permission(interaction, "manage_guild")
+
         embed, error = self._parse_embed_json(data)
         if error:
             raise UserError(error)
@@ -73,6 +78,8 @@ class Embed(commands.GroupCog, group_name="embed"):
     @app_commands.command(name="editjson", description="Edit an existing embed using raw JSON")
     @app_commands.describe(message_id="ID of the message to edit", data="New JSON data for the embed", channel="Channel the message is in, if not this one")
     async def editjson(self, interaction: discord.Interaction, message_id: str, data: str, channel: Optional[discord.TextChannel] = None):
+        await require_permission(interaction, "manage_guild")
+
         message = await self._resolve_message(interaction, channel, message_id)
 
         if message.author != self.bot.user:

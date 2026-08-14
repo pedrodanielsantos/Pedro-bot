@@ -21,12 +21,12 @@ COMMAND_CATEGORIES = {
     "userinfo": "Utility",
     "serverinfo": "Utility",
     "stats": "Utility",
-    "embed": "Utility",
     "timestamp": "Utility",
 
     "image": "Image",
 
     "set": "Administration",
+    "embed": "Administration",
     "autorole": "Administration",
     "setup": "Administration",
     "test": "Administration",

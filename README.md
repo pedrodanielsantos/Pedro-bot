@@ -79,9 +79,6 @@ processes' raw stdout/stderr (not just logged output), rendered client-side from
 | Command | Description |
 | --- | --- |
 | `/avatar` | Displays the avatar of a user |
-| `/embed createjson` | Create an embed using raw JSON |
-| `/embed editjson` | Edit an existing embed using raw JSON |
-| `/embed json` | Get the JSON source of an embed |
 | `/help` | Displays the help message with all available commands |
 | `/rules` | Displays the server rules |
 | `/serverinfo` | Displays server statistics |
@@ -127,6 +124,9 @@ processes' raw stdout/stderr (not just logged output), rendered client-side from
 | `/autorole add` | Adds a role to be automatically given to new members |
 | `/autorole list` | Lists all currently configured autoroles |
 | `/autorole remove` | Removes a role from the autorole list |
+| `/embed createjson` | Create an embed using raw JSON |
+| `/embed editjson` | Edit an existing embed using raw JSON |
+| `/embed json` | Get the JSON source of an embed |
 | `/log commands` | Setup or disable the log channel for every command used |
 | `/log moderation` | Setup or disable the moderation log channel |
 | `/moderation ban` | Bans a user from the server |
