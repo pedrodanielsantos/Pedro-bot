@@ -5,7 +5,8 @@ from typing import Optional
 
 from db.database import set_embed_color
 from config.constants import EMBED_COLOR
-from utils.transformers import HexColorTransformer
+from utils.color import parse_hex_color
+from utils.errors import UserError
 from utils.permissions import require_permission
 
 class Set(commands.GroupCog, group_name="set"):
@@ -15,7 +16,7 @@ class Set(commands.GroupCog, group_name="set"):
 
     @app_commands.command(name="embedcolor", description="Set or reset the server's embed color")
     @app_commands.describe(hex_code="The hex color code (leave empty to reset)")
-    async def embed_color(self, interaction: discord.Interaction, hex_code: app_commands.Transform[discord.Color, HexColorTransformer] = None):
+    async def embed_color(self, interaction: discord.Interaction, hex_code: Optional[str] = None):
         await require_permission(interaction, "administrator")
         if not hex_code:
             await set_embed_color(interaction.guild_id, None, interaction.user.id)
@@ -23,8 +24,12 @@ class Set(commands.GroupCog, group_name="set"):
             await interaction.response.send_message(embed=embed)
             return
 
+        try:
+            color = parse_hex_color(hex_code)
+        except ValueError as e:
+            raise UserError(str(e))
+
         # Save to Database without the #
-        color = hex_code
         clean_hex = f"{color.value:06X}"
         await set_embed_color(interaction.guild_id, clean_hex, interaction.user.id)
 
