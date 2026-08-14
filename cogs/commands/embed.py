@@ -9,24 +9,53 @@ from utils.errors import UserError
 from utils.permissions import require_permission
 
 MESSAGE_NOT_FOUND = "That message isn't in this channel. Specify which channel it's in."
+NO_CHANNEL_ACCESS = "You don't have access to that channel."
+
+CHANNEL_PERMISSIONS = {
+    "json": ("read_message_history",),
+    "createjson": ("send_messages",),
+    "editjson": ("read_message_history", "send_messages"),
+}
 
 class Embed(commands.GroupCog, group_name="embed"):
     def __init__(self, bot: commands.Bot):
         super().__init__()
         self.bot = bot
 
+    def _resolve_channel(
+        self,
+        interaction: discord.Interaction,
+        channel: Optional[discord.TextChannel],
+        command_name: str,
+    ) -> discord.TextChannel:
+        """Returns the target channel, refusing one the invoker couldn't use themselves."""
+        target_channel = channel or interaction.channel
+        permissions = target_channel.permissions_for(interaction.user)
+
+        # Reports vaguely if user somehow manages to select a private channel.
+        if not permissions.view_channel:
+            raise UserError(NO_CHANNEL_ACCESS)
+
+        missing = [name for name in CHANNEL_PERMISSIONS[command_name] if not getattr(permissions, name)]
+        if missing:
+            labels = ", ".join(f"**{name.replace('_', ' ').title()}**" for name in missing)
+            raise UserError(f"You need {labels} in {target_channel.mention} to use this command.")
+
+        return target_channel
+
     async def _resolve_message(
         self,
         interaction: discord.Interaction,
         channel: Optional[discord.TextChannel],
         message_id: str,
+        command_name: str,
     ) -> discord.Message:
         try:
             msg_id = int(message_id)
         except ValueError:
             raise UserError("Invalid Message ID. Please enter a numeric ID.")
 
-        target_channel = channel or interaction.channel
+        target_channel = self._resolve_channel(interaction, channel, command_name)
         try:
             return await target_channel.fetch_message(msg_id)
         except discord.NotFound:
@@ -46,7 +75,7 @@ class Embed(commands.GroupCog, group_name="embed"):
     async def json(self, interaction: discord.Interaction, message_id: str, channel: Optional[discord.TextChannel] = None):
         await require_permission(interaction, "manage_guild")
 
-        message = await self._resolve_message(interaction, channel, message_id)
+        message = await self._resolve_message(interaction, channel, message_id, "json")
 
         if not message.embeds:
             raise UserError("The specified message does not contain an embed.")
@@ -66,11 +95,12 @@ class Embed(commands.GroupCog, group_name="embed"):
     async def createjson(self, interaction: discord.Interaction, data: str, channel: Optional[discord.TextChannel] = None):
         await require_permission(interaction, "manage_guild")
 
+        target_channel = self._resolve_channel(interaction, channel, "createjson")
+
         embed, error = self._parse_embed_json(data)
         if error:
             raise UserError(error)
 
-        target_channel = channel or interaction.channel
         await target_channel.send(embed=embed)
         confirm_embed = success_embed(f"Embed sent to {target_channel.mention}.")
         await interaction.response.send_message(embed=confirm_embed, ephemeral=True)
@@ -80,7 +110,7 @@ class Embed(commands.GroupCog, group_name="embed"):
     async def editjson(self, interaction: discord.Interaction, message_id: str, data: str, channel: Optional[discord.TextChannel] = None):
         await require_permission(interaction, "manage_guild")
 
-        message = await self._resolve_message(interaction, channel, message_id)
+        message = await self._resolve_message(interaction, channel, message_id, "editjson")
 
         if message.author != self.bot.user:
             raise UserError("I can only edit my own messages.")
