@@ -238,6 +238,42 @@ async def temp_ban_remove(guild_id: int, user_id: int):
     await db.execute("DELETE FROM temp_bans WHERE guild_id = ? AND user_id = ?", (guild_id, user_id))
     await db.commit()
 
+async def delete_mod_cases(guild_id: int, case_numbers: list[int]) -> tuple[int, int, int]:
+    """Deletes specific cases and resyncs the counter to the highest remaining one.
+
+    A Warn writes the same case number to both mod_cases and warnings, so both are
+    cleared. Returns (cases deleted, warnings deleted, new counter).
+
+    The counter is resynced rather than decremented: deleting a case from the middle
+    of the range must not hand the next case a number that is already taken.
+    """
+    placeholders = ",".join("?" * len(case_numbers))
+    params = (guild_id, *case_numbers)
+
+    async with db.execute(
+        f"DELETE FROM mod_cases WHERE guild_id = ? AND case_number IN ({placeholders})", params
+    ) as cursor:
+        cases_deleted = cursor.rowcount
+
+    async with db.execute(
+        f"DELETE FROM warnings WHERE guild_id = ? AND case_number IN ({placeholders})", params
+    ) as cursor:
+        warnings_deleted = cursor.rowcount
+
+    async with db.execute(
+        """
+        UPDATE guild_data
+        SET case_counter = COALESCE((SELECT MAX(case_number) FROM mod_cases WHERE guild_id = ?), 0)
+        WHERE guild_id = ?
+        RETURNING case_counter
+        """,
+        (guild_id, guild_id)
+    ) as cursor:
+        result = await cursor.fetchone()
+
+    await db.commit()
+    return cases_deleted, warnings_deleted, result[0] if result else 0
+
 async def reset_case_counter(guild_id: int):
     """Wipes case history and resets the counter for a guild. Testing use only."""
     await db.execute("DELETE FROM mod_cases WHERE guild_id = ?", (guild_id,))

@@ -5,12 +5,37 @@ import aiohttp
 import discord
 from discord.ext import commands
 import os
-from db.database import get_guild_embed_color, reset_case_counter
+from db.database import get_guild_embed_color, delete_mod_cases, reset_case_counter
 from utils.cogs import reload_shared_modules
 from utils.embeds import error_embed, success_embed
 
 logger = logging.getLogger("dev")
 WEB_DASHBOARD = "http://127.0.0.1:8000"
+# SQLite caps host parameters per statement, and delete_mod_cases binds one per case.
+MAX_CASES_PER_DELETE = 500
+
+def parse_case_numbers(spec: str) -> list[int]:
+    """Parses '12', '10-12' or '4,7,12' into a sorted list of unique case numbers."""
+    numbers = set()
+    for token in spec.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        start, _, end = token.partition("-")
+        try:
+            start = int(start)
+            end = int(end) if end else start
+        except ValueError:
+            raise ValueError(f"`{token}` isn't a case number or range.")
+        if start < 1 or end < start:
+            raise ValueError(f"`{token}` isn't a valid range.")
+        numbers.update(range(start, end + 1))
+
+    if not numbers:
+        raise ValueError("No case numbers given.")
+    if len(numbers) > MAX_CASES_PER_DELETE:
+        raise ValueError(f"Too many cases at once, the limit is {MAX_CASES_PER_DELETE}.")
+    return sorted(numbers)
 
 class DeveloperTools(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -254,6 +279,44 @@ class DeveloperTools(commands.Cog):
         except Exception as e:
             embed = error_embed(f"Error: {e}")
             await ctx.reply(embed=embed, delete_after=5)
+
+    @commands.command(name="deletecase", hidden=True)
+    async def deletecase(self, ctx: commands.Context, cases: str, guild_id: int = None):
+        """
+        Deletes specific moderation cases and resyncs the case counter
+        Usage: ç!deletecase <cases> [guild_id]
+        ç!deletecase 12        one case
+        ç!deletecase 10-12     an inclusive range
+        ç!deletecase 4,7,12    a list
+        """
+        target_guild_id = guild_id or (ctx.guild.id if ctx.guild else None)
+        if target_guild_id is None:
+            embed = error_embed("No guild specified and this wasn't run in a guild.")
+            await ctx.reply(embed=embed)
+            return
+
+        try:
+            case_numbers = parse_case_numbers(cases)
+        except ValueError as e:
+            embed = error_embed(str(e))
+            await ctx.reply(embed=embed)
+            return
+
+        cases_deleted, warnings_deleted, new_counter = await delete_mod_cases(target_guild_id, case_numbers)
+
+        if not cases_deleted:
+            embed = error_embed(f"No matching cases found for guild `{target_guild_id}`.")
+            await ctx.reply(embed=embed)
+            return
+
+        description = f"Deleted **{cases_deleted}** case(s) for guild `{target_guild_id}`."
+        if warnings_deleted:
+            description += f"\nAlso removed **{warnings_deleted}** linked warning(s)."
+        description += f"\nThe next case will be **#{new_counter + 1}**."
+
+        embed = success_embed(description)
+        await ctx.reply(embed=embed)
+        logger.info(f"Deleted cases {case_numbers} for guild {target_guild_id}, counter now {new_counter}.")
 
     @commands.command(name="resetcases", hidden=True)
     async def resetcases(self, ctx: commands.Context, guild_id: int = None):
