@@ -49,6 +49,7 @@
                 <div id="guild-count" class="stat-value">{{ guild_count if guild_count is not none else "—" }}</div>
             </div>
             <button id="guild-toggle" class="btn btn-fixed-width"
+                {% if not is_ready %}style="display: none;"{% endif %}
                 hx-get="/guilds"
                 hx-target="#guild-list"
                 hx-swap="innerHTML">
