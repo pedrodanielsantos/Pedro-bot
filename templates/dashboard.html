@@ -63,7 +63,7 @@
     </div>
 
     <div>
-        <div id="cogs-form">
+        <div id="cogs-form" data-online="{{ 'true' if is_ready else 'false' }}" data-control="{{ status }}">
             <table>
                 <thead>
                     <tr id="cogs-header-row">
@@ -76,7 +76,7 @@
                         <th id="cogs-actions-cell" style="text-align: right; width: 220px;">
                             <span id="cogs-actions-label"></span>
                             <div id="cogs-bulk-actions" class="actions" style="display: none; justify-content: flex-end; flex-wrap: wrap; row-gap: 4px;">
-                                <button type="button" class="btn"
+                                <button type="button" id="cogs-bulk-reload" class="btn"
                                     hx-post="/cogs/bulk/reload"
                                     hx-include="#cogs-form"
                                     hx-target="#cogs-actions-cell"
@@ -115,6 +115,7 @@
             const actionsLabel = document.getElementById('cogs-actions-label');
             const bulkActions = document.getElementById('cogs-bulk-actions');
             const selectAll = document.getElementById('cogs-select-all');
+            const reloadBtn = document.getElementById('cogs-bulk-reload');
             const unloadBtn = document.getElementById('cogs-bulk-unload');
             const loadBtn = document.getElementById('cogs-bulk-load');
 
@@ -144,6 +145,13 @@
                 const anyUnloaded = checked.some(function(cb) { return cb.dataset.loaded === 'false'; });
                 unloadBtn.style.display = anyLoaded ? '' : 'none';
                 loadBtn.style.display = anyUnloaded ? '' : 'none';
+
+                // Selection stays available offline, only the actions are gated.
+                const online = container.dataset.online === 'true';
+                [reloadBtn, unloadBtn, loadBtn].forEach(function(btn) {
+                    btn.disabled = !online;
+                    btn.title = online ? '' : 'Bot is offline';
+                });
             }
 
             container.addEventListener('change', function(e) {
@@ -156,6 +164,9 @@
             });
 
             document.body.addEventListener('htmx:afterSwap', updateToolbar);
+            // innerHTML swaps and SSE state changes don't raise htmx events.
+            document.body.addEventListener('cogs:sync', updateToolbar);
+            updateToolbar();
         })();
     </script>
 
@@ -188,6 +199,12 @@
             const guildCountEl = document.getElementById('guild-count');
             const statusEl = document.getElementById('status-value');
             const uptimeEl = document.getElementById('uptime-value');
+            const cogsForm = document.getElementById('cogs-form');
+
+            // Seeded from the server render, so the ready/control events every stream
+            // opens with don't rebuild a table that already matches.
+            let lastReady = cogsForm.dataset.online === 'true';
+            let lastControl = cogsForm.dataset.control;
 
             function refreshBotStatus() {
                 htmx.ajax('GET', '/bot/status', { target: '#bot-status-group', swap: 'outerHTML' });
@@ -204,8 +221,17 @@
                     .then((html) => {
                         if (seq !== cogsRefreshSeq) return;
                         const tbody = document.getElementById('cog-tbody');
+                        // Checked state is user input, not server state, so it has to be
+                        // carried across the rebuild. Rows are keyed by extension.
+                        const selected = new Set(Array.from(
+                            tbody.querySelectorAll('input[name="cogs"]:checked')
+                        ).map((cb) => cb.value));
                         tbody.innerHTML = html;
+                        tbody.querySelectorAll('input[name="cogs"]').forEach((cb) => {
+                            cb.checked = selected.has(cb.value);
+                        });
                         htmx.process(tbody);
+                        document.body.dispatchEvent(new Event('cogs:sync'));
                     });
             }
 
@@ -247,8 +273,15 @@
                 }
 
                 // Refresh either way: coming online loads the configured cogs, going
-                // offline drops everything back to "not loaded".
-                refreshCogs();
+                // offline drops everything back to "not loaded". Only on a real flip
+                // though: while offline the stream ends and reconnects every few
+                // seconds, re-announcing the same state each time.
+                cogsForm.dataset.online = data.ready ? 'true' : 'false';
+                if (data.ready !== lastReady) {
+                    lastReady = data.ready;
+                    refreshCogs();
+                }
+                document.body.dispatchEvent(new Event('cogs:sync'));
 
                 refreshBotStatus();
             });
@@ -262,9 +295,12 @@
             // the bot's ready state, so it gets its own event for the same button refresh.
             // Also nudges the cog table: a fresh spawn loads extensions before the gateway
             // handshake completes, so this can pick up real state sooner than 'ready' would.
-            source.addEventListener('control', () => {
+            source.addEventListener('control', (e) => {
                 refreshBotStatus();
-                refreshCogs();
+                if (e.data !== lastControl) {
+                    lastControl = e.data;
+                    refreshCogs();
+                }
             });
         })();
     </script>
