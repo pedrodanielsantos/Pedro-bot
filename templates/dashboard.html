@@ -77,21 +77,21 @@
                         <th id="cogs-actions-cell" style="text-align: right; width: 220px;">
                             <span id="cogs-actions-label"></span>
                             <div id="cogs-bulk-actions" class="actions" style="display: none; justify-content: flex-end; flex-wrap: wrap; row-gap: 4px;">
-                                <button type="button" id="cogs-bulk-reload" class="btn"
+                                <button type="button" id="cogs-bulk-reload" class="btn btn-fixed-width"
                                     hx-post="/cogs/bulk/reload"
                                     hx-include="#cogs-form"
                                     hx-target="#cogs-actions-cell"
                                     hx-swap="none">
                                     Reload
                                 </button>
-                                <button type="button" id="cogs-bulk-unload" class="btn btn-danger" style="display: none;"
+                                <button type="button" id="cogs-bulk-unload" class="btn btn-danger btn-fixed-width" style="display: none;"
                                     hx-post="/cogs/bulk/unload"
                                     hx-include="#cogs-form"
                                     hx-target="#cogs-actions-cell"
                                     hx-swap="none">
                                     Unload
                                 </button>
-                                <button type="button" id="cogs-bulk-load" class="btn btn-primary" style="display: none;"
+                                <button type="button" id="cogs-bulk-load" class="btn btn-primary btn-fixed-width" style="display: none;"
                                     hx-post="/cogs/bulk/load"
                                     hx-include="#cogs-form"
                                     hx-target="#cogs-actions-cell"
@@ -149,7 +149,8 @@
 
                 // Selection stays available offline, only the actions are gated.
                 const online = container.dataset.online === 'true';
-                [reloadBtn, unloadBtn, loadBtn].forEach(function(btn) {
+                const rowBtns = Array.from(container.querySelectorAll('#cog-tbody .btn'));
+                [reloadBtn, unloadBtn, loadBtn].concat(rowBtns).forEach(function(btn) {
                     btn.disabled = !online;
                     btn.title = online ? '' : 'Bot is offline';
                 });

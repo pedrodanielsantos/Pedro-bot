@@ -259,7 +259,7 @@
             white-space: nowrap;
         }
 
-        .btn:hover            { background: var(--border); }
+        .btn:not(:disabled):hover { background: var(--border); }
         .btn:disabled         { opacity: 0.6; cursor: default; }
 
         .btn .btn-label.htmx-indicator { display: none; }
@@ -268,14 +268,14 @@
 
         .btn-fixed-width { min-width: 64px; justify-content: center; }
 
-        .btn-primary          { background: var(--accent); border-color: var(--accent); color: #fff; }
-        .btn-primary:hover    { background: #4752c4; border-color: #4752c4; }
-        .btn-danger           { border-color: var(--red); color: var(--red); }
-        .btn-danger:hover     { background: rgba(237, 66, 69, 0.1); }
-        .btn-success          { background: var(--green); border-color: var(--green); color: #0d2c17; }
-        .btn-success:hover    { background: #45d873; border-color: #45d873; }
-        .btn-warning          { border-color: var(--yellow); color: var(--yellow); }
-        .btn-warning:hover    { background: rgba(250, 166, 26, 0.1); }
+        .btn-primary                     { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .btn-primary:not(:disabled):hover { background: #4752c4; border-color: #4752c4; }
+        .btn-danger                      { border-color: var(--red); color: var(--red); }
+        .btn-danger:not(:disabled):hover { background: rgba(237, 66, 69, 0.1); }
+        .btn-success                     { background: var(--green); border-color: var(--green); color: #0d2c17; }
+        .btn-success:not(:disabled):hover { background: #45d873; border-color: #45d873; }
+        .btn-warning                     { border-color: var(--yellow); color: var(--yellow); }
+        .btn-warning:not(:disabled):hover { background: rgba(250, 166, 26, 0.1); }
 
         .badge {
             display: inline-block;
