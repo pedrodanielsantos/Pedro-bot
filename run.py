@@ -160,6 +160,12 @@ class WebState:
         self.reload_lock = asyncio.Lock()
         # Bumped on every cog load/unload/reload so other tabs notice and refresh.
         self.cogs_epoch = 0
+        # Transient badges are stored as deadlines, not rendered flags, so their
+        # lifetime survives the surrounding region being re-rendered.
+        self.cog_badges = {}  # extension -> (deadline, error or None)
+        self.last_sync = None  # (deadline, count, error)
+        self.started_deadline = None
+        self.bot_was_ready = None  # None until first observed
 
 
 async def main():

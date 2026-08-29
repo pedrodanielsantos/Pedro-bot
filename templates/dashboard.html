@@ -59,7 +59,7 @@
     </div>
 
     <div class="card card-stat card-stat-center">
-        {% with is_ready=is_ready, status=supervisor_status %}{% include "partials/bot_control.html" %}{% endwith %}
+        {% include "partials/bot_control.html" %}
     </div>
 
     <div>
@@ -102,11 +102,7 @@
                     </tr>
                 </thead>
                 <tbody id="cog-tbody">
-                    {% for cog in cogs %}
-                    {% with extension=cog.extension, loaded=cog.loaded, error=none, just_reloaded=false, oob=false %}
-                    {% include "partials/cog_row.html" %}
-                    {% endwith %}
-                    {% endfor %}
+                    {% include "partials/cog_rows.html" %}
                 </tbody>
             </table>
         </div>

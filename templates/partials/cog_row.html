@@ -4,16 +4,17 @@
     </td>
     <td class="mono">
         {{ extension | replace('cogs.', '', 1) }}
-        {% if error %}
-            <span class="badge badge-error">Error</span>
-            <span class="error-msg">{{ error }}</span>
-        {% elif just_reloaded %}
-            <span class="badge badge-ok"
-                hx-get="/cogs/badge/clear"
-                hx-trigger="load delay:2s"
+        {% if badge_remaining %}
+            <span hx-get="/cogs/badge/clear"
+                hx-trigger="load delay:{{ badge_remaining }}s"
                 hx-target="this"
                 hx-swap="outerHTML">
-                Reloaded
+                {% if badge_error %}
+                <span class="badge badge-error">Error</span>
+                <span class="error-msg">{{ badge_error }}</span>
+                {% else %}
+                <span class="badge badge-ok">Reloaded</span>
+                {% endif %}
             </span>
         {% endif %}
     </td>

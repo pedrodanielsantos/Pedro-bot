@@ -4,6 +4,7 @@ import logging
 import os
 import subprocess
 import sys
+import time
 
 import aiohttp
 import discord
@@ -17,6 +18,9 @@ from utils.log import CONSOLE_RAW_FILE, log_file_size, quiet_uvicorn_logging, ta
 
 COGS_DIR = os.path.join(os.path.dirname(__file__), "cogs")
 INTERNAL_API = "http://127.0.0.1:8001"
+
+BADGE_SECONDS = 2.0
+ERROR_BADGE_SECONDS = 10.0  # long enough to read the message
 
 templates = Jinja2Templates(directory="templates")
 templates.env.globals["discord_version"] = discord.__version__
@@ -72,12 +76,72 @@ async def _internal_post(path: str, json=None):
         return None
 
 
+def _remaining(deadline):
+    """Seconds left on a badge, or None once it has expired."""
+    if deadline is None:
+        return None
+    left = deadline - time.monotonic()
+    return round(left, 1) if left > 0 else None
+
+
 def create_app(supervisor, web_state):
     app = FastAPI(docs_url=None, redoc_url=None)
 
+    def _set_cog_badge(extension, error):
+        seconds = ERROR_BADGE_SECONDS if error else BADGE_SECONDS
+        web_state.cog_badges[extension] = (time.monotonic() + seconds, error)
+
+    def _mark_cog(extension, error):
+        """Load/unload only badge failures, so a success clears any older badge."""
+        if error:
+            _set_cog_badge(extension, error)
+        else:
+            web_state.cog_badges.pop(extension, None)
+
+    def _cog_badge(extension):
+        """(remaining, error) for a live badge, else (None, None)."""
+        entry = web_state.cog_badges.get(extension)
+        if not entry:
+            return None, None
+        left = _remaining(entry[0])
+        if left is None:
+            web_state.cog_badges.pop(extension, None)
+            return None, None
+        return left, entry[1]
+
+    def _cog_row_context(extension, loaded, oob=False):
+        left, error = _cog_badge(extension)
+        return {
+            "extension": extension,
+            "loaded": loaded,
+            "badge_remaining": left,
+            "badge_error": error,
+            "oob": oob,
+        }
+
+    def _bot_control_context(is_ready):
+        """Shared by every render of bot_control.html so the badges look the same
+        whichever endpoint produced the HTML."""
+        sync = web_state.last_sync
+        sync_remaining = _remaining(sync[0]) if sync else None
+        return {
+            "is_ready": is_ready,
+            "status": supervisor.status,
+            "started_remaining": _remaining(web_state.started_deadline),
+            "sync_remaining": sync_remaining,
+            "sync_count": sync[1] if sync_remaining else None,
+            "sync_error": sync[2] if sync_remaining else None,
+        }
+
     async def _status():
-        data = await _internal_get("/status")
-        return data or {}
+        data = await _internal_get("/status") or {}
+        ready = bool(data.get("ready"))
+        # Only a false -> true flip is a start finishing. Starting from None means
+        # the bot was already up when we first looked, which gets no badge.
+        if ready and web_state.bot_was_ready is False and supervisor.status == "running":
+            web_state.started_deadline = time.monotonic() + BADGE_SECONDS
+        web_state.bot_was_ready = ready
+        return data
 
     async def _cogs():
         # Based on whether the internal API answers, not bot.is_ready(). bot.py loads
@@ -106,8 +170,8 @@ def create_app(supervisor, web_state):
             "guild_count": status.get("guild_count"),
             "uptime": status.get("uptime") or "—",
             "launch_time": status.get("launch_time"),
-            "cogs": cogs,
-            "supervisor_status": supervisor.status,
+            "rows": [_cog_row_context(cog["extension"], cog["loaded"]) for cog in cogs],
+            **_bot_control_context(ready),
         })
 
     @app.get("/guilds", response_class=HTMLResponse)
@@ -131,10 +195,7 @@ def create_app(supervisor, web_state):
         # Replaces the whole table instead of patching rows one by one.
         cogs = await _cogs()
         return templates.TemplateResponse(request=request, name="partials/cog_rows.html", context={
-            "rows": [
-                {"extension": cog["extension"], "loaded": cog["loaded"], "error": None, "just_reloaded": False}
-                for cog in cogs
-            ],
+            "rows": [_cog_row_context(cog["extension"], cog["loaded"]) for cog in cogs],
         })
 
     @app.post("/cogs/reload/{extension:path}", response_class=HTMLResponse)
@@ -142,12 +203,11 @@ def create_app(supervisor, web_state):
         result = await _internal_post(f"/cogs/reload/{extension}")
         web_state.cogs_epoch += 1
         error = result.get("error") if result else "Bot is offline"
-        return templates.TemplateResponse(request=request, name="partials/cog_row.html", context={
-            "extension": extension,
-            "loaded": True,
-            "error": error,
-            "just_reloaded": error is None,
-        })
+        _set_cog_badge(extension, error)
+        return templates.TemplateResponse(
+            request=request, name="partials/cog_row.html",
+            context=_cog_row_context(extension, True),
+        )
 
     @app.get("/cogs/badge/clear", response_class=HTMLResponse)
     async def cog_badge_clear():
@@ -159,11 +219,11 @@ def create_app(supervisor, web_state):
         web_state.cogs_epoch += 1
         loaded = bool(result and result.get("loaded"))
         error = result.get("error") if result else "Bot is offline"
-        return templates.TemplateResponse(request=request, name="partials/cog_row.html", context={
-            "extension": extension,
-            "loaded": loaded,
-            "error": error,
-        })
+        _mark_cog(extension, error)
+        return templates.TemplateResponse(
+            request=request, name="partials/cog_row.html",
+            context=_cog_row_context(extension, loaded),
+        )
 
     @app.post("/cogs/load/{extension:path}", response_class=HTMLResponse)
     async def load_cog_row(request: Request, extension: str):
@@ -171,11 +231,11 @@ def create_app(supervisor, web_state):
         web_state.cogs_epoch += 1
         loaded = bool(result and result.get("loaded"))
         error = result.get("error") if result else "Bot is offline"
-        return templates.TemplateResponse(request=request, name="partials/cog_row.html", context={
-            "extension": extension,
-            "loaded": loaded,
-            "error": error,
-        })
+        _mark_cog(extension, error)
+        return templates.TemplateResponse(
+            request=request, name="partials/cog_row.html",
+            context=_cog_row_context(extension, loaded),
+        )
 
     @app.post("/cogs/bulk/reload", response_class=HTMLResponse)
     async def bulk_reload_cogs(request: Request, cogs: list[str] = Form(...)):
@@ -185,9 +245,9 @@ def create_app(supervisor, web_state):
             {"extension": extension, "loaded": False, "error": "Bot is offline"} for extension in cogs
         ]
         for row in rows:
-            row["just_reloaded"] = row.get("error") is None
-        return templates.TemplateResponse(request=request, name="partials/cog_rows_oob.html", context={
-            "rows": rows,
+            _set_cog_badge(row["extension"], row.get("error"))
+        return templates.TemplateResponse(request=request, name="partials/cog_rows.html", context={
+            "rows": [_cog_row_context(row["extension"], row["loaded"], oob=True) for row in rows],
         })
 
     @app.post("/cogs/bulk/unload", response_class=HTMLResponse)
@@ -197,8 +257,10 @@ def create_app(supervisor, web_state):
         rows = result["rows"] if result else [
             {"extension": extension, "loaded": False, "error": "Bot is offline"} for extension in cogs
         ]
-        return templates.TemplateResponse(request=request, name="partials/cog_rows_oob.html", context={
-            "rows": rows,
+        for row in rows:
+            _mark_cog(row["extension"], row.get("error"))
+        return templates.TemplateResponse(request=request, name="partials/cog_rows.html", context={
+            "rows": [_cog_row_context(row["extension"], row["loaded"], oob=True) for row in rows],
         })
 
     @app.post("/cogs/bulk/load", response_class=HTMLResponse)
@@ -208,8 +270,10 @@ def create_app(supervisor, web_state):
         rows = result["rows"] if result else [
             {"extension": extension, "loaded": False, "error": "Bot is offline"} for extension in cogs
         ]
-        return templates.TemplateResponse(request=request, name="partials/cog_rows_oob.html", context={
-            "rows": rows,
+        for row in rows:
+            _mark_cog(row["extension"], row.get("error"))
+        return templates.TemplateResponse(request=request, name="partials/cog_rows.html", context={
+            "rows": [_cog_row_context(row["extension"], row["loaded"], oob=True) for row in rows],
         })
 
     @app.post("/commands/sync", response_class=HTMLResponse)
@@ -217,55 +281,58 @@ def create_app(supervisor, web_state):
         result = await _internal_post("/commands/sync")
         count = result.get("count") if result else None
         error = result.get("error") if result else "Bot is offline"
-        return templates.TemplateResponse(request=request, name="partials/sync_result.html", context={
-            "count": count,
-            "error": error,
-        })
+        seconds = ERROR_BADGE_SECONDS if error else BADGE_SECONDS
+        web_state.last_sync = (time.monotonic() + seconds, count, error)
+        return templates.TemplateResponse(
+            request=request, name="partials/sync_result.html",
+            context=_bot_control_context(bool(web_state.bot_was_ready)),
+        )
+
+    @app.get("/commands/sync/clear", response_class=HTMLResponse)
+    async def sync_clear():
+        web_state.last_sync = None
+        return HTMLResponse('<span id="sync-status"></span>')
 
     @app.post("/bot/start", response_class=HTMLResponse)
     async def bot_start(request: Request):
         await supervisor.start()
-        return templates.TemplateResponse(request=request, name="partials/bot_control.html", context={
-            "is_ready": False,
-            "status": supervisor.status,
-            "oob": True,
-        })
+        web_state.bot_was_ready = False
+        return templates.TemplateResponse(
+            request=request, name="partials/bot_control.html",
+            context={**_bot_control_context(False), "oob": True},
+        )
 
     @app.post("/bot/stop", response_class=HTMLResponse)
     async def bot_stop(request: Request):
         await supervisor.stop()
-        return templates.TemplateResponse(request=request, name="partials/bot_control.html", context={
-            "is_ready": False,
-            "status": supervisor.status,
-            "oob": True,
-        })
+        web_state.bot_was_ready = False
+        web_state.started_deadline = None
+        return templates.TemplateResponse(
+            request=request, name="partials/bot_control.html",
+            context={**_bot_control_context(False), "oob": True},
+        )
 
     @app.post("/bot/reload", response_class=HTMLResponse)
     async def bot_reload(request: Request):
         await supervisor.restart()
-        return templates.TemplateResponse(request=request, name="partials/bot_control.html", context={
-            "is_ready": False,
-            "status": supervisor.status,
-            "oob": True,
-        })
+        web_state.bot_was_ready = False
+        web_state.started_deadline = None
+        return templates.TemplateResponse(
+            request=request, name="partials/bot_control.html",
+            context={**_bot_control_context(False), "oob": True},
+        )
 
     @app.get("/bot/status", response_class=HTMLResponse)
-    async def bot_status_partial(request: Request, announce: bool = False):
+    async def bot_status_partial(request: Request):
         status = await _status()
-        ready = bool(status.get("ready"))
-        return templates.TemplateResponse(request=request, name="partials/bot_control.html", context={
-            "is_ready": ready,
-            "status": supervisor.status,
-            # announce=true only comes from the self-poll below, which only runs while
-            # not ready, so a ready result there really is the first time we've seen it
-            # come back. Without this flag, the SSE refresh on every reconnect would
-            # show the "Started" badge every time.
-            "just_restarted": announce and ready and supervisor.status == "running",
-            "oob": True,
-        })
+        return templates.TemplateResponse(
+            request=request, name="partials/bot_control.html",
+            context={**_bot_control_context(bool(status.get("ready"))), "oob": True},
+        )
 
     @app.get("/bot/status/clear", response_class=HTMLResponse)
     async def bot_status_clear():
+        web_state.started_deadline = None
         return HTMLResponse("")
 
     @app.get("/status/stream")

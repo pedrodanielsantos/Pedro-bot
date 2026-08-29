@@ -1,6 +1,6 @@
 <span id="bot-status-group" class="guild-card-row"
     {% if status != "stopped" and not is_ready %}
-    hx-get="/bot/status?announce=true" hx-trigger="load delay:1s, every 2s" hx-swap="outerHTML"
+    hx-get="/bot/status" hx-trigger="load delay:1s, every 2s" hx-swap="outerHTML"
     {% endif %}>
     <div style="display: flex; align-items: center; gap: 10px;">
         <div class="stat-label" style="margin-bottom: 0;">Bot</div>
@@ -8,16 +8,16 @@
         <span class="badge badge-error">Stopping…</span>
         {% elif status != "stopped" and not is_ready %}
         <span class="badge badge-ok">Starting…</span>
-        {% elif just_restarted %}
+        {% elif started_remaining %}
         <span class="badge badge-ok"
             hx-get="/bot/status/clear"
-            hx-trigger="load delay:2s"
+            hx-trigger="load delay:{{ started_remaining }}s"
             hx-target="this"
             hx-swap="outerHTML">
             Started
         </span>
         {% endif %}
-        <span id="sync-status"></span>
+        {% include "partials/sync_result.html" %}
     </div>
     <div style="display: flex; gap: 8px;">
         <button class="btn btn-primary btn-fixed-width"
