@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Console{% endblock %}
+{% block body_class %}fill-viewport{% endblock %}
 {% block content %}
 
 <header>
@@ -12,7 +13,7 @@
 </header>
 
 <main>
-    <pre id="console-log" class="card" data-log-pos="{{ log_pos }}" style="font-family: var(--mono); font-size: 12px; white-space: pre-wrap; max-height: 75vh; overflow-y: auto;"></pre>
+    <pre id="console-log" class="card" data-log-pos="{{ log_pos }}" style="font-family: var(--mono); font-size: 12px; white-space: pre-wrap; flex: 1; min-height: 0; overflow-y: auto;"></pre>
 </main>
 {% include "partials/console_log.html" %}
 
@@ -44,9 +45,9 @@
 
         consoleLog.scrollTop = consoleLog.scrollHeight;
 
-        // max-height is in vh, so resizing the window changes clientHeight without
-        // firing a scroll event. Only re-pins if already stuck to the bottom, so a
-        // reader scrolled up through history isn't yanked back down.
+        // The box flexes to fill main, so resizing the window changes clientHeight
+        // without firing a scroll event. Only re-pins if already stuck to the bottom,
+        // so a reader scrolled up through history isn't yanked back down.
         window.addEventListener("resize", () => {
             if (stickToBottom) consoleLog.scrollTop = consoleLog.scrollHeight;
         });

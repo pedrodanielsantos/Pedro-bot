@@ -7,6 +7,9 @@
     {% if bot_avatar_url %}<link rel="icon" href="{{ bot_avatar_url }}">{% endif %}
     <style>
         :root {
+            /* Renders scrollbars and other native UI dark. */
+            color-scheme: dark;
+
             --bg:      #0d0d0d;
             --surface: #161616;
             --border:  #252525;
@@ -95,6 +98,10 @@
             gap: 28px;
             flex: 1;
         }
+
+        /* Locks the page to one screen so a flexed child can scroll internally. */
+        body.fill-viewport      { height: 100vh; }
+        body.fill-viewport main { min-height: 0; }
 
         .section-label {
             font-size: 11px;
@@ -324,7 +331,7 @@
     </style>
     <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js" defer></script>
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
     {% block content %}{% endblock %}
     <footer>
         <a href="https://github.com/pedrodanielsantos/Pedro-bot" target="_blank" rel="noopener noreferrer">GitHub</a>
