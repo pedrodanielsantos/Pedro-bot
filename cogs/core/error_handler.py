@@ -34,6 +34,11 @@ class ErrorHandler(commands.Cog):
         # Expected, user-facing validation failures raised deliberately by commands: never logged as a bug.
         if isinstance(error, UserError):
             message = str(error)
+        # Discord still lists commands from an unloaded cog until the tree is re-synced.
+        elif isinstance(error, app_commands.CommandNotFound):
+            full_name = " ".join([*error.parents, error.name])
+            logger.warning(f"/{full_name} invoked but not in the tree (cog unloaded?)")
+            message = f"`/{full_name}` is currently unavailable. Please try again later."
         # Handle Transformer Errors (Validation failures like invalid Hex codes)
         elif isinstance(error, app_commands.TransformerError):
             # The original ValueError is stored in error.__cause__
