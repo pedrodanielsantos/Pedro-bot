@@ -62,6 +62,7 @@ processes' raw stdout/stderr (not just logged output), rendered client-side from
 
 | Command | Description |
 | --- | --- |
+| `/region` | Change your current lobby's voice region |
 | `/rename` | Rename your current lobby voice-channel |
 | `/resize` | Resize your current lobby |
 

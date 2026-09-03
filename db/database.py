@@ -68,6 +68,15 @@ async def initialize_databases():
     except aiosqlite.OperationalError:
         pass
 
+    # Per-user preferences, global rather than per-guild: a default here applies
+    # in every guild the user creates a lobby in.
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS user_data (
+            user_id INTEGER PRIMARY KEY,
+            lobby_region TEXT
+        )
+    """)
+
     await db.execute("""
         CREATE TABLE IF NOT EXISTS autoroles (
             guild_id INTEGER,
@@ -331,6 +340,21 @@ async def get_all_warnings(guild_id: int):
 async def clear_warnings(guild_id: int, target_id: int):
     await db.execute("DELETE FROM warnings WHERE guild_id = ? AND target_id = ?", (guild_id, target_id))
     await db.commit()
+
+async def set_user_lobby_region(user_id: int, region: str | None):
+    await db.execute(
+        """
+        INSERT INTO user_data (user_id, lobby_region) VALUES (?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET lobby_region=excluded.lobby_region
+        """,
+        (user_id, region)
+    )
+    await db.commit()
+
+async def get_user_lobby_region(user_id: int) -> str | None:
+    async with db.execute("SELECT lobby_region FROM user_data WHERE user_id = ?", (user_id,)) as cursor:
+        result = await cursor.fetchone()
+        return result[0] if result else None
 
 async def add_autorole(guild_id: int, role_id: int):
     await db.execute(

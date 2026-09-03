@@ -9,6 +9,7 @@ from db.database import get_guild_embed_color
 COMMAND_CATEGORIES = {
     "rename": "Lobbies",
     "resize": "Lobbies",
+    "region": "Lobbies",
 
     "dog": "Fun",
     "cat": "Fun",

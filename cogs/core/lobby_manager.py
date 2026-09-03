@@ -1,9 +1,13 @@
 import discord
 from discord.ext import commands, tasks
+import logging
 from typing import Optional
 
 from db.database import lobby_add, lobby_delete, lobbies_all, lobby_is_tracked
-from config.constants import NEW_LOBBY_TRIGGER, LOBBY_NAME, LOBBY_EMOJI, VOICE_VQM, VOICE_REGION
+from config.constants import NEW_LOBBY_TRIGGER, LOBBY_NAME, LOBBY_EMOJI, VOICE_VQM
+from utils.regions import default_region_for
+
+logger = logging.getLogger("lobbies")
 
 class LobbyManager(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -38,13 +42,20 @@ class LobbyManager(commands.Cog):
             ch = after.channel
             cat: Optional[discord.CategoryChannel] = ch.category
             if cat and ch.name == NEW_LOBBY_TRIGGER:
-                new_ch = await cat.create_voice_channel(
-                    f"{LOBBY_EMOJI} {LOBBY_NAME}",
-                    position=len(cat.channels),
-                    bitrate=self._max_bitrate(cat.guild),
-                    video_quality_mode=discord.VideoQualityMode(VOICE_VQM),
-                    rtc_region=VOICE_REGION,
-                )
+                try:
+                    new_ch = await cat.create_voice_channel(
+                        f"{LOBBY_EMOJI} {LOBBY_NAME}",
+                        position=len(cat.channels),
+                        bitrate=self._max_bitrate(cat.guild),
+                        video_quality_mode=discord.VideoQualityMode(VOICE_VQM),
+                        rtc_region=await default_region_for(self.bot, member.id),
+                    )
+                except discord.HTTPException as e:
+                    # The user is left in the trigger channel with no feedback either way,
+                    # so log it; raising here would only surface as a listener traceback.
+                    logger.error(f"Failed to create a lobby in guild {member.guild.id}: {e}")
+                    return
+
                 await lobby_add(member.guild.id, new_ch.id)
 
                 try:
