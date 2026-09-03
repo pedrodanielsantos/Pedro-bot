@@ -7,11 +7,11 @@ LOBBY_EMOJI = "🎧"
 
 # Voice channel settings
 VOICE_VQM     = 2              # int value for discord.VideoQualityMode.full
-VOICE_REGION  = "rotterdam"    # Region override
 VOICE_NAME_MAX_LENGTH = 100    # 100 is the maximum discord will display (tested)
 
 # Sentinel for "let Discord pick", stored as text since rtc_region=None can't be saved.
-# Every other region id comes from Discord's live list (utils/regions.py).
+# Regions are configured per guild with /set lobbyregion; every other id comes from
+# Discord's live list (utils/regions.py).
 VOICE_REGION_AUTOMATIC = "automatic"
 
 # Embed settings

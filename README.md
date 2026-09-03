@@ -139,6 +139,7 @@ processes' raw stdout/stderr (not just logged output), rendered client-side from
 | `/moderation warn` | Warns a member |
 | `/moderation warnings` | Lists warnings for a member, or every member currently in the server |
 | `/set embedcolor` | Set or reset the server's embed color |
+| `/set lobbyregion` | Set or reset the voice region new lobbies are created in |
 | `/setup lobbies` | Setup temporary voice-chat system with user-created lobbies |
 | `/setup welcome` | Setup or disable the welcome message channel |
 | `/test welcome` | Simulate a member joining to test the welcome message |

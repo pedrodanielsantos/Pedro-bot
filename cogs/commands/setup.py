@@ -4,9 +4,10 @@ from discord.ext import commands
 from typing import Optional
 
 from db.database import set_welcome_channel
-from config.constants import NEW_LOBBY_TRIGGER, VOICE_VQM, VOICE_REGION
+from config.constants import NEW_LOBBY_TRIGGER, VOICE_VQM
 from utils.embeds import success_embed
 from utils.permissions import require_permission
+from utils.regions import guild_region
 
 class Setup(commands.GroupCog, group_name="setup"):
     def __init__(self, bot: commands.Bot):
@@ -30,7 +31,7 @@ class Setup(commands.GroupCog, group_name="setup"):
                 position=0,
                 bitrate=self._max_bitrate(category.guild),
                 video_quality_mode=discord.VideoQualityMode(VOICE_VQM),
-                rtc_region=VOICE_REGION,
+                rtc_region=await guild_region(self.bot, interaction.guild_id),
             )
 
         embed = success_embed(f"Lobby system set in **{category.name}**:\n- {trigger.mention}")

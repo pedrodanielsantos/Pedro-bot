@@ -48,7 +48,7 @@ class LobbyManager(commands.Cog):
                         position=len(cat.channels),
                         bitrate=self._max_bitrate(cat.guild),
                         video_quality_mode=discord.VideoQualityMode(VOICE_VQM),
-                        rtc_region=await default_region_for(self.bot, member.id),
+                        rtc_region=await default_region_for(self.bot, member.guild.id, member.id),
                     )
                 except discord.HTTPException as e:
                     # The user is left in the trigger channel with no feedback either way,

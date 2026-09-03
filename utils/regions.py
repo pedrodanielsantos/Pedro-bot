@@ -1,13 +1,19 @@
 import asyncio
 import logging
 
+import discord
+from discord import app_commands
 from discord.ext import commands
 from discord.http import Route
 
-from config.constants import VOICE_REGION, VOICE_REGION_AUTOMATIC
-from db.database import get_user_lobby_region
+from config.constants import VOICE_REGION_AUTOMATIC
+from db.database import get_guild_lobby_region, get_user_lobby_region
+from utils.errors import UserError
 
 logger = logging.getLogger("regions")
+
+# Discord accepts at most 25 autocomplete suggestions per response.
+AUTOCOMPLETE_LIMIT = 25
 
 # Cached on the bot, not at module level: reload_shared_modules() re-imports every
 # utils.* module on a cog reload, which would drop module-level state.
@@ -55,9 +61,6 @@ async def voice_regions(bot: commands.Bot) -> dict[str, str]:
             logger.error(f"Failed to fetch voice regions: {e}")
             return {}
 
-        if VOICE_REGION != VOICE_REGION_AUTOMATIC and VOICE_REGION not in fetched:
-            logger.warning(f"VOICE_REGION {VOICE_REGION!r} is not a region Discord offers")
-
         # Discord returns these in no useful order; sort by label so autocomplete is
         # stable, with automatic pinned first.
         ordered = dict(sorted(fetched.items(), key=lambda item: item[1]))
@@ -67,19 +70,52 @@ async def voice_regions(bot: commands.Bot) -> dict[str, str]:
         return regions
 
 
-async def default_region_for(bot: commands.Bot, user_id: int) -> str | None:
-    """rtc_region for a lobby this user is creating: their saved default, else
-    VOICE_REGION. None means Discord picks."""
-    region = await get_user_lobby_region(user_id) or VOICE_REGION
-    if region == VOICE_REGION_AUTOMATIC:
+async def region_choices(bot: commands.Bot, current: str) -> list[app_commands.Choice[str]]:
+    """Autocomplete suggestions matching `current` against either label or id."""
+    regions = await voice_regions(bot)
+    query = current.lower()
+    return [
+        app_commands.Choice(name=label, value=region_id)
+        for region_id, label in regions.items()
+        if query in label.lower() or query in region_id
+    ][:AUTOCOMPLETE_LIMIT]
+
+
+async def require_region(bot: commands.Bot, region: str) -> str:
+    """Checks a submitted region against the live list, returning its display label.
+    Autocomplete only suggests, so commands can still receive anything."""
+    regions = await voice_regions(bot)
+    if not regions:
+        raise UserError("Couldn't reach Discord for the region list. Please try again in a moment.")
+    if region not in regions:
+        typed = discord.utils.escape_markdown(region[:50])
+        raise UserError(f"**{typed}** isn't a voice region. Pick one from the list.")
+    return regions[region]
+
+
+async def resolve_region(bot: commands.Bot, region: str | None) -> str | None:
+    """Turns a stored region id into an rtc_region. None means Discord picks,
+    which is also what an unset or retired region falls back to."""
+    if not region or region == VOICE_REGION_AUTOMATIC:
         return None
 
-    # Discord retires regions, and VOICE_REGION is hand-written; either can leave a
-    # value that would make channel creation fail. Only checked when the live list
-    # is available, since an empty one means unknown rather than invalid.
+    # Discord retires regions, so a value saved months ago can stop being valid and
+    # would fail channel creation. Only checked when the live list is available,
+    # since an empty one means unknown rather than invalid.
     regions = await voice_regions(bot)
     if regions and region not in regions:
-        logger.warning(f"Unknown voice region {region!r}, creating the lobby as automatic")
+        logger.warning(f"Unknown voice region {region!r}, falling back to automatic")
         return None
 
     return region
+
+
+async def guild_region(bot: commands.Bot, guild_id: int) -> str | None:
+    """rtc_region for this guild's lobby channels, set by /set lobbyregion."""
+    return await resolve_region(bot, await get_guild_lobby_region(guild_id))
+
+
+async def default_region_for(bot: commands.Bot, guild_id: int, user_id: int) -> str | None:
+    """rtc_region for a lobby this user is creating: their own default, else the guild's."""
+    region = await get_user_lobby_region(user_id) or await get_guild_lobby_region(guild_id)
+    return await resolve_region(bot, region)

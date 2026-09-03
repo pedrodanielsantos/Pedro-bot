@@ -45,7 +45,8 @@ async def initialize_databases():
             welcome_channel_id INTEGER,
             commands_log_channel_id INTEGER,
             moderation_log_channel_id INTEGER,
-            case_counter INTEGER NOT NULL DEFAULT 0
+            case_counter INTEGER NOT NULL DEFAULT 0,
+            lobby_region TEXT
         )
     """)
 
@@ -65,6 +66,10 @@ async def initialize_databases():
         pass
     try:
         await db.execute("ALTER TABLE guild_data ADD COLUMN case_counter INTEGER NOT NULL DEFAULT 0")
+    except aiosqlite.OperationalError:
+        pass
+    try:
+        await db.execute("ALTER TABLE guild_data ADD COLUMN lobby_region TEXT")
     except aiosqlite.OperationalError:
         pass
 
@@ -340,6 +345,21 @@ async def get_all_warnings(guild_id: int):
 async def clear_warnings(guild_id: int, target_id: int):
     await db.execute("DELETE FROM warnings WHERE guild_id = ? AND target_id = ?", (guild_id, target_id))
     await db.commit()
+
+async def set_guild_lobby_region(guild_id: int, region: str | None):
+    await db.execute(
+        """
+        INSERT INTO guild_data (guild_id, lobby_region) VALUES (?, ?)
+        ON CONFLICT(guild_id) DO UPDATE SET lobby_region=excluded.lobby_region
+        """,
+        (guild_id, region)
+    )
+    await db.commit()
+
+async def get_guild_lobby_region(guild_id: int) -> str | None:
+    async with db.execute("SELECT lobby_region FROM guild_data WHERE guild_id = ?", (guild_id,)) as cursor:
+        result = await cursor.fetchone()
+        return result[0] if result else None
 
 async def set_user_lobby_region(user_id: int, region: str | None):
     await db.execute(
