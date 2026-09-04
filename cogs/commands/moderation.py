@@ -10,7 +10,7 @@ from db.database import (
     get_guild_embed_color, get_moderation_log_channel,
     next_case_number, add_mod_case,
     temp_ban_add, temp_ban_remove, temp_bans_due,
-    add_warning, get_warnings, count_warnings, get_all_warnings, clear_warnings,
+    add_warning, get_warnings, count_warnings, count_warnings_since, get_all_warnings, clear_warnings,
 )
 from utils.duration import parse_duration
 from utils.embeds import success_embed
@@ -33,9 +33,17 @@ PERMISSIONS = {
 }
 
 MAX_TIMEOUT_DURATION = timedelta(days=28)
-WARN_TIMEOUT_DURATION = timedelta(hours=24)
+
+# Timeout warn applies, picked by the member's lifetime warning count. Every
+# warning from the third on re-applies the 7d step.
 WARN_TIMEOUT_THRESHOLD = 2
-WARN_BAN_THRESHOLD = 3
+WARN_TIMEOUT_DURATION = timedelta(hours=24)
+WARN_ESCALATION_THRESHOLD = 3
+WARN_ESCALATION_DURATION = timedelta(days=7)
+
+# Owner alert threshold, counted over warnings on one member inside the window.
+WARN_BURST_THRESHOLD = 2
+WARN_BURST_WINDOW = timedelta(hours=24)
 
 class Moderation(commands.GroupCog, group_name="moderation"):
     def __init__(self, bot: commands.Bot):
@@ -83,6 +91,35 @@ class Moderation(commands.GroupCog, group_name="moderation"):
             pass
 
         return case_number
+
+    async def _notify_owner(self, guild: discord.Guild, embed: discord.Embed):
+        """DMs the guild owner, falling back to a ping in the moderation log channel
+        when the DM fails. Returns True if the alert reached either destination."""
+        owner = guild.owner
+        if owner is None and guild.owner_id:
+            try:
+                owner = await self.bot.fetch_user(guild.owner_id)
+            except discord.HTTPException:
+                owner = None
+
+        if owner is not None:
+            try:
+                await owner.send(embed=embed)
+                return True
+            except (discord.Forbidden, discord.HTTPException):
+                pass
+
+        channel_id = await get_moderation_log_channel(guild.id)
+        channel = guild.get_channel(channel_id) if channel_id else None
+        if channel is not None:
+            try:
+                await channel.send(content=f"<@{guild.owner_id}>", embed=embed)
+                return True
+            except (discord.Forbidden, discord.HTTPException):
+                pass
+
+        logger.warning(f"Could not deliver an owner alert for guild {guild.id}")
+        return False
 
     @app_commands.command(name="ban", description="Bans a user from the server")
     @app_commands.describe(
@@ -225,22 +262,45 @@ class Moderation(commands.GroupCog, group_name="moderation"):
         await add_warning(interaction.guild_id, case_number, member.id, interaction.user.id, reason)
         count = await count_warnings(interaction.guild_id, member.id)
 
+        since = int((discord.utils.utcnow() - WARN_BURST_WINDOW).timestamp())
+        recent = await count_warnings_since(interaction.guild_id, member.id, since)
+
         description = f"Warned {member.mention} (`{member.id}`). This is warning **#{count}**."
 
-        if count == WARN_TIMEOUT_THRESHOLD:
+        if count >= WARN_ESCALATION_THRESHOLD:
+            escalation = (WARN_ESCALATION_DURATION, "7d", f"Auto: {count} warnings")
+        elif count == WARN_TIMEOUT_THRESHOLD:
+            escalation = (WARN_TIMEOUT_DURATION, "24h", "Auto: 2nd warning")
+        else:
+            escalation = None
+
+        if escalation:
+            duration, duration_label, escalation_reason = escalation
             try:
-                await member.timeout(WARN_TIMEOUT_DURATION, reason="Auto: 2nd warning")
-                await self._log_case(interaction.guild, "Timeout", member.id, self.bot.user.id, "Auto: 2nd warning", "24h")
-                description += "\nAuto-escalation: member has been **timed out for 24h**."
+                await member.timeout(duration, reason=escalation_reason)
+                await self._log_case(interaction.guild, "Timeout", member.id, self.bot.user.id, escalation_reason, duration_label)
+                description += f"\nAuto-escalation: member has been **timed out for {duration_label}**."
             except discord.Forbidden:
                 description += "\nAuto-escalation failed: I don't have permission to time out that member."
-        elif count >= WARN_BAN_THRESHOLD:
-            try:
-                await member.ban(reason="Auto: 3rd warning", delete_message_seconds=0)
-                await self._log_case(interaction.guild, "Ban", member.id, self.bot.user.id, "Auto: 3rd warning", None)
-                description += "\nAuto-escalation: member has been **banned**."
-            except discord.Forbidden:
-                description += "\nAuto-escalation failed: I don't have permission to ban that member."
+
+        alerts = []
+        if count >= WARN_ESCALATION_THRESHOLD:
+            alerts.append(f"has reached **{count}** total warnings")
+        if recent >= WARN_BURST_THRESHOLD:
+            alerts.append(f"has received **{recent}** warnings in the last 24 hours")
+
+        # No alert when the owner is the one issuing the warning.
+        if alerts and interaction.user.id != interaction.guild.owner_id:
+            alert = discord.Embed(
+                title="Warning escalation",
+                description=f"In **{interaction.guild.name}**, {member.mention} (`{member.id}`) {' and '.join(alerts)}.",
+                color=await get_guild_embed_color(interaction.guild_id),
+            )
+            alert.add_field(name=f"Latest warning | Case #{case_number}", value=reason, inline=False)
+            alert.add_field(name="Responsible Moderator", value=interaction.user.mention, inline=False)
+            alert.timestamp = discord.utils.utcnow()
+            alert.set_footer(text=f"User ID: {member.id}")
+            await self._notify_owner(interaction.guild, alert)
 
         embed = success_embed(description)
         await interaction.followup.send(embed=embed, ephemeral=True)

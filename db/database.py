@@ -332,6 +332,14 @@ async def count_warnings(guild_id: int, target_id: int) -> int:
         result = await cursor.fetchone()
         return result[0]
 
+async def count_warnings_since(guild_id: int, target_id: int, since: int) -> int:
+    async with db.execute(
+        "SELECT COUNT(*) FROM warnings WHERE guild_id = ? AND target_id = ? AND created_at >= ?",
+        (guild_id, target_id, since)
+    ) as cursor:
+        result = await cursor.fetchone()
+        return result[0]
+
 async def get_all_warnings(guild_id: int):
     async with db.execute(
         """
