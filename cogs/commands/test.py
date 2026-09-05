@@ -3,8 +3,9 @@ from discord import app_commands
 from discord.ext import commands
 from utils.embeds import success_embed
 from utils.errors import UserError
-from utils.permissions import require_permission
+from utils.permissions import require_permission, visibility_gate
 
+@visibility_gate("administrator")
 class Test(commands.GroupCog, group_name="test"):
     def __init__(self, bot: commands.Bot):
         super().__init__()

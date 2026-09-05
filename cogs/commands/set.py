@@ -8,13 +8,10 @@ from config.constants import EMBED_COLOR
 from utils.color import parse_hex_color
 from utils.embeds import success_embed
 from utils.errors import UserError
-from utils.permissions import require_permission
+from utils.permissions import require_permission, visibility_gate
 from utils.regions import region_choices, require_region
 
-# Hides the whole group from non-admins in the command picker. Discord only supports
-# this per top-level command, so it can't differ per subcommand. It's a default a
-# server can override, so each command still checks the permission itself.
-@app_commands.default_permissions(administrator=True)
+@visibility_gate("administrator")
 class Set(commands.GroupCog, group_name="set"):
     def __init__(self, bot: commands.Bot):
         super().__init__()

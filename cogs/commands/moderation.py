@@ -15,7 +15,7 @@ from db.database import (
 from utils.duration import parse_duration
 from utils.embeds import success_embed
 from utils.errors import UserError
-from utils.permissions import require_permission
+from utils.permissions import require_permission, visibility_gate
 
 logger = logging.getLogger("moderation")
 
@@ -45,6 +45,7 @@ WARN_ESCALATION_DURATION = timedelta(days=7)
 WARN_BURST_THRESHOLD = 2
 WARN_BURST_WINDOW = timedelta(hours=24)
 
+@visibility_gate(*PERMISSIONS.values())
 class Moderation(commands.GroupCog, group_name="moderation"):
     def __init__(self, bot: commands.Bot):
         super().__init__()

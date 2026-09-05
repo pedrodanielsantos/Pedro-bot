@@ -5,8 +5,9 @@ from typing import Optional
 
 from db.database import set_commands_log_channel, set_moderation_log_channel
 from utils.embeds import success_embed
-from utils.permissions import require_permission
+from utils.permissions import require_permission, visibility_gate
 
+@visibility_gate("administrator")
 class Log(commands.GroupCog, group_name="log"):
     def __init__(self, bot: commands.Bot):
         super().__init__()

@@ -6,7 +6,7 @@ import json
 from typing import Optional
 from utils.embeds import success_embed
 from utils.errors import UserError
-from utils.permissions import require_permission
+from utils.permissions import permission_label, require_permission, visibility_gate
 
 MESSAGE_NOT_FOUND = "That message isn't in this channel. Specify which channel it's in."
 NO_CHANNEL_ACCESS = "You don't have access to that channel."
@@ -17,6 +17,7 @@ CHANNEL_PERMISSIONS = {
     "editjson": ("read_message_history", "send_messages"),
 }
 
+@visibility_gate("manage_guild")
 class Embed(commands.GroupCog, group_name="embed"):
     def __init__(self, bot: commands.Bot):
         super().__init__()
@@ -38,7 +39,7 @@ class Embed(commands.GroupCog, group_name="embed"):
 
         missing = [name for name in CHANNEL_PERMISSIONS[command_name] if not getattr(permissions, name)]
         if missing:
-            labels = ", ".join(f"**{name.replace('_', ' ').title()}**" for name in missing)
+            labels = ", ".join(f"**{permission_label(name)}**" for name in missing)
             raise UserError(f"You need {labels} in {target_channel.mention} to use this command.")
 
         return target_channel

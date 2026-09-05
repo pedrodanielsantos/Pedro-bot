@@ -2,6 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from db.database import get_guild_embed_color
+from utils.permissions import is_visible_to
 
 # Keyed by qualified name, whole group (e.g. "image") or single subcommand
 # (e.g. "setup welcome"). A subcommand entry wins over its group's entry.
@@ -157,7 +158,7 @@ class HelpCog(commands.Cog):
     @app_commands.command(name="help", description="Displays the help message with all available commands")
     async def help_command(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        pages, category_starts, color = await self.get_help_pages(interaction.guild_id)
+        pages, category_starts, color = await self.get_help_pages(interaction.user, interaction.guild_id)
         view = HelpView(pages, category_starts, color)
         view.message = await interaction.followup.send(view=view)
 
@@ -169,12 +170,14 @@ class HelpCog(commands.Cog):
         root = qualified_name.split(" ", 1)[0]
         return COMMAND_CATEGORIES.get(root, DEFAULT_CATEGORY)
 
-    def _collect_commands(self):
-        """Bucket every registered slash command by category, keyed leaf-first."""
+    def _collect_commands(self, user):
+        """Bucket every slash command the user can see by category, keyed leaf-first."""
         categorized: dict[str, list[str]] = {}
         for cmd in self.bot.tree.walk_commands():
             if not isinstance(cmd, app_commands.Command):
                 continue  # skip Group containers; their leaves are walked too
+            if not is_visible_to(user, cmd):
+                continue
             category = self._category_for(cmd.qualified_name)
             desc = cmd.description or "No description provided."
             line = f"**/{cmd.qualified_name}**: *{desc}*\n"
@@ -199,10 +202,10 @@ class HelpCog(commands.Cog):
             chunks.append(current)
         return chunks
 
-    async def get_help_pages(self, guild_id=None):
+    async def get_help_pages(self, user, guild_id=None):
         color = await get_guild_embed_color(guild_id)
 
-        collected = self._collect_commands()
+        collected = self._collect_commands(user)
 
         overview_parts = [
             "# Help",

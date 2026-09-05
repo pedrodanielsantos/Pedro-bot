@@ -4,8 +4,9 @@ from discord.ext import commands
 from db.database import get_guild_embed_color, add_autorole, remove_autorole, get_autoroles
 from utils.embeds import success_embed
 from utils.errors import UserError
-from utils.permissions import require_permission
+from utils.permissions import require_permission, visibility_gate
 
+@visibility_gate("manage_roles")
 class Autorole(commands.GroupCog, group_name="autorole"):
     def __init__(self, bot: commands.Bot):
         super().__init__()

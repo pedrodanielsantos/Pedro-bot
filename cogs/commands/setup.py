@@ -6,9 +6,10 @@ from typing import Optional
 from db.database import set_welcome_channel
 from config.constants import NEW_LOBBY_TRIGGER, VOICE_VQM
 from utils.embeds import success_embed
-from utils.permissions import require_permission
+from utils.permissions import require_permission, visibility_gate
 from utils.regions import guild_region
 
+@visibility_gate("manage_channels", "administrator")
 class Setup(commands.GroupCog, group_name="setup"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
