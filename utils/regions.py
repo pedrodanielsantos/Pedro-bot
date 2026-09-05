@@ -93,6 +93,16 @@ async def require_region(bot: commands.Bot, region: str) -> str:
     return regions[region]
 
 
+async def region_label(bot: commands.Bot, region: str | None) -> str | None:
+    """Display name for a stored region id, for read-only views. None stays None.
+    Falls back to the raw id when the live list is unavailable or the region has
+    been retired, since a stored value is worth showing either way."""
+    if not region:
+        return None
+    regions = await voice_regions(bot)
+    return regions.get(region, region)
+
+
 async def resolve_region(bot: commands.Bot, region: str | None) -> str | None:
     """Turns a stored region id into an rtc_region. None means Discord picks,
     which is also what an unset or retired region falls back to."""

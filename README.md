@@ -83,6 +83,7 @@ processes' raw stdout/stderr (not just logged output), rendered client-side from
 | `/help` | Displays the help message with all available commands |
 | `/rules` | Displays the server rules |
 | `/serverinfo` | Displays server statistics |
+| `/settings` | View your personal settings |
 | `/stats` | Shows technical information about the bot |
 | `/timestamp at` | Generate a timestamp tag for a specific date and time |
 | `/timestamp in` | Generate a timestamp tag relative to now |
@@ -138,6 +139,7 @@ processes' raw stdout/stderr (not just logged output), rendered client-side from
 | `/moderation unban` | Unbans a user from the server |
 | `/moderation warn` | Warns a member |
 | `/moderation warnings` | Lists warnings for a member, or every member currently in the server |
+| `/serverconfig` | View the server's current bot settings |
 | `/set embedcolor` | Set or reset the server's embed color |
 | `/set lobbyregion` | Set or reset the voice region new lobbies are created in |
 | `/setup lobbies` | Setup temporary voice-chat system with user-created lobbies |

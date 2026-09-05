@@ -217,6 +217,24 @@ async def get_moderation_log_channel(guild_id: int):
         result = await cursor.fetchone()
         return result[0] if result else None
 
+GUILD_SETTING_FIELDS = (
+    "embed_color",
+    "welcome_channel_id",
+    "commands_log_channel_id",
+    "moderation_log_channel_id",
+    "lobby_region",
+)
+
+async def get_guild_settings(guild_id: int) -> dict:
+    """Every configurable guild_data field in one read. A guild with no row yet
+    reads as all-unset rather than missing."""
+    async with db.execute(
+        f"SELECT {', '.join(GUILD_SETTING_FIELDS)} FROM guild_data WHERE guild_id = ?",
+        (guild_id,)
+    ) as cursor:
+        row = await cursor.fetchone()
+    return dict(zip(GUILD_SETTING_FIELDS, row or (None,) * len(GUILD_SETTING_FIELDS)))
+
 async def next_case_number(guild_id: int) -> int:
     """Atomically increments and returns the guild's next moderation case number."""
     async with db.execute(

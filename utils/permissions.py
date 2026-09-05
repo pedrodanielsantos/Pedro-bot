@@ -40,7 +40,10 @@ def visibility_gate(*permissions: str):
     """Hides a command from members who can't use it, in the command picker and
     in /help. Discord only supports this per top-level command, so a group is
     gated by its least privileged subcommand and every command still checks its
-    own permission at runtime. It's a default a server can override."""
+    own permission at runtime. It's a default a server can override.
+
+    Applied to a GroupCog class, or to a standalone command. On a plain Cog the
+    class is not a command, so a gate there is silently ignored."""
     weakest = min(permissions, key=PRIVILEGE_ORDER.index)
     return app_commands.default_permissions(**{weakest: True})
 
