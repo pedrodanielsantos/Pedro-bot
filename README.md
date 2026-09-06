@@ -3,14 +3,15 @@
 # Pedro-bot
 
 A Discord bot built on discord.py, with a FastAPI + htmx web dashboard.
-Temporary voice lobbies, GIF generation, autoroles, welcome messages,
-command logging, and more.
+Temporary voice lobbies, music streaming, GIF generation, autoroles,
+welcome messages, command logging, and more.
 
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
 ![discord.py](https://img.shields.io/badge/discord.py-5865F2?logo=discord&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
 ![htmx](https://img.shields.io/badge/htmx-3D72D7?logo=htmx&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
+![Lavalink](https://img.shields.io/badge/Lavalink-FF624B?logo=soundcloud&logoColor=white)
 
 </div>
 
@@ -27,6 +28,9 @@ without a restart.
 
 - **Temporary voice lobbies**: joining a trigger channel spins up a voice channel
   the member can rename and resize, cleaned up automatically when empty.
+- **Music**: queue-based playback from YouTube, YouTube Music, SoundCloud and
+  Bandcamp through a self-hosted Lavalink node, with search autocomplete, seeking,
+  looping and an optional DJ role.
 - **GIF generation**: 25 effects (petpet, heart lock, explode, glitch, etc.)
   applied to an avatar, URL, or attachment via the Jeyy API.
 - **Autoroles & welcome messages**: auto-assign roles to new members, greet them
@@ -47,9 +51,108 @@ process, separate from the bot. Shows real-time status, latency, uptime, and
 guild count, with **Start/Stop/Reload** control, a **Cog Manager**, and a **Sync**
 button for slash commands.
 
-A separate **Console** page (`/console`) is a live, auto-scrolling mirror of both
-processes' raw stdout/stderr (not just logged output), rendered client-side from
-`logs/console.raw` so it stays visible across a crash or restart.
+A separate **Console** page (`/console`) is a live, auto-scrolling mirror of every
+supervised process's raw stdout/stderr (not just logged output), Lavalink
+included, rendered client-side from `logs/console.raw` so it stays visible across
+a crash or restart.
+
+## Music
+
+Audio is streamed by [Lavalink](https://lavalink.dev/), a standalone Java node
+that the bot controls over a loopback WebSocket via
+[Wavelink](https://github.com/PythonistaGuild/Wavelink). The bot never touches
+audio itself: it resolves and queues tracks, and Lavalink opens the voice
+connection, decodes, and sends Opus.
+
+That split is why the `PyNaCl is not installed` and `davey is not installed`
+warnings at startup are harmless here. They gate discord.py's own `VoiceClient`,
+which encrypts and sends audio in-process. `wavelink.Player` is a bare
+`VoiceProtocol` that only relays the voice session to Lavalink, and Lavalink
+handles encryption, including DAVE, on its side.
+
+### Architecture
+
+| Piece | Role |
+| --- | --- |
+| `Lavalink.jar` | Standalone node on `127.0.0.1:2333`, started by `run.py` |
+| [`youtube-source`](https://github.com/lavalink-devs/youtube-source) | YouTube and YouTube Music extraction, pinned to a snapshot |
+| [`LavaSrc`](https://github.com/topi314/LavaSrc) | Spotify/Apple/Deezer resolution, off until credentials are set |
+| [`cogs/core/music_manager.py`](cogs/core/music_manager.py) | Owns the node connection and playback lifecycle |
+| [`cogs/commands/music.py`](cogs/commands/music.py) | The slash commands |
+| [`utils/music.py`](utils/music.py) | Player lookup, DJ gating, track formatting |
+
+The node is **optional**. With `LAVALINK_DIR` unset, or the jar or `java` missing,
+`run.py` logs why and skips it, the bot starts normally, and the music commands
+report themselves as unavailable.
+
+### Node setup
+
+Needs a **JDK 17+** on the host, 21 LTS recommended. `winget` is unavailable on
+Windows Server, so install [Temurin](https://adoptium.net/) directly:
+
+```powershell
+$msi = "$env:TEMP\temurin21.msi"
+Invoke-WebRequest -Uri "https://api.adoptium.net/v3/installer/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse" -OutFile $msi
+Start-Process msiexec.exe -Wait -ArgumentList "/i `"$msi`" ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJavaHome /quiet"
+```
+
+```bash
+sudo apt install openjdk-21-jre-headless    # Debian/Ubuntu
+```
+
+Open a new shell afterwards so `java` is on `PATH`, then:
+
+```bash
+py -3.13 scripts/setup_lavalink.py
+```
+
+That downloads `Lavalink.jar` and the LavaSrc plugin, renders `application.yml`
+from [`config/lavalink/application.yml.example`](config/lavalink/application.yml.example)
+with a generated password, and prints the `.env` lines to add. Re-running keeps
+what's already there unless `--force` is passed. Default install dir is
+`C:\lavalink` or `/opt/lavalink`, overridable with `--dir`.
+
+> [!IMPORTANT]
+> The install dir must be on **local disk**, not the network share the repo
+> lives on. A JVM started over SMB is slow to boot and prone to file locking
+> problems, and Lavalink writes its logs and plugin jars next to its own jar.
+
+Only the config template is tracked. The rendered `application.yml` holds the
+real password and stays on the host, outside the repo.
+
+### Bot permissions
+
+The bot's role needs **View Channel**, **Connect**, **Speak**, **Send Messages**
+and **Embed Links**. **Move Members** is optional and lets it join a channel that
+is at its user limit. Channel and category overwrites beat role permissions, so
+grant these on the category the lobbies live in.
+
+`voice_states` is already covered by `Intents.default()` and is not privileged,
+so no portal changes are needed.
+
+### YouTube extraction
+
+This is the part that breaks, not the infrastructure. YouTube actively works
+against extraction, so two settings in `application.yml` matter:
+
+- **`youtube-plugin` is declared as a snapshot dependency**, not shipped as a jar,
+  because tagged releases lag behind YouTube's changes. Snapshot versions are
+  commit hashes, listed
+  [here](https://maven.lavalink.dev/snapshots/dev/lavalink/youtube/youtube-plugin/).
+  Only one copy may be installed: delete any `plugins/youtube-plugin-*.jar`
+  before starting.
+- **All ten clients are listed**, ordered by how likely each is to return a plain
+  HTTPS URL. Which ones work varies by IP and region, and a client that fails
+  costs one request. A short list is what caused a total playback failure here:
+  `WEB` was served SABR-only responses carrying no format URLs, `ANDROID_VR`
+  returned "This video requires login", and `WEBEMBEDDED` returned "Video player
+  configuration error". Adding `ANDROID_MUSIC`, the TV clients and `IOS` fixed it.
+
+`MUSIC` resolves `music.youtube.com` links and `ytmsearch` but does not stream,
+so it can never be the only client. If playback fails again, the error enumerates
+every client with its own reason, which says whether any client still gets a
+direct URL. SoundCloud and Bandcamp are native Lavalink sources that never touch
+this path, so they make a good control test.
 
 ## Command Reference
 
@@ -65,6 +168,22 @@ processes' raw stdout/stderr (not just logged output), rendered client-side from
 | `/region` | Change your current lobby's voice region |
 | `/rename` | Rename your current lobby voice-channel |
 | `/resize` | Resize your current lobby |
+
+### Music
+
+| Command | Description |
+| --- | --- |
+| `/loop` | Set the loop mode |
+| `/nowplaying` | Show the track currently playing |
+| `/pause` | Pause playback |
+| `/play` | Play a track, or add it to the queue |
+| `/queue` | Show the queue |
+| `/resume` | Resume playback |
+| `/seek` | Jump to a position in the current track |
+| `/shuffle` | Shuffle the queue |
+| `/skip` | Skip the current track |
+| `/stop` | Stop playback, clear the queue and leave |
+| `/volume` | Set or view the playback volume |
 
 ### Fun
 
@@ -140,8 +259,10 @@ processes' raw stdout/stderr (not just logged output), rendered client-side from
 | `/moderation warn` | Warns a member |
 | `/moderation warnings` | Lists warnings for a member, or every member currently in the server |
 | `/serverconfig` | View the server's current bot settings |
+| `/set djrole` | Set or reset the role required to control music playback |
 | `/set embedcolor` | Set or reset the server's embed color |
 | `/set lobbyregion` | Set or reset the voice region new lobbies are created in |
+| `/set musicvolume` | Set or reset the volume new players start at |
 | `/setup lobbies` | Setup temporary voice-chat system with user-created lobbies |
 | `/setup welcome` | Setup or disable the welcome message channel |
 | `/test welcome` | Simulate a member joining to test the welcome message |
@@ -169,6 +290,7 @@ hidden from `/help` and excluded from the table above. Not part of the generated
 
 - Python 3.13
 - A [Discord bot token](https://discord.com/developers/applications)
+- A JDK 17+ (21 LTS recommended), for the music node only. See [Music](#music).
 
 ### Installation
 
@@ -177,6 +299,14 @@ git clone https://github.com/pedrodanielsantos/Pedro-bot.git
 cd Pedro-bot
 pip install -r requirements.txt
 ```
+
+For music, also install the Lavalink node once per host:
+
+```bash
+py -3.13 scripts/setup_lavalink.py
+```
+
+Skip it to run without music. See [Music](#music) for the full setup.
 
 ### Configuration
 
@@ -188,7 +318,14 @@ JEYY_API_KEY=your_jeyy_api_key       # image manipulation commands
 CAT_API_KEY=your_cat_api_key         # /cat
 DOG_API_KEY=your_dog_api_key         # /dog
 SYNC_ON_STARTUP=false                # optional; skip the automatic command sync on every restart
+
+LAVALINK_DIR=C:\lavalink             # music; where setup_lavalink.py installed the node
+LAVALINK_URI=http://127.0.0.1:2333   # music; the node's address
+LAVALINK_PASSWORD=your_node_password # music; must match application.yml
 ```
+
+The three `LAVALINK_*` values are printed by `scripts/setup_lavalink.py`. Leave
+them out to run without music.
 
 Non-secret defaults (lobby names, voice region, embed colors, etc.) live in
 [`config/constants.py`](config/constants.py).
@@ -204,11 +341,19 @@ button or `ç!sync`.
 py -3.13 run.py
 ```
 
-`run.py` hosts the dashboard on port 8000 and supervises `bot.py` as a child
-process, restarting it automatically on crash. Terminal output is color-coded,
-same as the web console.
+`run.py` hosts the dashboard on port 8000 and supervises both child processes,
+restarting them automatically on crash. Terminal output is color-coded, same as
+the web console.
 
-Ctrl+C in `run.py`'s console, or Stop on the dashboard, shuts the bot down cleanly.
+When configured, **Lavalink starts first** and `run.py` waits for it to accept
+connections before starting the bot, so the node is listening by the time the
+music cog connects. On shutdown the order reverses: the bot leaves its voice
+channels before the node it streams through goes away.
+
+Ctrl+C in `run.py`'s console, or Stop on the dashboard, shuts everything down
+cleanly. `bot.py` stops on a `CTRL_BREAK_EVENT` it handles itself; Lavalink is
+terminated directly, since a JVM answers Ctrl+Break with a thread dump rather
+than by exiting.
 
 `bot.py` also exposes a small internal API on **127.0.0.1:8001** that the
 dashboard uses for live bot data (status, guilds, cogs, command sync); reachable
@@ -228,16 +373,18 @@ Pedro-bot/
 ├── bot.py              # Entry point: loads cogs, starts the bot and internal API
 ├── internal_api.py     # Localhost-only API (127.0.0.1:8001), feeds live bot data to web.py
 ├── web.py              # FastAPI dashboard: status, guilds, cog manager, command sync, console
-├── run.py              # Supervisor: hosts the dashboard (:8000), starts/stops/restarts bot.py
+├── run.py              # Supervisor: hosts the dashboard (:8000), starts/stops bot.py and Lavalink
 ├── logs/               # Rotating bot.log, read by the Console page
 ├── cogs/
 │   ├── commands/       # Slash commands
-│   └── core/           # Error handling, dev tools, shared mixins
-├── config/             # Constants and configuration
+│   └── core/           # Error handling, dev tools, music node, shared mixins
+├── config/
+│   ├── constants.py    # Module-level constants and default values
+│   └── lavalink/       # Tracked application.yml template for the music node
 ├── db/                 # SQLite storage (aiosqlite)
 ├── utils/              # Runtime helpers
 ├── templates/          # Jinja2 templates for the dashboard
-└── scripts/            # Dev tooling (e.g. README generation)
+└── scripts/            # Dev tooling (README generation, Lavalink install/diagnostics)
 ```
 
 ## License

@@ -46,7 +46,9 @@ async def initialize_databases():
             commands_log_channel_id INTEGER,
             moderation_log_channel_id INTEGER,
             case_counter INTEGER NOT NULL DEFAULT 0,
-            lobby_region TEXT
+            lobby_region TEXT,
+            music_dj_role_id INTEGER,
+            music_default_volume INTEGER
         )
     """)
 
@@ -70,6 +72,14 @@ async def initialize_databases():
         pass
     try:
         await db.execute("ALTER TABLE guild_data ADD COLUMN lobby_region TEXT")
+    except aiosqlite.OperationalError:
+        pass
+    try:
+        await db.execute("ALTER TABLE guild_data ADD COLUMN music_dj_role_id INTEGER")
+    except aiosqlite.OperationalError:
+        pass
+    try:
+        await db.execute("ALTER TABLE guild_data ADD COLUMN music_default_volume INTEGER")
     except aiosqlite.OperationalError:
         pass
 
@@ -223,6 +233,8 @@ GUILD_SETTING_FIELDS = (
     "commands_log_channel_id",
     "moderation_log_channel_id",
     "lobby_region",
+    "music_dj_role_id",
+    "music_default_volume",
 )
 
 async def get_guild_settings(guild_id: int) -> dict:
@@ -399,6 +411,36 @@ async def set_user_lobby_region(user_id: int, region: str | None):
 
 async def get_user_lobby_region(user_id: int) -> str | None:
     async with db.execute("SELECT lobby_region FROM user_data WHERE user_id = ?", (user_id,)) as cursor:
+        result = await cursor.fetchone()
+        return result[0] if result else None
+
+async def set_music_dj_role(guild_id: int, role_id: int | None):
+    await db.execute(
+        """
+        INSERT INTO guild_data (guild_id, music_dj_role_id) VALUES (?, ?)
+        ON CONFLICT(guild_id) DO UPDATE SET music_dj_role_id=excluded.music_dj_role_id
+        """,
+        (guild_id, role_id)
+    )
+    await db.commit()
+
+async def get_music_dj_role(guild_id: int) -> int | None:
+    async with db.execute("SELECT music_dj_role_id FROM guild_data WHERE guild_id = ?", (guild_id,)) as cursor:
+        result = await cursor.fetchone()
+        return result[0] if result else None
+
+async def set_music_volume(guild_id: int, volume: int | None):
+    await db.execute(
+        """
+        INSERT INTO guild_data (guild_id, music_default_volume) VALUES (?, ?)
+        ON CONFLICT(guild_id) DO UPDATE SET music_default_volume=excluded.music_default_volume
+        """,
+        (guild_id, volume)
+    )
+    await db.commit()
+
+async def get_music_volume(guild_id: int) -> int | None:
+    async with db.execute("SELECT music_default_volume FROM guild_data WHERE guild_id = ?", (guild_id,)) as cursor:
         result = await cursor.fetchone()
         return result[0] if result else None
 

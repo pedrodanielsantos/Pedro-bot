@@ -13,6 +13,18 @@ COMMAND_CATEGORIES = {
     "resize": "Lobbies",
     "region": "Lobbies",
 
+    "play": "Music",
+    "skip": "Music",
+    "pause": "Music",
+    "resume": "Music",
+    "stop": "Music",
+    "queue": "Music",
+    "nowplaying": "Music",
+    "volume": "Music",
+    "seek": "Music",
+    "shuffle": "Music",
+    "loop": "Music",
+
     "dog": "Fun",
     "cat": "Fun",
     "8ball": "Fun",
@@ -42,6 +54,7 @@ COMMAND_CATEGORIES = {
 # Render order; categories not listed here (including DEFAULT_CATEGORY) are appended after.
 CATEGORY_ORDER = [
     "Lobbies",
+    "Music",
     "Fun",
     "Utility",
     "Image",
@@ -52,6 +65,7 @@ DEFAULT_CATEGORY = "Other"
 
 CATEGORY_DESCRIPTIONS = {
     "Lobbies": "Manage your own temporary voice lobby",
+    "Music": "Play audio in a voice channel",
     "Fun": "Random novelty commands",
     "Utility": "Info and utility commands",
     "Image": "Apply effects to images and create GIFs",

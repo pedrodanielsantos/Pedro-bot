@@ -1,0 +1,132 @@
+# Lavalink node config. Copied to <install dir>/application.yml by
+# scripts/setup_lavalink.py, which fills in the password placeholder below.
+#
+# This file is the tracked template. The generated copy holds the real password
+# and lives on the host outside the repo, so it is never committed.
+
+server:
+  port: 2333
+  # Loopback only. The bot runs on the same host, so the node is never exposed.
+  address: 127.0.0.1
+
+plugins:
+  youtube:
+    enabled: true
+    allowSearch: true
+    allowDirectVideoIds: true
+    allowDirectPlaylistIds: true
+    # Queried in order, first success wins, so this is ordered by how likely a
+    # client is to return a plain HTTPS format URL rather than a SABR-only
+    # response. Every client is listed because which ones work varies by IP and
+    # region, and a client that fails only costs one request.
+    #
+    # MUSIC resolves music.youtube.com and ytmsearch but does not stream, so it
+    # cannot be the only entry. ANDROID_MUSIC and the TV clients return Opus,
+    # which passes through to Discord without transcoding.
+    #
+    # Known failure modes seen here: WEB returns SABR-only responses with no
+    # format URLs, ANDROID_VR reports "This video requires login", and
+    # WEBEMBEDDED reports "Video player configuration error". They are kept as
+    # last resorts since they cost nothing once an earlier client succeeds.
+    clients:
+      - MUSIC
+      - ANDROID_MUSIC
+      - TVHTML5_SIMPLY
+      - TV
+      - IOS
+      - MWEB
+      - ANDROID
+      - WEB
+      - WEBEMBEDDED
+      - ANDROID_VR
+
+  lavasrc:
+    # Where a Spotify/Apple track is actually streamed from once LavaSrc has
+    # resolved its metadata. Tried in order, so a YouTube failure falls back to
+    # SoundCloud rather than failing the track.
+    providers:
+      - "ytmsearch:%ISRC%"
+      - "ytsearch:%ISRC%"
+      - "ytmsearch:%QUERY%"
+      - "ytsearch:%QUERY%"
+      - "scsearch:%QUERY%"
+    sources:
+      # Spotify and Apple Music need credentials below, Deezer needs a
+      # decryption key. Left off until those are filled in.
+      spotify: false
+      applemusic: false
+      deezer: false
+    spotify:
+      clientId: ""
+      clientSecret: ""
+      countryCode: "US"
+    applemusic:
+      countryCode: "US"
+      mediaAPIToken: ""
+    deezer:
+      masterDecryptionKey: ""
+
+lavalink:
+  # youtube-plugin is declared here rather than dropped into plugins/ as a jar,
+  # so it can track a snapshot. Releases lag well behind YouTube's changes: 1.18.2
+  # could not play anything, failing on the signature cipher and on SABR responses
+  # that carry no format URLs. Snapshot versions are commit hashes, listed at
+  # https://maven.lavalink.dev/snapshots/dev/lavalink/youtube/youtube-plugin/
+  #
+  # Only one copy may be installed. Delete plugins/youtube-plugin-*.jar before
+  # starting, or Lavalink loads both and the older one may win.
+  plugins:
+    - dependency: "dev.lavalink.youtube:youtube-plugin:f45bbb7aebfcbc1c553769e04af6cd43afa8b7c3"
+      snapshot: true
+
+  server:
+    password: "__PASSWORD__"
+    sources:
+      # Superseded by the youtube-source plugin above. Leaving this on would
+      # shadow the plugin with Lavalink's stock extractor.
+      youtube: false
+      # Credential-free fallbacks, and what scsearch above resolves against.
+      soundcloud: true
+      bandcamp: true
+      twitch: true
+      vimeo: true
+      http: true
+      local: false
+    filters:
+      volume: true
+      equalizer: true
+      karaoke: true
+      timescale: true
+      tremolo: true
+      vibrato: true
+      distortion: true
+      rotation: true
+      channelMix: true
+      lowPass: true
+    # 400ms absorbs jitter without a noticeable delay on skip.
+    bufferDurationMs: 400
+    frameBufferDurationMs: 5000
+    opusEncodingQuality: 10
+    resamplingQuality: LOW
+    trackStuckThresholdMs: 10000
+    useSeekGhosting: true
+    youtubePlaylistLoadLimit: 6
+    playerUpdateInterval: 5
+    youtubeSearchEnabled: true
+    soundcloudSearchEnabled: true
+    gc-warnings: true
+
+metrics:
+  prometheus:
+    enabled: false
+
+logging:
+  file:
+    path: ./logs/
+  level:
+    root: INFO
+    lavalink: INFO
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 7

@@ -24,11 +24,21 @@ class LobbyManager(commands.Cog):
     def _max_bitrate(guild: discord.Guild) -> int:
         return guild.bitrate_limit
 
+    @staticmethod
+    def _is_empty(channel: discord.VoiceChannel) -> bool:
+        """Whether a lobby has no human left in it.
+
+        Bots are excluded deliberately: the music player sits in the channel it
+        is streaming to, and counting it would keep every lobby it ever joined
+        alive forever. The player leaves on its own once the last human does.
+        """
+        return not any(not member.bot for member in channel.members)
+
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         # Check if a user left a voice channel
         if before.channel and (not after.channel or before.channel.id != after.channel.id):
-            if len(before.channel.members) == 0:
+            if self._is_empty(before.channel):
                 if await lobby_is_tracked(before.channel.id):
                     try:
                         await before.channel.delete(reason="Empty user lobby")
@@ -85,7 +95,7 @@ class LobbyManager(commands.Cog):
                 await lobby_delete(channel_id)
                 continue
 
-            if len(ch.members) == 0:
+            if self._is_empty(ch):
                 try:
                     await ch.delete(reason="Empty user lobby (periodic cleanup)")
                 finally:

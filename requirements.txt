@@ -1,4 +1,5 @@
 discord.py==2.7.1
+wavelink==3.5.2
 tzdata==2026.3
 python-dotenv==1.2.2
 aiosqlite==0.20.0

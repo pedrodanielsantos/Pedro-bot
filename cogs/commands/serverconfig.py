@@ -3,10 +3,10 @@ from discord import app_commands
 from discord.ext import commands
 
 from db.database import get_autoroles, get_guild_embed_color, get_guild_settings
-from config.constants import EMBED_COLOR
+from config.constants import EMBED_COLOR, MUSIC_DEFAULT_VOLUME
 from utils.permissions import require_permission, visibility_gate
 from utils.regions import AUTOMATIC_LABEL, region_label
-from utils.settings import format_channel, format_roles
+from utils.settings import NOT_SET, format_channel, format_roles
 
 class ServerConfig(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -26,6 +26,15 @@ class ServerConfig(commands.Cog):
         embed_color = settings["embed_color"]
         guild = interaction.guild
 
+        dj_role_id = settings["music_dj_role_id"]
+        dj_role = guild.get_role(dj_role_id) if dj_role_id else None
+        if dj_role_id is None:
+            dj_value = f"{NOT_SET}, everyone can control playback"
+        else:
+            dj_value = dj_role.mention if dj_role else f"*Deleted role* (`{dj_role_id}`)"
+
+        music_volume = settings["music_default_volume"]
+
         # Unset values name the effective default rather than reading as missing,
         # since both fall back to something rather than being disabled.
         lines = [
@@ -35,6 +44,8 @@ class ServerConfig(commands.Cog):
             f"**Commands log:** {format_channel(guild, settings['commands_log_channel_id'])}",
             f"**Moderation log:** {format_channel(guild, settings['moderation_log_channel_id'])}",
             f"**Autoroles:** {format_roles(guild, autoroles)}",
+            f"**DJ role:** {dj_value}",
+            f"**Music volume:** {music_volume}%" if music_volume else f"**Music volume:** {MUSIC_DEFAULT_VOLUME}% (default)",
         ]
 
         color = await get_guild_embed_color(interaction.guild_id)
