@@ -65,7 +65,7 @@ audio itself: it resolves and queues tracks, and Lavalink opens the voice
 connection, decodes, and sends Opus.
 
 That split is why the `PyNaCl is not installed` and `davey is not installed`
-warnings at startup are harmless here. They gate discord.py's own `VoiceClient`,
+warnings at startup are harmless. They gate discord.py's own `VoiceClient`,
 which encrypts and sends audio in-process. `wavelink.Player` is a bare
 `VoiceProtocol` that only relays the voice session to Lavalink, and Lavalink
 handles encryption, including DAVE, on its side.
@@ -87,14 +87,8 @@ report themselves as unavailable.
 
 ### Node setup
 
-Needs a **JDK 17+** on the host, 21 LTS recommended. `winget` is unavailable on
-Windows Server, so install [Temurin](https://adoptium.net/) directly:
-
-```powershell
-$msi = "$env:TEMP\temurin21.msi"
-Invoke-WebRequest -Uri "https://api.adoptium.net/v3/installer/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse" -OutFile $msi
-Start-Process msiexec.exe -Wait -ArgumentList "/i `"$msi`" ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJavaHome /quiet"
-```
+Needs a **JDK 17+** on the host, 21 LTS recommended. Install
+[Temurin](https://adoptium.net/) on Windows, or:
 
 ```bash
 sudo apt install openjdk-21-jre-headless    # Debian/Ubuntu
@@ -113,9 +107,9 @@ what's already there unless `--force` is passed. Default install dir is
 `C:\lavalink` or `/opt/lavalink`, overridable with `--dir`.
 
 > [!IMPORTANT]
-> The install dir must be on **local disk**, not the network share the repo
-> lives on. A JVM started over SMB is slow to boot and prone to file locking
-> problems, and Lavalink writes its logs and plugin jars next to its own jar.
+> Install on **local disk**, not a network share. Lavalink writes its logs and
+> plugin jars next to its own jar, and a JVM started over a share is slow to
+> boot and prone to file locking problems.
 
 Only the config template is tracked. The rendered `application.yml` holds the
 real password and stays on the host, outside the repo.
@@ -132,8 +126,8 @@ so no portal changes are needed.
 
 ### YouTube extraction
 
-This is the part that breaks, not the infrastructure. YouTube actively works
-against extraction, so two settings in `application.yml` matter:
+This is the part that breaks, not the infrastructure. Two settings in
+`application.yml` matter:
 
 - **`youtube-plugin` is declared as a snapshot dependency**, not shipped as a jar,
   because tagged releases lag behind YouTube's changes. Snapshot versions are
@@ -143,26 +137,23 @@ against extraction, so two settings in `application.yml` matter:
   before starting.
 - **All ten clients are listed**, ordered by how likely each is to return a plain
   HTTPS URL. Which ones work varies by IP and region, and a client that fails
-  costs one request. A short list is what caused a total playback failure here:
-  `WEB` was served SABR-only responses carrying no format URLs, `ANDROID_VR`
-  returned "This video requires login", and `WEBEMBEDDED` returned "Video player
-  configuration error". Adding `ANDROID_MUSIC`, the TV clients and `IOS` fixed it.
+  costs one request, so a short list risks total playback failure. `MUSIC`
+  resolves `music.youtube.com` links and `ytmsearch` but does not stream, so it
+  can never be the only client.
 
-`MUSIC` resolves `music.youtube.com` links and `ytmsearch` but does not stream,
-so it can never be the only client. If playback fails again, the error enumerates
-every client with its own reason, which says whether any client still gets a
-direct URL. SoundCloud and Bandcamp are native Lavalink sources that never touch
-this path, so they make a good control test.
+When playback fails, the error enumerates every client with its own reason, which
+says whether any client still gets a direct URL. SoundCloud and Bandcamp are
+native Lavalink sources that never touch this path, so they make a good control
+test.
 
-Not every failure is an extraction problem. A YouTube Music playlist can carry
-entries whose underlying upload is deleted or region locked, where every client
-reports "This video is not available" and no plugin version helps. For those,
-`music_manager` re-searches the author and title against `MUSIC_FALLBACK_SOURCES`
-(plain YouTube first, then SoundCloud), requires the result to be within
-`MUSIC_FALLBACK_TOLERANCE` seconds of the original length, and queues it in the
-failed track's place. Each id is only replaced once, so an unplayable track
-cannot set off a chain of searches. Both constants live in
-[`config/constants.py`](config/constants.py).
+Not every failure is an extraction problem. A playlist can carry entries whose
+underlying upload is deleted or region locked, where every client reports "This
+video is not available". For those, `music_manager` re-searches the author and
+title against `MUSIC_FALLBACK_SOURCES` (plain YouTube first, then SoundCloud),
+requires the result to be within `MUSIC_FALLBACK_TOLERANCE` seconds of the
+original length, and queues it in the failed track's place. Each id is only
+replaced once, so an unplayable track cannot set off a chain of searches. Both
+constants live in [`config/constants.py`](config/constants.py).
 
 ## Command Reference
 
@@ -416,12 +407,11 @@ changes, it stages the updated README and appends a note to the commit message,
 avoiding separate "docs" commits.
 
 > [!IMPORTANT]
-> **Run once per machine.** Git hooks aren't cloned or pushed, so on every
-> machine (desktop, laptop, fresh clone) enable them once:
+> Git hooks aren't cloned or pushed, so enable them once per clone:
 >
 > ```bash
 > git config core.hooksPath scripts/hooks
 > ```
 >
-> Without this, commits still work, but the command table won't auto-update on
-> that machine until `py -3.13 scripts/gen_readme.py` is run manually.
+> Without this, commits still work, but the command table won't auto-update
+> until `py -3.13 scripts/gen_readme.py` is run manually.
