@@ -79,7 +79,7 @@ handles encryption, including DAVE, on its side.
 | [`LavaSrc`](https://github.com/topi314/LavaSrc) | Spotify/Apple/Deezer resolution, off until credentials are set |
 | [`cogs/core/music_manager.py`](cogs/core/music_manager.py) | Owns the node connection and playback lifecycle |
 | [`cogs/commands/music.py`](cogs/commands/music.py) | The slash commands |
-| [`utils/music.py`](utils/music.py) | Player lookup, DJ gating, track formatting |
+| [`utils/music.py`](utils/music.py) | Player lookup, DJ gating, track formatting, fallback search |
 
 The node is **optional**. With `LAVALINK_DIR` unset, or the jar or `java` missing,
 `run.py` logs why and skips it, the bot starts normally, and the music commands
@@ -153,6 +153,16 @@ so it can never be the only client. If playback fails again, the error enumerate
 every client with its own reason, which says whether any client still gets a
 direct URL. SoundCloud and Bandcamp are native Lavalink sources that never touch
 this path, so they make a good control test.
+
+Not every failure is an extraction problem. A YouTube Music playlist can carry
+entries whose underlying upload is deleted or region locked, where every client
+reports "This video is not available" and no plugin version helps. For those,
+`music_manager` re-searches the author and title against `MUSIC_FALLBACK_SOURCES`
+(plain YouTube first, then SoundCloud), requires the result to be within
+`MUSIC_FALLBACK_TOLERANCE` seconds of the original length, and queues it in the
+failed track's place. Each id is only replaced once, so an unplayable track
+cannot set off a chain of searches. Both constants live in
+[`config/constants.py`](config/constants.py).
 
 ## Command Reference
 

@@ -1,8 +1,13 @@
+import logging
+
 import discord
 import wavelink
 
+from config.constants import MUSIC_FALLBACK_SOURCES, MUSIC_FALLBACK_TOLERANCE
 from db.database import get_music_dj_role
 from utils.errors import UserError
+
+logger = logging.getLogger("music")
 
 # Sources that stream without a meaningful length, so a progress bar or a
 # remaining-time estimate would be nonsense for them.
@@ -129,6 +134,44 @@ def parse_position(value: str) -> int:
     for number in numbers:
         seconds = seconds * 60 + number
     return seconds * 1000
+
+
+async def find_replacement(track: wavelink.Playable) -> wavelink.Playable | None:
+    """A stand-in for a track the node refused to stream, or None if there isn't one.
+
+    YouTube Music playlists carry entries no client can play: removed, region
+    locked, or login walled. The same recording is usually up elsewhere, so the
+    author and title are re-searched against MUSIC_FALLBACK_SOURCES.
+    """
+    # A failed live stream has no fixed recording to substitute, and its length
+    # is meaningless, so there is nothing to match a candidate against.
+    if track.is_stream:
+        return None
+
+    query = " ".join(part for part in (track.author, track.title) if part).strip()
+    if not query:
+        return None
+
+    for source in MUSIC_FALLBACK_SOURCES:
+        try:
+            results = await wavelink.Playable.search(query, source=source)
+        except Exception:
+            logger.warning(f"Fallback search on {source} failed for {query!r}", exc_info=True)
+            continue
+
+        if isinstance(results, wavelink.Playlist):
+            continue
+
+        for candidate in results:
+            # Same id means the same unplayable item, just found again.
+            if candidate.identifier == track.identifier or candidate.is_stream:
+                continue
+            # Length is the cheap signal that a result is the same recording
+            # rather than a remix, a live version or an hour long mix.
+            if abs(candidate.length - track.length) <= MUSIC_FALLBACK_TOLERANCE * 1000:
+                return candidate
+
+    return None
 
 
 def progress_bar(position: int, length: int, width: int = 20) -> str:

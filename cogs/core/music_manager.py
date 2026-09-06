@@ -6,9 +6,9 @@ import os
 
 import wavelink
 
-from config.constants import MUSIC_IDLE_TIMEOUT
+from config.constants import EMBED_COLOR_WARNING, MUSIC_IDLE_TIMEOUT
 from db.database import get_guild_embed_color
-from utils.music import format_track
+from utils.music import find_replacement, format_track
 
 logger = logging.getLogger("music")
 
@@ -115,6 +115,74 @@ class MusicManager(commands.Cog):
         except discord.HTTPException:
             # A deleted or newly forbidden channel must not interrupt playback.
             pass
+
+    @commands.Cog.listener()
+    async def on_wavelink_track_exception(self, payload: wavelink.TrackExceptionEventPayload):
+        """A track the node could not stream, e.g. every YouTube client refusing it."""
+        # Lavalink already ended the track, so wavelink's autoplay has moved on
+        # by itself. Only the replacement and the notice are added here.
+        await self._replace_failed(
+            payload.player, payload.track, payload.exception.get("message") or "unknown error"
+        )
+
+    @commands.Cog.listener()
+    async def on_wavelink_track_stuck(self, payload: wavelink.TrackStuckEventPayload):
+        """A track that stopped producing audio without reporting an error."""
+        # No track end follows this event, so nothing advances the queue on its
+        # own and the track has to be skipped explicitly.
+        await self._replace_failed(
+            payload.player, payload.track, "the stream stopped responding", skip=True
+        )
+
+    async def _replace_failed(self, player: wavelink.Player | None, track: wavelink.Playable, detail: str, *, skip: bool = False):
+        """Queues a stand-in for a track that failed, and says so in the channel."""
+        if player is None or not player.connected:
+            return
+
+        # Every id gets at most one replacement attempt, and a stand-in is
+        # registered before it plays, so a run of unplayable results terminates
+        # instead of searching for a replacement for the replacement.
+        tried = getattr(player, "failed_tracks", None)
+        if tried is None:
+            tried = player.failed_tracks = set()
+
+        replacement = None
+        if track.identifier not in tried:
+            tried.add(track.identifier)
+            try:
+                replacement = await find_replacement(track)
+            except Exception:
+                logger.exception(f"Could not search for a replacement for {track.identifier}")
+
+        outcome = f"replacing it with {replacement.identifier}" if replacement else "no replacement found"
+        logger.warning(f"Could not play {track.title!r} ({track.identifier}): {detail}, {outcome}")
+
+        if replacement is not None:
+            tried.add(replacement.identifier)
+            # The queue has already advanced by the time the search returns, so
+            # the stand-in goes to the front and plays next rather than in place.
+            player.queue.put_at(0, replacement)
+
+        # Sent before playback starts, so it lands ahead of the "Now playing"
+        # the stand-in triggers rather than after it.
+        channel = getattr(player, "home", None)
+        if channel is not None:
+            description = f"Couldn't play {format_track(track)}."
+            description += f"\nPlaying {format_track(replacement)} instead." if replacement else "\nSkipping it."
+            try:
+                await channel.send(embed=discord.Embed(description=description, color=EMBED_COLOR_WARNING))
+            except discord.HTTPException:
+                pass
+
+        if skip:
+            await player.skip(force=True)
+        elif replacement is not None and not player.playing:
+            # Nothing followed the failed track, or autoplay gave up after three
+            # consecutive failures, so the stand-in has to be started here.
+            try:
+                await player.play(player.queue.get())
+            except wavelink.QueueEmpty:
+                pass
 
     @commands.Cog.listener()
     async def on_wavelink_inactive_player(self, player: wavelink.Player):

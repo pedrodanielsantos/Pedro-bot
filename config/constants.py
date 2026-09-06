@@ -26,3 +26,9 @@ MUSIC_MAX_VOLUME = 150         # above this the Opus encoder clips audibly
 MUSIC_IDLE_TIMEOUT = 300       # seconds with nothing playing before the bot disconnects
 MUSIC_QUEUE_PAGE_SIZE = 10     # tracks per /queue page
 MUSIC_AUTOCOMPLETE_LIMIT = 25  # Discord's hard cap on autocomplete choices
+
+# Search prefixes tried, in order, to replace a track the node refuses to
+# stream. A YouTube Music entry that fails often has a plain YouTube upload that
+# doesn't, so ytsearch comes before leaving YouTube entirely.
+MUSIC_FALLBACK_SOURCES = ("ytsearch", "scsearch")
+MUSIC_FALLBACK_TOLERANCE = 15  # seconds a replacement may differ in length from the original
