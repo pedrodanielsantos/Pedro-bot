@@ -52,9 +52,10 @@ guild count, with **Start/Stop/Reload** control, a **Cog Manager**, and a **Sync
 button for slash commands.
 
 A separate **Console** page (`/console`) is a live, auto-scrolling mirror of every
-supervised process's raw stdout/stderr (not just logged output), Lavalink
-included, rendered client-side from `logs/console.raw` so it stays visible across
-a crash or restart.
+supervised process's stdout/stderr (not just logged output), rendered client-side
+from `logs/console.raw` so it stays visible across a crash or restart. Lavalink's
+own Spring Boot lines are restated in the bot's log format on the way through, so
+both processes read as one log.
 
 ## Music
 
@@ -376,7 +377,7 @@ Pedro-bot/
 ├── internal_api.py     # Localhost-only API (127.0.0.1:8001), feeds live bot data to web.py
 ├── web.py              # FastAPI dashboard: status, guilds, cog manager, command sync, console
 ├── run.py              # Supervisor: hosts the dashboard (:8000), starts/stops bot.py and Lavalink
-├── logs/               # Rotating bot.log, read by the Console page
+├── logs/               # Rotating bot.log, plus console.raw, the Console page's source
 ├── cogs/
 │   ├── commands/       # Slash commands
 │   └── core/           # Error handling, dev tools, music node, shared mixins

@@ -50,6 +50,18 @@ def _enable_windows_vt():
         kernel32.SetConsoleMode(handle, mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
 
 
+def color_log_line(ts: str, level: str, logger_name: str, msg: str) -> str:
+    """The colored console form of a log line. Shared by the formatter below and
+    by run.py, which rewrites child processes that log in their own format into
+    this one so the console reads as a single log."""
+    color = _LEVEL_COLORS.get(level, "")
+    return (
+        f"{_MUTED}[{ts}]{_RESET} "
+        f"{_BOLD}{color}{level}{_RESET} "
+        f"{_MUTED}{logger_name}:{_RESET} {msg}"
+    )
+
+
 class ColorFormatter(logging.Formatter):
     """Formats log lines with ANSI color escapes for the terminal."""
 
@@ -58,14 +70,7 @@ class ColorFormatter(logging.Formatter):
         match = _LOG_LINE_RE.match(line)
         if not match:
             return line
-
-        level = match["level"]
-        color = _LEVEL_COLORS.get(level, "")
-        return (
-            f"{_MUTED}[{match['ts']}]{_RESET} "
-            f"{_BOLD}{color}{level}{_RESET} "
-            f"{_MUTED}{match['logger']}:{_RESET} {match['msg']}"
-        )
+        return color_log_line(match["ts"], match["level"], match["logger"], match["msg"])
 
 
 class BufferHandler(logging.Handler):

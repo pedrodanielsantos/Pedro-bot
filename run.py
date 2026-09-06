@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -11,7 +12,7 @@ from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 import web
-from utils.log import RawConsoleSink, setup_logging
+from utils.log import RawConsoleSink, color_log_line, setup_logging
 
 # run.py needs LAVALINK_* to decide whether to supervise a node. bot.py loads
 # this again in its own process, which is a no-op the second time.
@@ -66,6 +67,11 @@ class ProcessSupervisor:
     # thread dump and keep running, so Lavalink leaves this False.
     stops_on_ctrl_break = False
 
+    # True for children whose output is rewritten by format_line(), which needs
+    # whole lines. Children that render progress with \r must leave this False,
+    # since line splitting would collapse those redraws.
+    reformats_output = False
+
     def __init__(self, sink, host_stdout):
         self.process = None
         self.status = "stopped"  # stopped | stopping | running | crashed_retrying
@@ -108,12 +114,20 @@ class ProcessSupervisor:
         await self.stop()
         await self.start()
 
+    def format_line(self, line: str) -> str:
+        """Rewrites one line of the child's output. Only called when
+        reformats_output is set."""
+        return line
+
     async def _spawn(self):
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
         logger.info(f"Starting {self.label}...")
         self.process = await asyncio.create_subprocess_exec(
             *self.command(), creationflags=creationflags, env=self.env(), cwd=self.cwd(),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+            # Raised from the 64KB default so a long line (a stack trace frame,
+            # a dumped payload) can still be read whole in line mode.
+            limit=1_048_576,
         )
         self.status = "running"
         asyncio.create_task(self._pump_output(self.process))
@@ -134,17 +148,23 @@ class ProcessSupervisor:
 
     async def _pump_output(self, proc):
         """Forwards the child's merged stdout+stderr to the real host stdout and
-        to the raw console sink. Reads in chunks, not lines, to preserve \\r bytes."""
+        to the raw console sink. Reads in chunks, not lines, to preserve \\r bytes,
+        unless the child's output is being reformatted."""
         try:
-            while True:
-                chunk = await proc.stdout.read(4096)
-                if not chunk:
-                    break
-                self.host_stdout.buffer.write(chunk)
-                self.host_stdout.buffer.flush()
-                self.sink.write(chunk)
+            if self.reformats_output:
+                async for raw_line in proc.stdout:
+                    line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+                    self._emit(f"{self.format_line(line)}\n".encode("utf-8"))
+            else:
+                while chunk := await proc.stdout.read(4096):
+                    self._emit(chunk)
         except Exception:
             logger.exception(f"Error pumping {self.label} output")
+
+    def _emit(self, data: bytes):
+        self.host_stdout.buffer.write(data)
+        self.host_stdout.buffer.flush()
+        self.sink.write(data)
 
     async def _watch(self, proc):
         returncode = await proc.wait()
@@ -186,6 +206,16 @@ class BotSupervisor(ProcessSupervisor):
         return {**os.environ, "PYTHONIOENCODING": "utf-8"}
 
 
+# Spring Boot's default console line, e.g.
+# 2026-09-06T15:19:56.714+01:00  INFO 6156 --- [Lavalink] [   main] o.s.b.w.e.u.UndertowWebServer : ...
+# The PID, the "---" separator and the app/thread brackets are all dropped in the
+# rewrite; only the timestamp, level, logger and message survive.
+_SPRING_LINE_RE = re.compile(
+    r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})T(?P<time>\d{2}:\d{2}:\d{2})\.\d+\S*\s+"
+    r"(?P<level>[A-Z]+)\s+\d+\s+---\s+(?:\[[^\]]*\]\s*)+(?P<logger>\S+)\s*:\s(?P<msg>.*)$"
+)
+
+
 class LavalinkSupervisor(ProcessSupervisor):
     """Runs the Lavalink node the music cogs connect to.
 
@@ -195,6 +225,7 @@ class LavalinkSupervisor(ProcessSupervisor):
     """
 
     label = "lavalink"
+    reformats_output = True
 
     def __init__(self, sink, host_stdout):
         super().__init__(sink, host_stdout)
@@ -231,6 +262,23 @@ class LavalinkSupervisor(ProcessSupervisor):
     def cwd(self):
         # Lavalink resolves application.yml, plugins/ and logs/ relative to cwd.
         return str(self.directory)
+
+    def format_line(self, line):
+        """Restates a Spring Boot log line in the bot's own console format, so the
+        node's output reads as part of the same log instead of a second one pasted
+        in. Anything that doesn't match (the startup banner, stack traces) is left
+        exactly as printed."""
+        match = _SPRING_LINE_RE.match(line)
+        if not match:
+            return line
+
+        # WARN -> WARNING keeps the level names, and so the colors, in step with
+        # logging's own. The logger is cut to its last segment and namespaced, so
+        # o.s.b.w.e.u.UndertowWebServer reads as lavalink.UndertowWebServer.
+        level = "WARNING" if match["level"] == "WARN" else match["level"]
+        timestamp = f"{match['day']}/{match['month']}/{match['year']} {match['time']}"
+        name = f"lavalink.{match['logger'].rsplit('.', 1)[-1]}"
+        return color_log_line(timestamp, level, name, match["msg"])
 
     async def wait_until_ready(self, timeout: float = 90):
         """Blocks until the node accepts connections, so the bot doesn't come up

@@ -12,8 +12,8 @@
     <a href="/" class="btn btn-fixed-width">Dashboard</a>
 </header>
 
-<main>
-    <pre id="console-log" class="card" data-log-pos="{{ log_pos }}" style="font-family: var(--mono); font-size: 12px; white-space: pre-wrap; flex: 1; min-height: 0; overflow-y: auto;"></pre>
+<main class="main-bleed">
+    <pre id="console-log" data-log-pos="{{ log_pos }}" style="font-family: var(--mono); font-size: 12px; white-space: pre-wrap; padding: 16px; flex: 1; min-height: 0; overflow-y: auto;"></pre>
 </main>
 {% include "partials/console_log.html" %}
 

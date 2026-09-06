@@ -103,6 +103,15 @@
         body.fill-viewport      { height: 100vh; }
         body.fill-viewport main { min-height: 0; }
 
+        /* Content that is the page itself: full width, flush against the header
+           and footer, no frame of its own. */
+        main.main-bleed {
+            max-width: none;
+            padding: 0;
+        }
+
+        body.fill-viewport footer { margin-top: 0; }
+
         .section-label {
             font-size: 11px;
             font-weight: 600;
