@@ -23,6 +23,6 @@ ERROR_COLOR = 0xdd2e44
 # Music settings
 MUSIC_DEFAULT_VOLUME = 60      # percent, overridable per guild with /set musicvolume
 MUSIC_MAX_VOLUME = 150         # above this the Opus encoder clips audibly
-MUSIC_IDLE_TIMEOUT = 300       # seconds alone or paused before the bot disconnects
+MUSIC_IDLE_TIMEOUT = 300       # seconds with nothing playing before the bot disconnects
 MUSIC_QUEUE_PAGE_SIZE = 10     # tracks per /queue page
 MUSIC_AUTOCOMPLETE_LIMIT = 25  # Discord's hard cap on autocomplete choices
