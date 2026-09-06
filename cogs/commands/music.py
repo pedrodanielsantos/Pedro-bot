@@ -274,6 +274,10 @@ class Music(commands.Cog):
         if not player or not player.connected or not player.current:
             raise UserError("Nothing is playing.")
 
+        # Deferred before the database read, which is otherwise done inside the
+        # three seconds Discord allows for a first response.
+        await interaction.response.defer()
+
         track = player.current
         color = await get_guild_embed_color(interaction.guild_id)
         embed = discord.Embed(title="Now playing", description=format_track(track), color=color)
@@ -296,7 +300,7 @@ class Music(commands.Cog):
             footer += f" - {player.queue.count} track{'s' if player.queue.count != 1 else ''} queued"
         embed.set_footer(text=footer)
 
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="queue", description="Show the queue")
     async def queue(self, interaction: discord.Interaction):

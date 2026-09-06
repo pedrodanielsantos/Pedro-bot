@@ -119,11 +119,16 @@ class MusicManager(commands.Cog):
     @commands.Cog.listener()
     async def on_wavelink_track_exception(self, payload: wavelink.TrackExceptionEventPayload):
         """A track the node could not stream, e.g. every YouTube client refusing it."""
+        # Lavalink sends the whole Java cause chain, a stack trace per client it
+        # tried. Only the first line names the failure, but the rest is where each
+        # client's own reason appears, so it is kept at debug level.
+        message = (payload.exception.get("message") or "").strip()
+        detail = message.splitlines()[0] if message else "unknown error"
+        logger.debug(f"Full exception for {payload.track.identifier}:\n{message}")
+
         # Lavalink already ended the track, so wavelink's autoplay has moved on
         # by itself. Only the replacement and the notice are added here.
-        await self._replace_failed(
-            payload.player, payload.track, payload.exception.get("message") or "unknown error"
-        )
+        await self._replace_failed(payload.player, payload.track, detail)
 
     @commands.Cog.listener()
     async def on_wavelink_track_stuck(self, payload: wavelink.TrackStuckEventPayload):

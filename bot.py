@@ -36,7 +36,7 @@ TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 if not TOKEN:
     raise SystemExit("DISCORD_BOT_TOKEN is not set. Add it to your .env file")
 
-setup_logging()
+setup_logging(os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("bot")
 
 intents = discord.Intents.default()

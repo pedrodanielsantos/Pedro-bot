@@ -319,6 +319,7 @@ JEYY_API_KEY=your_jeyy_api_key       # image manipulation commands
 CAT_API_KEY=your_cat_api_key         # /cat
 DOG_API_KEY=your_dog_api_key         # /dog
 SYNC_ON_STARTUP=false                # optional; skip the automatic command sync on every restart
+LOG_LEVEL=DEBUG                      # optional; defaults to INFO
 
 LAVALINK_DIR=C:\lavalink             # music; where setup_lavalink.py installed the node
 LAVALINK_URI=http://127.0.0.1:2333   # music; the node's address

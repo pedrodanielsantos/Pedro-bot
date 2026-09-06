@@ -47,7 +47,7 @@ sys.stderr = _TeeStream(sys.stderr, _console_sink)
 
 # Must install the tee before setup_logging(): logging.StreamHandler() snapshots
 # sys.stderr at construction, so installing the tee later would bypass it.
-setup_logging()
+setup_logging(os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("run")
 
 

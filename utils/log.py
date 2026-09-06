@@ -127,6 +127,11 @@ def _install_excepthooks():
 
 
 def setup_logging(level=logging.INFO):
+    # Accepts a level name so LOG_LEVEL can be set in .env. An unknown one falls
+    # back to INFO rather than failing startup over a typo.
+    if isinstance(level, str):
+        level = logging.getLevelNamesMapping().get(level.upper(), logging.INFO)
+
     fmt = logging.Formatter(
         "[%(asctime)s] %(levelname)s %(name)s: %(message)s",
         datefmt="%d/%m/%Y %H:%M:%S",
