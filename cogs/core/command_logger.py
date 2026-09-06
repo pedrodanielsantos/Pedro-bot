@@ -1,7 +1,8 @@
 import discord
 from discord.ext import commands
 
-from db.database import get_commands_log_channel, get_guild_embed_color
+from config.constants import EMBED_COLOR
+from db.database import get_commands_log_channel
 
 class CommandLogger(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -31,8 +32,8 @@ class CommandLogger(commands.Cog):
         if options_str:
             description += f"\n{options_str}"
 
-        color = await get_guild_embed_color(interaction.guild_id)
-        embed = discord.Embed(description=description, color=color)
+        # Log entries always use the default color, not the guild's embed color.
+        embed = discord.Embed(description=description, color=EMBED_COLOR)
         embed.timestamp = discord.utils.utcnow()
         embed.set_footer(text=f"User ID: {interaction.user.id}")
 

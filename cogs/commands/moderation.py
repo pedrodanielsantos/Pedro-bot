@@ -6,6 +6,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
+from config.constants import EMBED_COLOR
 from db.database import (
     get_guild_embed_color, get_moderation_log_channel,
     next_case_number, add_mod_case,
@@ -76,8 +77,8 @@ class Moderation(commands.GroupCog, group_name="moderation"):
         if not channel:
             return case_number
 
-        color = await get_guild_embed_color(guild.id)
-        embed = discord.Embed(title=f"{action} | Case #{case_number}", color=color)
+        # Log entries always use the default color, not the guild's embed color.
+        embed = discord.Embed(title=f"{action} | Case #{case_number}", color=EMBED_COLOR)
         embed.add_field(name="Offender", value=f"<@{target_id}>", inline=False)
         embed.add_field(name="Reason", value=reason, inline=False)
         if duration:
