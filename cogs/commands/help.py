@@ -14,6 +14,7 @@ COMMAND_CATEGORIES = {
     "region": "Lobbies",
 
     "play": "Music",
+    "insert": "Music",
     "skip": "Music",
     "pause": "Music",
     "resume": "Music",

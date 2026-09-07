@@ -29,6 +29,7 @@ from utils.music import (
     require_node,
     require_player,
     require_voice,
+    resolve_pending,
     track_length,
 )
 from utils.paginator import PaginatorView
@@ -107,7 +108,42 @@ class Music(SessionMixin, commands.Cog):
 
         await interaction.followup.send(embed=embed)
 
-    async def _queue_search(self, player: wavelink.Player, query: str, color: int) -> discord.Embed:
+    @app_commands.command(name="insert", description="Add a track to the front of the queue")
+    @app_commands.describe(
+        query="A search term, or a Spotify, YouTube, YouTube Music, SoundCloud or Bandcamp link"
+    )
+    async def insert(self, interaction: discord.Interaction, query: str):
+        require_node()
+        await interaction.response.defer()
+
+        player = await self._ensure_player(interaction)
+        # With nothing queued this is exactly what /play does, so gating it would
+        # be stricter than /play for the same result. Cutting ahead of tracks
+        # other people queued is the part that needs the role.
+        if player.playing or not player.queue.is_empty:
+            await require_dj(interaction, player)
+
+        player.home = interaction.channel
+
+        color = await get_guild_embed_color(interaction.guild_id)
+        spotify = parse_spotify_url(query)
+        if spotify is not None:
+            embed = await self._queue_spotify(player, *spotify, color=color, front=True)
+        else:
+            embed = await self._queue_search(player, query, color, front=True)
+
+        if not player.playing:
+            await player.play(player.queue.get())
+
+        await interaction.followup.send(embed=embed)
+
+    @insert.autocomplete("query")
+    async def insert_autocomplete(self, interaction: discord.Interaction, current: str):
+        return await self._query_autocomplete(current)
+
+    async def _queue_search(
+        self, player: wavelink.Player, query: str, color: int, *, front: bool = False
+    ) -> discord.Embed:
         """Queues whatever the node resolves a query or link to."""
         try:
             # No source given, so wavelink's default applies: a bare query becomes
@@ -122,29 +158,65 @@ class Music(SessionMixin, commands.Cog):
             raise UserError(f"No results for `{query[:100]}`.")
 
         if isinstance(results, wavelink.Playlist):
-            added = player.queue.put(results)
+            if front:
+                # Ascending indices, so the playlist keeps its own order while
+                # sitting ahead of everything already queued.
+                for offset, track in enumerate(results.tracks):
+                    player.queue.put_at(offset, track)
+                added = len(results.tracks)
+            else:
+                added = player.queue.put(results)
             return discord.Embed(
-                title="Playlist queued",
+                title="Playlist up next" if front else "Playlist queued",
                 description=f"**{results.name}**\n{added} track{'s' if added != 1 else ''} added.",
                 color=color,
             )
 
         track = results[0]
-        player.queue.put(track)
-        embed = discord.Embed(title="Queued", description=format_track(track), color=color)
+        if front:
+            player.queue.put_at(0, track)
+        else:
+            player.queue.put(track)
+        embed = discord.Embed(
+            title="Playing next" if front else "Queued",
+            description=format_track(track),
+            color=color,
+        )
         if track.artwork:
             embed.set_thumbnail(url=track.artwork)
         return embed
 
     async def _queue_spotify(
-        self, player: wavelink.Player, kind: str, identifier: str, *, color: int
+        self, player: wavelink.Player, kind: str, identifier: str, *, color: int, front: bool = False
     ) -> discord.Embed:
         """Queues a Spotify link, which carries metadata the node can't stream."""
+        # An album or playlist is resolved a few tracks at a time as the queue
+        # drains, which only ever appends. Inserting one would mean resolving all
+        # of it up front, so the link is refused rather than played out of order.
+        # Checked before the fetch, since the URL already says which kind it is.
+        if front and kind != "track":
+            raise UserError(f"I can only insert a single track. Use `/play` for a Spotify {kind}.")
+
         entity = await fetch_entity(self.session, kind, identifier)
         if entity is None:
             raise UserError("Couldn't read that Spotify link. Searching by name still works.")
         if not entity.tracks:
             raise UserError("That Spotify link has no tracks.")
+
+        if front:
+            # Resolved directly rather than through the pending queue, which
+            # fill_queue would append to the back.
+            resolved = await resolve_pending(entity.tracks[0])
+            if resolved is None:
+                raise UserError(f"Couldn't find a playable version of **{entity.name}**.")
+
+            player.queue.put_at(0, resolved)
+            embed = discord.Embed(
+                title="Playing next", description=format_track(resolved), color=color
+            )
+            if resolved.artwork:
+                embed.set_thumbnail(url=resolved.artwork)
+            return embed
 
         pending = getattr(player, "pending_tracks", None)
         if pending is None:
@@ -176,6 +248,10 @@ class Music(SessionMixin, commands.Cog):
 
     @play.autocomplete("query")
     async def play_autocomplete(self, interaction: discord.Interaction, current: str):
+        return await self._query_autocomplete(current)
+
+    async def _query_autocomplete(self, current: str):
+        """Track suggestions for /play and /insert, which take the same query."""
         if len(current) < AUTOCOMPLETE_MIN_LENGTH or not current.strip():
             return []
         # A pasted link is already exact, so there is nothing to suggest.

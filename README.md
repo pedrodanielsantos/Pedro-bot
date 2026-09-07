@@ -193,6 +193,7 @@ carries no ISRC, so a match rests on artist, title and length.
 
 | Command | Description |
 | --- | --- |
+| `/insert` | Add a track to the front of the queue |
 | `/loop` | Set the loop mode |
 | `/nowplaying` | Show the track currently playing |
 | `/pause` | Pause playback |
