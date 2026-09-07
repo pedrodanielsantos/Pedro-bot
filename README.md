@@ -168,8 +168,11 @@ the app owner to hold Premium, so it is not used and LavaSrc's sources stay off.
 
 Tracks resolve `MUSIC_PREFETCH` ahead of playback and top up as each one starts,
 so a long playlist costs a search or two per track played rather than hundreds at
-once. `/queue` shows how many are still pending, and after `MUSIC_MISS_LIMIT`
-misses in a row the rest is dropped.
+once. After `MUSIC_MISS_LIMIT` misses in a row the rest is dropped.
+
+The metadata arrives in one request, so `/queue` lists the whole playlist right
+away and shows the unresolved ones without a link. `/skip` and `/shuffle` count
+those positions too, rather than only the handful resolved so far.
 
 The embed page returns at most `MUSIC_SPOTIFY_LIMIT` tracks for a playlist, and
 carries no ISRC, so a match rests on artist, title and length.

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections import deque
 from dataclasses import dataclass
 
 import discord
@@ -157,6 +158,19 @@ class PendingTrack:
     artists: str
     duration: int  # milliseconds, matching Playable.length
 
+    # Named after the Playable attributes format_track reads, so a pending track
+    # renders through it unchanged. No uri, so it shows as plain text.
+    uri = None
+    is_stream = False
+
+    @property
+    def author(self) -> str:
+        return self.artists
+
+    @property
+    def length(self) -> int:
+        return self.duration
+
     @property
     def query(self) -> str:
         return f"{self.artists} {self.title}".strip()
@@ -217,6 +231,27 @@ async def resolve_pending(track: PendingTrack) -> wavelink.Playable | None:
     return await search_matching(track.query, track.duration, MUSIC_SEARCH_SOURCES)
 
 
+def pending_tracks(player: wavelink.Player) -> deque:
+    """The player's queued tail, created on first use.
+
+    Holds PendingTrack, plus any already playable track pushed back out of the
+    queue by a reorder. fill_queue passes those through without searching again.
+    """
+    pending = getattr(player, "pending_tracks", None)
+    if pending is None:
+        pending = player.pending_tracks = deque()
+    return pending
+
+
+def queued_tracks(player: wavelink.Player) -> list:
+    """Everything queued, resolved first, then what is still to be looked up.
+
+    What /queue numbers and every command addressing a position counts, so the
+    tail of a Spotify playlist isn't treated as though it weren't queued yet.
+    """
+    return list(player.queue) + list(pending_tracks(player))
+
+
 async def fill_queue(player: wavelink.Player) -> list[wavelink.Playable]:
     """Resolves pending tracks until MUSIC_PREFETCH of them sit in the queue.
 
@@ -224,7 +259,7 @@ async def fill_queue(player: wavelink.Player) -> list[wavelink.Playable]:
     playlist costs a search or two per track played rather than hundreds up
     front. Returns what it added, in order.
     """
-    pending = getattr(player, "pending_tracks", None)
+    pending = pending_tracks(player)
     if not pending:
         return []
 
@@ -239,6 +274,13 @@ async def fill_queue(player: wavelink.Player) -> list[wavelink.Playable]:
     async with lock:
         while pending and player.connected and player.queue.count < MUSIC_PREFETCH:
             track = pending.popleft()
+            # Already playable, so it only has to move across: a reorder puts
+            # resolved tracks back here to keep one order across both.
+            if not isinstance(track, PendingTrack):
+                player.queue.put(track)
+                added.append(track)
+                continue
+
             resolved = await resolve_pending(track)
 
             if resolved is None:

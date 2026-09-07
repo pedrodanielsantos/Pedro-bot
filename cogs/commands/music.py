@@ -1,9 +1,8 @@
-from collections import deque
-
 import discord
 from discord import app_commands
 from discord.ext import commands
 import logging
+import random
 from typing import Optional
 
 import wavelink
@@ -20,11 +19,14 @@ from utils.embeds import success_embed
 from utils.errors import UserError
 from utils.mixins import SessionMixin
 from utils.music import (
+    PendingTrack,
     fill_queue,
     format_track,
     format_track_length,
     parse_position,
+    pending_tracks,
     progress_bar,
+    queued_tracks,
     require_dj,
     require_node,
     require_player,
@@ -121,7 +123,7 @@ class Music(SessionMixin, commands.Cog):
         # With nothing queued this is exactly what /play does, so gating it would
         # be stricter than /play for the same result. Cutting ahead of tracks
         # other people queued is the part that needs the role.
-        if player.playing or not player.queue.is_empty:
+        if player.playing or queued_tracks(player):
             await require_dj(interaction, player)
 
         player.home = interaction.channel
@@ -219,10 +221,7 @@ class Music(SessionMixin, commands.Cog):
                 embed.set_thumbnail(url=resolved.artwork)
             return embed
 
-        pending = getattr(player, "pending_tracks", None)
-        if pending is None:
-            pending = player.pending_tracks = deque()
-        pending.extend(entity.tracks)
+        pending_tracks(player).extend(entity.tracks)
 
         # Only enough to start playing is resolved here. The rest follows as the
         # queue drains, from the manager cog's track start handler.
@@ -302,30 +301,44 @@ class Music(SessionMixin, commands.Cog):
             )
             return
 
-        # Positions count the queue only, numbered as /queue prints them, so the
-        # track playing is skipped by leaving this empty rather than by asking
-        # for position 0.
-        if player.queue.is_empty:
+        # Positions count everything queued, numbered as /queue prints them, so
+        # the track playing is skipped by leaving this empty rather than by
+        # asking for position 0.
+        resolved = list(player.queue)
+        pending = pending_tracks(player)
+        tail = list(pending)
+        tracks = resolved + tail
+        if not tracks:
             raise UserError("The queue is empty, so there's nothing in it to skip.")
 
         try:
             positions = parse_number_spec(
-                position, noun="queue position", maximum=player.queue.count
+                position, noun="queue position", maximum=len(tracks)
             )
         except ValueError as e:
             raise UserError(str(e))
 
-        tracks = list(player.queue)
         removed = [tracks[index - 1] for index in positions]
 
-        # Rebuilt rather than deleted in place, where every removal would shift
-        # the positions after it. Nothing is awaited between the two, so the
-        # queue is never observed empty.
+        # Both rebuilt rather than deleted in place, where every removal would
+        # shift the positions after it. Nothing is awaited, so neither is
+        # observed half rebuilt. A track fill_queue is resolving right now has
+        # already left the deque, so skipping it does nothing.
         dropping = set(positions)
-        player.queue.clear()
-        for index, track in enumerate(tracks, 1):
-            if index not in dropping:
-                player.queue.put(track)
+        # Left alone when only the tail is affected, so dropping a track nowhere
+        # near the queue doesn't disturb what loop mode is tracking.
+        if positions[0] <= len(resolved):
+            player.queue.clear()
+            for index, track in enumerate(resolved, 1):
+                if index not in dropping:
+                    player.queue.put(track)
+
+        keeping = [
+            track for offset, track in enumerate(tail)
+            if len(resolved) + offset + 1 not in dropping
+        ]
+        pending.clear()
+        pending.extend(keeping)
 
         if len(removed) == 1:
             description = f"Skipped {format_track(removed[0], with_author=False)}"
@@ -342,7 +355,7 @@ class Music(SessionMixin, commands.Cog):
     @skip.autocomplete("position")
     async def skip_autocomplete(self, interaction: discord.Interaction, current: str):
         player: wavelink.Player | None = interaction.guild.voice_client
-        if not player or not player.connected or player.queue.is_empty:
+        if not player or not player.connected:
             return []
 
         current = current.strip()
@@ -352,7 +365,7 @@ class Music(SessionMixin, commands.Cog):
             return []
 
         choices = []
-        for index, track in enumerate(player.queue, 1):
+        for index, track in enumerate(queued_tracks(player), 1):
             if current and not str(index).startswith(current):
                 continue
 
@@ -396,6 +409,7 @@ class Music(SessionMixin, commands.Cog):
         await require_dj(interaction, player)
 
         player.queue.clear()
+        pending_tracks(player).clear()
         await player.disconnect()
         await interaction.response.send_message(embed=success_embed("Stopped and cleared the queue."))
 
@@ -442,12 +456,33 @@ class Music(SessionMixin, commands.Cog):
         player = require_player(interaction)
         await require_dj(interaction, player)
 
-        if player.queue.count < 2:
+        tracks = queued_tracks(player)
+        if len(tracks) < 2:
             raise UserError("There aren't enough tracks queued to shuffle.")
 
-        player.queue.shuffle()
-        await interaction.response.send_message(
-            embed=success_embed(f"Shuffled **{player.queue.count}** tracks.")
+        pending = pending_tracks(player)
+        if not pending:
+            player.queue.shuffle()
+            await interaction.response.send_message(
+                embed=success_embed(f"Shuffled **{len(tracks)}** tracks.")
+            )
+            return
+
+        # fill_queue searches, so this can outlast the three seconds Discord
+        # allows for a first response.
+        await interaction.response.defer()
+
+        # Everything goes to the tail so a resolved track can land anywhere in
+        # the new order, not just in the stretch already resolved. fill_queue
+        # pulls the head back, and only searches for what is still pending.
+        random.shuffle(tracks)
+        player.queue.clear()
+        pending.clear()
+        pending.extend(tracks)
+        await fill_queue(player)
+
+        await interaction.followup.send(
+            embed=success_embed(f"Shuffled **{len(tracks)}** tracks.")
         )
 
     @app_commands.command(name="loop", description="Set the loop mode")
@@ -494,8 +529,9 @@ class Music(SessionMixin, commands.Cog):
         footer = f"Volume {player.volume}%"
         if player.paused:
             footer += " - paused"
-        if player.queue.count:
-            footer += f" - {player.queue.count} track{'s' if player.queue.count != 1 else ''} queued"
+        queued = len(queued_tracks(player))
+        if queued:
+            footer += f" - {queued} track{'s' if queued != 1 else ''} queued"
         embed.set_footer(text=footer)
 
         await interaction.followup.send(embed=embed)
@@ -512,16 +548,15 @@ class Music(SessionMixin, commands.Cog):
         if player.current:
             header = f"**Now playing**\n{format_track(player.current)}\n\n"
 
-        # Tracks from a Spotify link are resolved a few ahead of playback, so the
-        # rest of one aren't in the queue yet and would otherwise go unmentioned.
-        pending = len(getattr(player, "pending_tracks", ()) or ())
-        waiting = f", {pending} still resolving" if pending else ""
+        tracks = queued_tracks(player)
+        # Tracks from a Spotify link are listed from their metadata before a
+        # playable source is found, which is why some carry no link.
+        resolving = sum(1 for track in tracks if isinstance(track, PendingTrack))
+        waiting = f", {resolving} still resolving" if resolving else ""
 
-        if player.queue.is_empty:
-            empty = f"Resolving {pending} more." if pending else "The queue is empty."
-            pages = [f"{header}**Up next**\n{empty}"]
+        if not tracks:
+            pages = [f"{header}**Up next**\nThe queue is empty."]
         else:
-            tracks = list(player.queue)
             pages = []
             for start in range(0, len(tracks), MUSIC_QUEUE_PAGE_SIZE):
                 chunk = tracks[start:start + MUSIC_QUEUE_PAGE_SIZE]
