@@ -50,7 +50,7 @@ class ServerConfig(commands.Cog):
 
         color = await get_guild_embed_color(interaction.guild_id)
         embed = discord.Embed(title="Server Config", description="\n".join(lines), color=color)
-        embed.set_footer(text="Change these with /set, /log, /setup and /autorole.")
+        embed.set_footer(text="Change these with /set, /log, /setup, /autorole and /welcome.")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 async def setup(bot: commands.Bot):

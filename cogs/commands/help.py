@@ -6,7 +6,7 @@ from utils.paginator import TEXT_DISPLAY_LIMIT, JumpTarget, PaginatorView, chunk
 from utils.permissions import is_visible_to
 
 # Keyed by qualified name, whole group (e.g. "image") or single subcommand
-# (e.g. "setup welcome"). A subcommand entry wins over its group's entry.
+# (e.g. "setup lobbies"). A subcommand entry wins over its group's entry.
 # Anything unlisted falls into DEFAULT_CATEGORY so it can't silently vanish.
 COMMAND_CATEGORIES = {
     "rename": "Lobbies",
@@ -47,7 +47,7 @@ COMMAND_CATEGORIES = {
     "embed": "Administration",
     "autorole": "Administration",
     "setup": "Administration",
-    "test": "Administration",
+    "welcome": "Administration",
     "log": "Administration",
     "moderation": "Administration",
 }

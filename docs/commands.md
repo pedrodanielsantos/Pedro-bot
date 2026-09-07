@@ -109,8 +109,8 @@
 | `/set lobbyregion` | Set or reset the voice region new lobbies are created in |
 | `/set musicvolume` | Set or reset the volume new players start at |
 | `/setup lobbies` | Setup temporary voice-chat system with user-created lobbies |
-| `/setup welcome` | Setup or disable the welcome message channel |
-| `/test welcome` | Simulate a member joining to test the welcome message |
+| `/welcome channel` | Set or disable the welcome message channel |
+| `/welcome test` | Simulate a member joining to test the welcome message |
 
 <!-- COMMANDS:END -->
 
