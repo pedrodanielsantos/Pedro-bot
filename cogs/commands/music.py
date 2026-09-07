@@ -22,7 +22,6 @@ from utils.embeds import success_embed
 from utils.errors import UserError
 from utils.mixins import SessionMixin
 from utils.music import (
-    PendingTrack,
     fill_queue,
     format_track,
     format_track_length,
@@ -396,6 +395,12 @@ class Music(SessionMixin, commands.Cog):
 
         await interaction.response.send_message(embed=success_embed(description))
 
+        # Skipping the resolved stretch leaves the queue short, or empty. Nothing
+        # else refills it: with autoplay partial an empty queue never starts a
+        # track, so no track start arrives to do it and the tail is stranded.
+        # Last, since it searches, and the reply shouldn't wait on it.
+        await fill_queue(player)
+
     @skip.autocomplete("position")
     async def skip_autocomplete(self, interaction: discord.Interaction, current: str):
         player: wavelink.Player | None = interaction.guild.voice_client
@@ -593,10 +598,6 @@ class Music(SessionMixin, commands.Cog):
             header = f"**Now playing**\n{format_track(player.current)}\n\n"
 
         tracks = queued_tracks(player)
-        # Tracks from a Spotify link are listed from their metadata before a
-        # playable source is found, which is why some carry no link.
-        resolving = sum(1 for track in tracks if isinstance(track, PendingTrack))
-        waiting = f", {resolving} still resolving" if resolving else ""
 
         if not tracks:
             pages = [f"{header}**Up next**\nThe queue is empty."]
@@ -609,7 +610,7 @@ class Music(SessionMixin, commands.Cog):
                     for offset, track in enumerate(chunk)
                 ]
                 # The header repeats on every page so a page reads on its own.
-                pages.append(f"{header}**Up next** ({len(tracks)} total{waiting})\n" + "\n".join(lines))
+                pages.append(f"{header}**Up next** ({len(tracks)} total)\n" + "\n".join(lines))
 
         color = await get_guild_embed_color(interaction.guild_id)
         view = PaginatorView(pages, color)

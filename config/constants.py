@@ -40,6 +40,8 @@ MUSIC_FALLBACK_TOLERANCE = 15  # seconds a replacement may differ in length from
 # as one from a Spotify link. ytmsearch leads because it returns songs rather
 # than the covers and lyric uploads a plain YouTube search mixes in.
 MUSIC_SEARCH_SOURCES = ("ytmsearch", "ytsearch", "scsearch")
-MUSIC_PREFETCH = 3         # metadata-only tracks resolved ahead of the one playing
+# A page's worth, so /queue's first page always has a link on every track and
+# only the pages past it show anything unresolved.
+MUSIC_PREFETCH = MUSIC_QUEUE_PAGE_SIZE
 MUSIC_MISS_LIMIT = 5       # unresolvable tracks in a row before the rest are dropped
 MUSIC_SPOTIFY_LIMIT = 100  # tracks Spotify's embed page returns for a playlist

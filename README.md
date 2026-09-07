@@ -166,13 +166,14 @@ YouTube, then SoundCloud), taking the first result within
 `MUSIC_FALLBACK_TOLERANCE` seconds of the original length. The Spotify API needs
 the app owner to hold Premium, so it is not used and LavaSrc's sources stay off.
 
-Tracks resolve `MUSIC_PREFETCH` ahead of playback and top up as each one starts,
-so a long playlist costs a search or two per track played rather than hundreds at
-once. After `MUSIC_MISS_LIMIT` misses in a row the rest is dropped.
+Tracks resolve `MUSIC_PREFETCH` ahead of playback, a page of `/queue` worth, and
+top up as each one starts and after `/skip` drops part of the queue, so a long
+playlist costs a search per track played rather than hundreds at once. After
+`MUSIC_MISS_LIMIT` misses in a row the rest is dropped.
 
 The metadata arrives in one request, so `/queue` lists the whole playlist right
-away and shows the unresolved ones without a link. `/skip` and `/shuffle` count
-those positions too, rather than only the handful resolved so far.
+away, with the tracks it hasn't looked up yet carrying no link. `/skip` and
+`/shuffle` count those positions too, rather than only the resolved ones.
 
 The embed page returns at most `MUSIC_SPOTIFY_LIMIT` tracks for a playlist, and
 carries no ISRC, so a match rests on artist, title and length.
