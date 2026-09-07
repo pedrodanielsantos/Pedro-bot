@@ -6,16 +6,17 @@ import os
 
 import wavelink
 
-from config.constants import EMBED_COLOR_WARNING, MUSIC_IDLE_TIMEOUT
+from config.constants import EMBED_COLOR_WARNING, MUSIC_IDLE_TIMEOUT, MUSIC_VOICE_RESUME_DELAY
 from db.database import get_guild_embed_color
 from utils.music import fill_queue, find_replacement, format_track
 
 logger = logging.getLogger("music")
 
-# Voice closes worth a fresh handshake: the session is gone but the channel is
-# still there, which is what changing a lobby's region produces. Wavelink only
-# acts on 4014 itself, and treats every other code as nothing to recover from.
+# Voice closes where the channel is still there and playback should carry on.
+# CALL_TERMINATED is the one a lobby region change produces. Wavelink only acts
+# on 4014 itself and treats every other code as nothing to recover from.
 RECOVERABLE_VOICE_CLOSES = frozenset({
+    wavelink.DiscordVoiceCloseType.CALL_TERMINATED,
     wavelink.DiscordVoiceCloseType.SESSION_INVALID,
     wavelink.DiscordVoiceCloseType.SESSION_TIMEOUT,
     wavelink.DiscordVoiceCloseType.VOICE_SERVER_CRASHED,
@@ -101,31 +102,48 @@ class MusicManager(commands.Cog):
     async def on_wavelink_websocket_closed(self, payload: wavelink.WebsocketClosedEventPayload):
         """Discord dropped the voice connection, e.g. after /region moved the lobby.
 
-        Without this the player keeps reporting itself as playing: Lavalink's
-        position clock runs on and the queue advances on schedule, while nothing
-        reaches the channel.
+        Usually Discord reissues a voice server and playback carries on, so this
+        waits for one player update before deciding anything. A node that came
+        back reports a real ping and is left alone, since seeking a healthy
+        stream only makes it stutter. One that didn't keeps its position clock
+        running while sending nothing, and needs the stream restarted at the
+        position it thinks it reached.
         """
         player = payload.player
+
+        # A local close is this bot disconnecting, and the player is destroyed
+        # right after, so there is nothing to report or to recover.
+        if not payload.by_remote:
+            logger.debug(f"Voice websocket closed locally: {payload.code.name}")
+            return
+
         logger.warning(
             f"Voice websocket closed: {payload.code.name} ({payload.code.value}), "
-            f"reason {payload.reason or 'none given'}, by_remote={payload.by_remote}"
+            f"reason {payload.reason or 'none given'}"
         )
 
-        if player is None or player.channel is None:
-            return
-        if payload.code not in RECOVERABLE_VOICE_CLOSES:
+        if player is None or payload.code not in RECOVERABLE_VOICE_CLOSES:
             return
 
-        try:
-            # Same channel, so this only redoes the handshake. The queue and the
-            # position Lavalink has kept running both survive it.
-            await player.move_to(player.channel)
-        except Exception:
-            logger.exception("Could not restore the voice connection, disconnecting")
-            await player.disconnect()
+        # Long enough for a fresh playerUpdate, which is what refreshes the ping.
+        await asyncio.sleep(MUSIC_VOICE_RESUME_DELAY)
+
+        # Only ever false once wavelink has invalidated the player and dropped it
+        # from the node, so there is nothing left here to resume.
+        if not player.connected:
+            logger.warning(f"Player was discarded after {payload.code.name}")
             return
 
-        logger.info(f"Restored the voice connection in {player.channel.id}")
+        # Lavalink reports -1 until it is talking to a voice server again.
+        if player.ping >= 0:
+            logger.info(f"Voice came back on its own after {payload.code.name}, ping {player.ping}ms")
+            return
+
+        if player.current:
+            # Read here, not before the wait, or the track jumps back by it.
+            position = player.position
+            await player.seek(position)
+            logger.info(f"Restarted {player.current.identifier} at {position}ms after {payload.code.name}")
 
     @commands.Cog.listener()
     async def on_wavelink_track_start(self, payload: wavelink.TrackStartEventPayload):
