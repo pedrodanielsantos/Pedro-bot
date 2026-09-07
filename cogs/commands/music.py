@@ -1,3 +1,4 @@
+import asyncio
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -8,6 +9,8 @@ from typing import Optional
 import wavelink
 
 from config.constants import (
+    MUSIC_AUTOCOMPLETE_CACHE,
+    MUSIC_AUTOCOMPLETE_DEBOUNCE,
     MUSIC_AUTOCOMPLETE_LIMIT,
     MUSIC_DEFAULT_VOLUME,
     MUSIC_MAX_VOLUME,
@@ -40,9 +43,8 @@ from utils.spotify import fetch_entity, parse_spotify_url
 
 logger = logging.getLogger("music")
 
-# Minimum characters before /play autocomplete queries the node. Autocomplete
-# fires on every keystroke, and a search per character would hammer YouTube for
-# results nobody is going to pick.
+# Minimum characters before /play autocomplete queries the node, under which
+# there is nothing specific enough to suggest.
 AUTOCOMPLETE_MIN_LENGTH = 3
 
 LOOP_MODES = {
@@ -55,6 +57,13 @@ LOOP_MODES = {
 class Music(SessionMixin, commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        # The newest autocomplete keystroke per user, so earlier ones can tell
+        # they have been superseded. Holds one small token per typist at most.
+        self._autocomplete_tokens: dict[int, object] = {}
+        # The last query each user was shown results for, with those results,
+        # so backspacing through it doesn't ask the node again. Capped at
+        # MUSIC_AUTOCOMPLETE_CACHE users.
+        self._autocomplete_results: dict[int, tuple[str, list]] = {}
 
     async def _ensure_player(self, interaction: discord.Interaction) -> wavelink.Player:
         """The guild's player, connecting to the caller's channel if needed."""
@@ -142,7 +151,7 @@ class Music(SessionMixin, commands.Cog):
 
     @insert.autocomplete("query")
     async def insert_autocomplete(self, interaction: discord.Interaction, current: str):
-        return await self._query_autocomplete(current)
+        return await self._query_autocomplete(interaction, current)
 
     async def _queue_search(
         self, player: wavelink.Player, query: str, color: int, *, front: bool = False
@@ -248,15 +257,44 @@ class Music(SessionMixin, commands.Cog):
 
     @play.autocomplete("query")
     async def play_autocomplete(self, interaction: discord.Interaction, current: str):
-        return await self._query_autocomplete(current)
+        return await self._query_autocomplete(interaction, current)
 
-    async def _query_autocomplete(self, current: str):
+    async def _query_autocomplete(self, interaction: discord.Interaction, current: str):
         """Track suggestions for /play and /insert, which take the same query."""
+        # Dropping the token cancels a keystroke still waiting to search, so
+        # deleting the query doesn't leave one to fire for text that is gone.
+        user_id = interaction.user.id
         if len(current) < AUTOCOMPLETE_MIN_LENGTH or not current.strip():
+            self._autocomplete_tokens.pop(user_id, None)
+            if not current:
+                self._autocomplete_results.pop(user_id, None)
             return []
         # A pasted link is already exact, so there is nothing to suggest.
         if current.startswith(("http://", "https://")):
+            self._autocomplete_tokens.pop(user_id, None)
             return []
+
+        # Backspacing leaves a prefix of what was already searched, which is
+        # text being edited rather than a query someone means. What they were
+        # already shown is served again instead, since one backspace is a poor
+        # reason to ask the node anything. Typing forward is never a prefix of
+        # the last search, so it falls through and searches.
+        searched, previous = self._autocomplete_results.get(user_id, (None, None))
+        if searched is not None and searched.startswith(current):
+            self._autocomplete_tokens.pop(user_id, None)
+            return previous
+
+        # Discord fires this as you type, roughly once a second, and searching
+        # each one would hammer YouTube for results the next keystroke discards.
+        # Only the last of a burst is still current after the wait, so only it
+        # searches.
+        token = object()
+        self._autocomplete_tokens[user_id] = token
+        await asyncio.sleep(MUSIC_AUTOCOMPLETE_DEBOUNCE)
+        if self._autocomplete_tokens.get(user_id) is not token:
+            return []
+        # Dropped once claimed, so the map doesn't keep an entry per user seen.
+        self._autocomplete_tokens.pop(user_id, None)
 
         try:
             results = await wavelink.Playable.search(current)
@@ -278,6 +316,12 @@ class Music(SessionMixin, commands.Cog):
             # re-searched. Falls back to the label for a source without one.
             value = track.uri if track.uri and len(track.uri) <= 100 else label
             choices.append(app_commands.Choice(name=label, value=value))
+
+        # Capped, or a long lived bot keeps a result set per user who ever
+        # typed one. Oldest first, since a dict keeps insertion order.
+        while len(self._autocomplete_results) >= MUSIC_AUTOCOMPLETE_CACHE:
+            del self._autocomplete_results[next(iter(self._autocomplete_results))]
+        self._autocomplete_results[user_id] = (current, choices)
         return choices
 
     @app_commands.command(
