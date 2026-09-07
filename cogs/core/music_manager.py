@@ -6,7 +6,12 @@ import os
 
 import wavelink
 
-from config.constants import EMBED_COLOR_WARNING, MUSIC_IDLE_TIMEOUT, MUSIC_VOICE_RESUME_DELAY
+from config.constants import (
+    EMBED_COLOR_WARNING,
+    MUSIC_FALLBACK_ATTEMPTS,
+    MUSIC_IDLE_TIMEOUT,
+    MUSIC_VOICE_RESUME_DELAY,
+)
 from db.database import get_guild_embed_color
 from utils.music import fill_queue, find_replacement, format_track
 
@@ -21,6 +26,27 @@ RECOVERABLE_VOICE_CLOSES = frozenset({
     wavelink.DiscordVoiceCloseType.SESSION_TIMEOUT,
     wavelink.DiscordVoiceCloseType.VOICE_SERVER_CRASHED,
 })
+
+
+def _extras_dict(track: wavelink.Playable) -> dict:
+    """A track's extras as a plain dict, empty if it carries none."""
+    try:
+        return dict(track.extras)
+    except (TypeError, ValueError):
+        return {}
+
+
+def _fallback_depth(track: wavelink.Playable) -> int:
+    """How many stand-ins deep a track already is, 0 for one queued directly.
+
+    Rides on the track's extras, which Lavalink stores as userData and hands back
+    on the events that track produces, so the count follows the chain rather than
+    the player.
+    """
+    try:
+        return int(_extras_dict(track).get("fallback_depth", 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 class MusicManager(commands.Cog):
@@ -204,26 +230,36 @@ class MusicManager(commands.Cog):
         if player is None or not player.connected:
             return
 
-        # Every id gets at most one replacement attempt, and a stand-in is
-        # registered before it plays, so a run of unplayable results terminates
-        # instead of searching for a replacement for the replacement.
+        # Every id that has failed on this player, so a repeated search walks past
+        # them to the next candidate. A stand-in is not added until it fails too,
+        # since one bad result should not end the track.
         tried = getattr(player, "failed_tracks", None)
         if tried is None:
             tried = player.failed_tracks = set()
+        tried.add(track.identifier)
+
+        # How many stand-ins deep this track already is. Carried on the track
+        # rather than the player because a stand-in reports a normal track start
+        # before it fails, so nothing on the player survives to be counted.
+        depth = _fallback_depth(track)
 
         replacement = None
-        if track.identifier not in tried:
-            tried.add(track.identifier)
+        if depth < MUSIC_FALLBACK_ATTEMPTS:
             try:
-                replacement = await find_replacement(track)
+                replacement = await find_replacement(track, exclude=tried)
             except Exception:
                 logger.exception(f"Could not search for a replacement for {track.identifier}")
 
-        outcome = f"replacing it with {replacement.identifier}" if replacement else "no replacement found"
+        if replacement is not None:
+            outcome = f"replacing it with {replacement.identifier}"
+        elif depth >= MUSIC_FALLBACK_ATTEMPTS:
+            outcome = f"giving up after {depth} stand-ins"
+        else:
+            outcome = "no replacement found"
         logger.warning(f"Could not play {track.title!r} ({track.identifier}): {detail}, {outcome}")
 
         if replacement is not None:
-            tried.add(replacement.identifier)
+            replacement.extras = {**_extras_dict(track), "fallback_depth": depth + 1}
             # The queue has already advanced by the time the search returns, so
             # the stand-in goes to the front and plays next rather than in place.
             player.queue.put_at(0, replacement)

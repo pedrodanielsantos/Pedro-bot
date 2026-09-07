@@ -82,12 +82,28 @@ test.
 
 Not every failure is an extraction problem. A playlist can carry entries whose
 underlying upload is deleted or region locked, where every client reports "This
-video is not available". For those, `music_manager` re-searches the author and
-title against `MUSIC_FALLBACK_SOURCES` (plain YouTube first, then SoundCloud),
+video is not available". For those, `music_manager` re-searches the author,
+minus any `- Topic` suffix naming an auto-generated channel, and the title
+against `MUSIC_FALLBACK_SOURCES` (plain YouTube first, then SoundCloud),
 requires the result to be within `MUSIC_FALLBACK_TOLERANCE` seconds of the
-original length, and queues it in the failed track's place. Each id is only
-replaced once, so an unplayable track cannot set off a chain of searches. Both
-constants live in [`config/constants.py`](../config/constants.py).
+original length, and queues it in the failed track's place.
+
+A stand-in can fail too, so the search repeats with every identifier already
+tried excluded, up to `MUSIC_FALLBACK_ATTEMPTS` deep. That depth rides on the
+track's `extras`, which Lavalink stores as `userData` and returns on its events:
+a stand-in announces a normal track start before failing, so a counter on the
+player would be reset by the very track it counts. The exclusion set only grows,
+so a chain terminates. Constants live in
+[`config/constants.py`](../config/constants.py).
+
+That retry matters most for SoundCloud, which is
+[dropping MP3 and Opus transcodings](https://developers.soundcloud.com/blog/api-streaming-urls/)
+for AAC HLS. Lavaplayer only selects `hls` and `progressive`, so a migrated
+track fails with `Invalid status code for soundcloud stream: 404`. No Lavalink
+release reads the AAC transcodings and there is no setting for it, so upgrading
+does not help. Migration is per track, so duplicate uploads usually still play,
+which is exactly what the retry finds. Expect that to fade as the rollout
+finishes.
 
 ## Spotify links
 

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from collections import deque
+from collections.abc import Container
 from dataclasses import dataclass
 
 import discord
@@ -176,14 +177,29 @@ class PendingTrack:
         return f"{self.artists} {self.title}".strip()
 
 
+def search_author(track: wavelink.Playable) -> str:
+    """A track's author as a person would search for it.
+
+    YouTube's auto-generated artist channels are named "Artist - Topic", and that
+    suffix appears verbatim in the author of everything they host. Searching it
+    back matches only the same auto-generated uploads, which are the ones that
+    tend to be unplayable in the first place.
+    """
+    author = (track.author or "").strip()
+    if author.lower().endswith(" - topic"):
+        author = author[: -len(" - topic")].strip()
+    return author
+
+
 async def search_matching(
-    query: str, length: int, sources: tuple[str, ...], *, exclude: str | None = None
+    query: str, length: int, sources: tuple[str, ...], *, exclude: Container[str] = ()
 ) -> wavelink.Playable | None:
     """The first result across sources close enough in length to be the same recording.
 
     Length is the cheap signal that a candidate isn't a remix, a live version or
-    an hour long mix. exclude drops one identifier, for a search looking for an
-    alternative to a track it already has.
+    an hour long mix. exclude drops identifiers already known to be unplayable,
+    so a repeated search walks past them to the next candidate instead of
+    returning the same dead result.
     """
     if not query:
         return None
@@ -199,7 +215,7 @@ async def search_matching(
             continue
 
         for candidate in results:
-            if candidate.is_stream or candidate.identifier == exclude:
+            if candidate.is_stream or candidate.identifier in exclude:
                 continue
             if abs(candidate.length - length) <= MUSIC_FALLBACK_TOLERANCE * 1000:
                 return candidate
@@ -207,23 +223,26 @@ async def search_matching(
     return None
 
 
-async def find_replacement(track: wavelink.Playable) -> wavelink.Playable | None:
+async def find_replacement(
+    track: wavelink.Playable, *, exclude: Container[str] = ()
+) -> wavelink.Playable | None:
     """A stand-in for a track the node refused to stream, or None if there isn't one.
 
     YouTube Music playlists carry entries no client can play: removed, region
     locked, or login walled. The same recording is usually up elsewhere, so the
     author and title are re-searched against MUSIC_FALLBACK_SOURCES.
+
+    exclude carries every identifier already tried for this track, so a stand-in
+    that itself fails leads to the next candidate rather than back to a known
+    dead one. It must contain the track's own id.
     """
     # A failed live stream has no fixed recording to substitute, and its length
     # is meaningless, so there is nothing to match a candidate against.
     if track.is_stream:
         return None
 
-    query = " ".join(part for part in (track.author, track.title) if part).strip()
-    # Excluded by id, or the same unplayable item is just found again.
-    return await search_matching(
-        query, track.length, MUSIC_FALLBACK_SOURCES, exclude=track.identifier
-    )
+    query = " ".join(part for part in (search_author(track), track.title) if part).strip()
+    return await search_matching(query, track.length, MUSIC_FALLBACK_SOURCES, exclude=exclude)
 
 
 async def resolve_pending(track: PendingTrack) -> wavelink.Playable | None:
