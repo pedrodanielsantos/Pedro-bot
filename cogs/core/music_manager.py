@@ -12,6 +12,15 @@ from utils.music import fill_queue, find_replacement, format_track
 
 logger = logging.getLogger("music")
 
+# Voice closes worth a fresh handshake: the session is gone but the channel is
+# still there, which is what changing a lobby's region produces. Wavelink only
+# acts on 4014 itself, and treats every other code as nothing to recover from.
+RECOVERABLE_VOICE_CLOSES = frozenset({
+    wavelink.DiscordVoiceCloseType.SESSION_INVALID,
+    wavelink.DiscordVoiceCloseType.SESSION_TIMEOUT,
+    wavelink.DiscordVoiceCloseType.VOICE_SERVER_CRASHED,
+})
+
 
 class MusicManager(commands.Cog):
     """Owns the connection to the Lavalink node and the playback lifecycle.
@@ -87,6 +96,36 @@ class MusicManager(commands.Cog):
             f"Lavalink node {payload.node.identifier} ready "
             f"(session {payload.session_id}, resumed={payload.resumed})"
         )
+
+    @commands.Cog.listener()
+    async def on_wavelink_websocket_closed(self, payload: wavelink.WebsocketClosedEventPayload):
+        """Discord dropped the voice connection, e.g. after /region moved the lobby.
+
+        Without this the player keeps reporting itself as playing: Lavalink's
+        position clock runs on and the queue advances on schedule, while nothing
+        reaches the channel.
+        """
+        player = payload.player
+        logger.warning(
+            f"Voice websocket closed: {payload.code.name} ({payload.code.value}), "
+            f"reason {payload.reason or 'none given'}, by_remote={payload.by_remote}"
+        )
+
+        if player is None or player.channel is None:
+            return
+        if payload.code not in RECOVERABLE_VOICE_CLOSES:
+            return
+
+        try:
+            # Same channel, so this only redoes the handshake. The queue and the
+            # position Lavalink has kept running both survive it.
+            await player.move_to(player.channel)
+        except Exception:
+            logger.exception("Could not restore the voice connection, disconnecting")
+            await player.disconnect()
+            return
+
+        logger.info(f"Restored the voice connection in {player.channel.id}")
 
     @commands.Cog.listener()
     async def on_wavelink_track_start(self, payload: wavelink.TrackStartEventPayload):
