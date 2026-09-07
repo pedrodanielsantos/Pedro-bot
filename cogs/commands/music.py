@@ -466,8 +466,8 @@ class Music(SessionMixin, commands.Cog):
             embed=success_embed(f"Loop mode set to **{mode.name}**.")
         )
 
-    @app_commands.command(name="nowplaying", description="Show the track currently playing")
-    async def nowplaying(self, interaction: discord.Interaction):
+    @app_commands.command(name="playing", description="Show the track currently playing")
+    async def playing(self, interaction: discord.Interaction):
         player: wavelink.Player | None = interaction.guild.voice_client
         if not player or not player.connected or not player.current:
             raise UserError("Nothing is playing.")

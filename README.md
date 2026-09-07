@@ -195,9 +195,9 @@ carries no ISRC, so a match rests on artist, title and length.
 | --- | --- |
 | `/insert` | Add a track to the front of the queue |
 | `/loop` | Set the loop mode |
-| `/nowplaying` | Show the track currently playing |
 | `/pause` | Pause playback |
 | `/play` | Play a track, or add it to the queue |
+| `/playing` | Show the track currently playing |
 | `/queue` | Show the queue |
 | `/resume` | Resume playback |
 | `/seek` | Jump to a position in the current track |
