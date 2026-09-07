@@ -202,7 +202,7 @@ carries no ISRC, so a match rests on artist, title and length.
 | `/resume` | Resume playback |
 | `/seek` | Jump to a position in the current track |
 | `/shuffle` | Shuffle the queue |
-| `/skip` | Skip the current track |
+| `/skip` | Skip the current track, or drop tracks from the queue |
 | `/stop` | Stop playback, clear the queue and leave |
 | `/volume` | Set or view the playback volume |
 

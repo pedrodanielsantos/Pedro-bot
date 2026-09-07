@@ -33,6 +33,7 @@ from utils.music import (
     track_length,
 )
 from utils.paginator import PaginatorView
+from utils.parsing import parse_number_spec
 from utils.spotify import fetch_entity, parse_spotify_url
 
 logger = logging.getLogger("music")
@@ -280,19 +281,90 @@ class Music(SessionMixin, commands.Cog):
             choices.append(app_commands.Choice(name=label, value=value))
         return choices
 
-    @app_commands.command(name="skip", description="Skip the current track")
-    async def skip(self, interaction: discord.Interaction):
+    @app_commands.command(
+        name="skip", description="Skip the current track, or drop tracks from the queue"
+    )
+    @app_commands.describe(
+        position="A queue position, range or list like 3, 2-5 or 1,4,7-9 (leave empty to skip what's playing)"
+    )
+    async def skip(self, interaction: discord.Interaction, position: Optional[str] = None):
         player = require_player(interaction)
         await require_dj(interaction, player)
 
-        if not player.current:
-            raise UserError("Nothing is playing.")
+        if position is None:
+            if not player.current:
+                raise UserError("Nothing is playing.")
 
-        skipped = player.current
-        await player.skip(force=True)
-        await interaction.response.send_message(
-            embed=success_embed(f"Skipped {format_track(skipped, with_author=False)}")
-        )
+            skipped = player.current
+            await player.skip(force=True)
+            await interaction.response.send_message(
+                embed=success_embed(f"Skipped {format_track(skipped, with_author=False)}")
+            )
+            return
+
+        # Positions count the queue only, numbered as /queue prints them, so the
+        # track playing is skipped by leaving this empty rather than by asking
+        # for position 0.
+        if player.queue.is_empty:
+            raise UserError("The queue is empty, so there's nothing in it to skip.")
+
+        try:
+            positions = parse_number_spec(
+                position, noun="queue position", maximum=player.queue.count
+            )
+        except ValueError as e:
+            raise UserError(str(e))
+
+        tracks = list(player.queue)
+        removed = [tracks[index - 1] for index in positions]
+
+        # Rebuilt rather than deleted in place, where every removal would shift
+        # the positions after it. Nothing is awaited between the two, so the
+        # queue is never observed empty.
+        dropping = set(positions)
+        player.queue.clear()
+        for index, track in enumerate(tracks, 1):
+            if index not in dropping:
+                player.queue.put(track)
+
+        if len(removed) == 1:
+            description = f"Skipped {format_track(removed[0], with_author=False)}"
+        else:
+            # Capped at a page's worth, or a long range would overflow the embed.
+            listed = removed[:MUSIC_QUEUE_PAGE_SIZE]
+            lines = "\n".join(f"- {format_track(track, with_author=False)}" for track in listed)
+            description = f"Skipped **{len(removed)}** queued tracks.\n{lines}"
+            if len(removed) > len(listed):
+                description += f"\n- and {len(removed) - len(listed)} more"
+
+        await interaction.response.send_message(embed=success_embed(description))
+
+    @skip.autocomplete("position")
+    async def skip_autocomplete(self, interaction: discord.Interaction, current: str):
+        player: wavelink.Player | None = interaction.guild.voice_client
+        if not player or not player.connected or player.queue.is_empty:
+            return []
+
+        current = current.strip()
+        # A range or list is typed by hand, and there is no single position to
+        # suggest for one.
+        if current and not current.isdigit():
+            return []
+
+        choices = []
+        for index, track in enumerate(player.queue, 1):
+            if current and not str(index).startswith(current):
+                continue
+
+            label = f"{index}. {track.title} - {track.author}"
+            # Discord rejects a choice name over 100 characters.
+            if len(label) > 100:
+                label = label[:97] + "..."
+            choices.append(app_commands.Choice(name=label, value=str(index)))
+
+            if len(choices) >= MUSIC_AUTOCOMPLETE_LIMIT:
+                break
+        return choices
 
     @app_commands.command(name="pause", description="Pause playback")
     async def pause(self, interaction: discord.Interaction):
