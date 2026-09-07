@@ -1,6 +1,6 @@
 #!/bin/sh
-# Regenerate the README command table before each commit. If it changed, stage
-# the README and leave a marker so prepare-commit-msg can note it in the message.
+# Regenerate the command table before each commit. If it changed, stage the doc
+# and leave a marker so prepare-commit-msg can note it in the message.
 #
 # Enable once per machine:  git config core.hooksPath scripts/hooks
 
@@ -11,8 +11,8 @@ $PY scripts/gen_readme.py
 code=$?
 
 if [ "$code" -eq 10 ]; then
-    git add README.md
-    touch "$(git rev-parse --git-dir)/README_REGEN"
+    git add docs/commands.md
+    touch "$(git rev-parse --git-dir)/COMMANDS_REGEN"
 elif [ "$code" -ne 0 ]; then
     echo "pre-commit: gen_readme.py failed (exit $code)" >&2
     exit 1

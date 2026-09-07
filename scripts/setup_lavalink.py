@@ -7,10 +7,6 @@ Run once on the host that runs the bot:
 Downloads pinned Lavalink and plugin jars, renders application.yml from
 config/lavalink/application.yml.example, and prints the .env lines to add.
 Safe to re-run: existing files are kept unless --force is passed.
-
-The install dir lives on local disk, never on the network drive the repo sits
-on. Lavalink writes logs and plugin state next to its jar, and a JVM started
-over SMB is slow to boot and prone to file locking problems.
 """
 
 import argparse

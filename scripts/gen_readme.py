@@ -1,10 +1,10 @@
-"""Regenerate the command reference table in README.md from the cogs.
+"""Regenerate the command reference table in docs/commands.md from the cogs.
 
 This is a dev tool, not part of the running bot. It statically parses every
 cog for its slash commands (name + description) and rewrites the block between
-the ``<!-- COMMANDS:START -->`` / ``<!-- COMMANDS:END -->`` markers in the
-README. Command categories and their order are read straight from
-``cogs/commands/help.py`` so the README, and the in-Discord /help, stay in sync
+the ``<!-- COMMANDS:START -->`` / ``<!-- COMMANDS:END -->`` markers in the doc.
+Command categories and their order are read straight from
+``cogs/commands/help.py`` so the doc, and the in-Discord /help, stay in sync
 from a single source of truth.
 
 Run it from anywhere:
@@ -12,8 +12,8 @@ Run it from anywhere:
     py -3.13 scripts/gen_readme.py
 
 Exit codes:
-    0  README was already up to date (no changes written)
-    10 README was regenerated (changes written)
+    0  the doc was already up to date (no changes written)
+    10 the doc was regenerated (changes written)
     1  something went wrong
 """
 
@@ -26,7 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 COGS_DIR = ROOT / "cogs"
 HELP_FILE = COGS_DIR / "commands" / "help.py"
-README = ROOT / "README.md"
+COMMANDS_DOC = ROOT / "docs" / "commands.md"
 
 START_MARKER = "<!-- COMMANDS:START -->"
 END_MARKER = "<!-- COMMANDS:END -->"
@@ -215,15 +215,15 @@ def render_table() -> str:
 
 
 def main() -> int:
-    if not README.exists():
-        print(f"[gen_readme] README not found at {README}", file=sys.stderr)
+    if not COMMANDS_DOC.exists():
+        print(f"[gen_readme] doc not found at {COMMANDS_DOC}", file=sys.stderr)
         return 1
 
-    text = README.read_text(encoding="utf-8")
+    text = COMMANDS_DOC.read_text(encoding="utf-8")
     if START_MARKER not in text or END_MARKER not in text:
         print(
             f"[gen_readme] markers not found; add {START_MARKER} / {END_MARKER} "
-            "around the command section in README.md",
+            "around the command section in docs/commands.md",
             file=sys.stderr,
         )
         return 1
@@ -235,11 +235,11 @@ def main() -> int:
     new_text = f"{before}{START_MARKER}\n\n{table}\n{END_MARKER}{after}"
 
     if new_text == text:
-        print("[gen_readme] README already up to date.")
+        print("[gen_readme] docs/commands.md already up to date.")
         return 0
 
-    README.write_text(new_text, encoding="utf-8")
-    print("[gen_readme] README command table regenerated.")
+    COMMANDS_DOC.write_text(new_text, encoding="utf-8")
+    print("[gen_readme] command table regenerated.")
     return 10
 
 

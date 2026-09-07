@@ -1,11 +1,11 @@
 #!/bin/sh
-# If pre-commit regenerated the README, append a standard bullet to the commit
-# message. Skips merges/squashes and never duplicates the line.
+# If pre-commit regenerated the command table, append a standard bullet to the
+# commit message. Skips merges/squashes and never duplicates the line.
 
 MSG_FILE="$1"
 SOURCE="$2"
 
-MARKER="$(git rev-parse --git-dir)/README_REGEN"
+MARKER="$(git rev-parse --git-dir)/COMMANDS_REGEN"
 [ -f "$MARKER" ] || exit 0
 rm -f "$MARKER"
 
@@ -14,7 +14,7 @@ case "$SOURCE" in
     merge|squash) exit 0 ;;
 esac
 
-LINE="- Regenerated command reference in README."
+LINE="- Regenerated the command reference."
 grep -qF "$LINE" "$MSG_FILE" && exit 0
 
 [ -n "$(tail -c1 "$MSG_FILE")" ] && printf '\n' >> "$MSG_FILE"
