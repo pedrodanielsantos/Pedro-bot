@@ -212,6 +212,11 @@ async def find_replacement(track: wavelink.Playable) -> wavelink.Playable | None
     )
 
 
+async def resolve_pending(track: PendingTrack) -> wavelink.Playable | None:
+    """A playable source for a metadata-only track, or None if no source has it."""
+    return await search_matching(track.query, track.duration, MUSIC_SEARCH_SOURCES)
+
+
 async def fill_queue(player: wavelink.Player) -> list[wavelink.Playable]:
     """Resolves pending tracks until MUSIC_PREFETCH of them sit in the queue.
 
@@ -234,7 +239,7 @@ async def fill_queue(player: wavelink.Player) -> list[wavelink.Playable]:
     async with lock:
         while pending and player.connected and player.queue.count < MUSIC_PREFETCH:
             track = pending.popleft()
-            resolved = await search_matching(track.query, track.duration, MUSIC_SEARCH_SOURCES)
+            resolved = await resolve_pending(track)
 
             if resolved is None:
                 logger.warning(f"No source had {track.query!r}, skipping it")
