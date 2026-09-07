@@ -32,3 +32,11 @@ MUSIC_AUTOCOMPLETE_LIMIT = 25  # Discord's hard cap on autocomplete choices
 # doesn't, so ytsearch comes before leaving YouTube entirely.
 MUSIC_FALLBACK_SOURCES = ("ytsearch", "scsearch")
 MUSIC_FALLBACK_TOLERANCE = 15  # seconds a replacement may differ in length from the original
+
+# Search prefixes tried, in order, for a track known only by its metadata, such
+# as one from a Spotify link. ytmsearch leads because it returns songs rather
+# than the covers and lyric uploads a plain YouTube search mixes in.
+MUSIC_SEARCH_SOURCES = ("ytmsearch", "ytsearch", "scsearch")
+MUSIC_PREFETCH = 3         # metadata-only tracks resolved ahead of the one playing
+MUSIC_MISS_LIMIT = 5       # unresolvable tracks in a row before the rest are dropped
+MUSIC_SPOTIFY_LIMIT = 100  # tracks Spotify's embed page returns for a playlist

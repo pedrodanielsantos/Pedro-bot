@@ -41,9 +41,9 @@ plugins:
       - ANDROID_VR
 
   lavasrc:
-    # Where a Spotify/Apple track is actually streamed from once LavaSrc has
-    # resolved its metadata. Tried in order, so a YouTube failure falls back to
-    # SoundCloud rather than failing the track.
+    # Where a track is actually streamed from once LavaSrc has resolved its
+    # metadata, for whichever sources below are enabled. Tried in order, so a
+    # YouTube failure falls back to SoundCloud rather than failing the track.
     providers:
       - "ytmsearch:%ISRC%"
       - "ytsearch:%ISRC%"
@@ -51,8 +51,9 @@ plugins:
       - "ytsearch:%QUERY%"
       - "scsearch:%QUERY%"
     sources:
-      # Spotify and Apple Music need credentials below, Deezer needs a
-      # decryption key. Left off until those are filled in.
+      # Spotify stays off: utils/spotify.py resolves those links instead, since
+      # LavaSrc can no longer obtain a token without a Premium account. Apple
+      # Music needs credentials below, Deezer a decryption key.
       spotify: false
       applemusic: false
       deezer: false

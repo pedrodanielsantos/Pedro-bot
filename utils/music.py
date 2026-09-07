@@ -1,9 +1,17 @@
+import asyncio
 import logging
+from dataclasses import dataclass
 
 import discord
 import wavelink
 
-from config.constants import MUSIC_FALLBACK_SOURCES, MUSIC_FALLBACK_TOLERANCE
+from config.constants import (
+    MUSIC_FALLBACK_SOURCES,
+    MUSIC_FALLBACK_TOLERANCE,
+    MUSIC_MISS_LIMIT,
+    MUSIC_PREFETCH,
+    MUSIC_SEARCH_SOURCES,
+)
 from db.database import get_music_dj_role
 from utils.errors import UserError
 
@@ -136,6 +144,55 @@ def parse_position(value: str) -> int:
     return seconds * 1000
 
 
+@dataclass(frozen=True)
+class PendingTrack:
+    """A track known only by its metadata, still to be found on a playable source.
+
+    Spotify links produce these, since such a link carries no audio and every
+    track has to be searched for elsewhere. Nothing here is Spotify specific, so
+    another metadata-only source can queue them the same way.
+    """
+
+    title: str
+    artists: str
+    duration: int  # milliseconds, matching Playable.length
+
+    @property
+    def query(self) -> str:
+        return f"{self.artists} {self.title}".strip()
+
+
+async def search_matching(
+    query: str, length: int, sources: tuple[str, ...], *, exclude: str | None = None
+) -> wavelink.Playable | None:
+    """The first result across sources close enough in length to be the same recording.
+
+    Length is the cheap signal that a candidate isn't a remix, a live version or
+    an hour long mix. exclude drops one identifier, for a search looking for an
+    alternative to a track it already has.
+    """
+    if not query:
+        return None
+
+    for source in sources:
+        try:
+            results = await wavelink.Playable.search(query, source=source)
+        except Exception:
+            logger.warning(f"Search on {source} failed for {query!r}", exc_info=True)
+            continue
+
+        if isinstance(results, wavelink.Playlist):
+            continue
+
+        for candidate in results:
+            if candidate.is_stream or candidate.identifier == exclude:
+                continue
+            if abs(candidate.length - length) <= MUSIC_FALLBACK_TOLERANCE * 1000:
+                return candidate
+
+    return None
+
+
 async def find_replacement(track: wavelink.Playable) -> wavelink.Playable | None:
     """A stand-in for a track the node refused to stream, or None if there isn't one.
 
@@ -149,29 +206,52 @@ async def find_replacement(track: wavelink.Playable) -> wavelink.Playable | None
         return None
 
     query = " ".join(part for part in (track.author, track.title) if part).strip()
-    if not query:
-        return None
+    # Excluded by id, or the same unplayable item is just found again.
+    return await search_matching(
+        query, track.length, MUSIC_FALLBACK_SOURCES, exclude=track.identifier
+    )
 
-    for source in MUSIC_FALLBACK_SOURCES:
-        try:
-            results = await wavelink.Playable.search(query, source=source)
-        except Exception:
-            logger.warning(f"Fallback search on {source} failed for {query!r}", exc_info=True)
-            continue
 
-        if isinstance(results, wavelink.Playlist):
-            continue
+async def fill_queue(player: wavelink.Player) -> list[wavelink.Playable]:
+    """Resolves pending tracks until MUSIC_PREFETCH of them sit in the queue.
 
-        for candidate in results:
-            # Same id means the same unplayable item, just found again.
-            if candidate.identifier == track.identifier or candidate.is_stream:
+    Called once when a link is queued and again as each track starts, so a long
+    playlist costs a search or two per track played rather than hundreds up
+    front. Returns what it added, in order.
+    """
+    pending = getattr(player, "pending_tracks", None)
+    if not pending:
+        return []
+
+    # Two track starts, or a start racing a /play, would otherwise resolve the
+    # same entries twice and queue them out of order.
+    lock = getattr(player, "pending_lock", None)
+    if lock is None:
+        lock = player.pending_lock = asyncio.Lock()
+
+    added = []
+    misses = 0
+    async with lock:
+        while pending and player.connected and player.queue.count < MUSIC_PREFETCH:
+            track = pending.popleft()
+            resolved = await search_matching(track.query, track.duration, MUSIC_SEARCH_SOURCES)
+
+            if resolved is None:
+                logger.warning(f"No source had {track.query!r}, skipping it")
+                misses += 1
+                # A run this long means every search is failing, not that the
+                # tracks are obscure. The rest is dropped rather than left
+                # pending, which would strand it once playback runs out.
+                if misses >= MUSIC_MISS_LIMIT:
+                    logger.warning(f"Dropping {len(pending)} unresolved tracks after {misses} misses")
+                    pending.clear()
                 continue
-            # Length is the cheap signal that a result is the same recording
-            # rather than a remix, a live version or an hour long mix.
-            if abs(candidate.length - track.length) <= MUSIC_FALLBACK_TOLERANCE * 1000:
-                return candidate
 
-    return None
+            misses = 0
+            player.queue.put(resolved)
+            added.append(resolved)
+
+    return added
 
 
 def progress_bar(position: int, length: int, width: int = 20) -> str:

@@ -29,8 +29,9 @@ without a restart.
 - **Temporary voice lobbies**: joining a trigger channel spins up a voice channel
   the member can rename and resize, cleaned up automatically when empty.
 - **Music**: queue-based playback from YouTube, YouTube Music, SoundCloud and
-  Bandcamp through a self-hosted Lavalink node, with search autocomplete, seeking,
-  looping and an optional DJ role.
+  Bandcamp through a self-hosted Lavalink node, with Spotify links matched to a
+  YouTube or SoundCloud stream, plus search autocomplete, seeking, looping and an
+  optional DJ role.
 - **GIF generation**: 25 effects (petpet, heart lock, explode, glitch, etc.)
   applied to an avatar, URL, or attachment via the Jeyy API.
 - **Autoroles & welcome messages**: auto-assign roles to new members, greet them
@@ -77,10 +78,11 @@ handles encryption, including DAVE, on its side.
 | --- | --- |
 | `Lavalink.jar` | Standalone node on `127.0.0.1:2333`, started by `run.py` |
 | [`youtube-source`](https://github.com/lavalink-devs/youtube-source) | YouTube and YouTube Music extraction, pinned to a snapshot |
-| [`LavaSrc`](https://github.com/topi314/LavaSrc) | Spotify/Apple/Deezer resolution, off until credentials are set |
+| [`LavaSrc`](https://github.com/topi314/LavaSrc) | Installed but all sources off, see [Spotify links](#spotify-links) |
 | [`cogs/core/music_manager.py`](cogs/core/music_manager.py) | Owns the node connection and playback lifecycle |
 | [`cogs/commands/music.py`](cogs/commands/music.py) | The slash commands |
-| [`utils/music.py`](utils/music.py) | Player lookup, DJ gating, track formatting, fallback search |
+| [`utils/music.py`](utils/music.py) | Player lookup, DJ gating, track formatting, track search |
+| [`utils/spotify.py`](utils/spotify.py) | Spotify link parsing and metadata |
 
 The node is **optional**. With `LAVALINK_DIR` unset, or the jar or `java` missing,
 `run.py` logs why and skips it, the bot starts normally, and the music commands
@@ -155,6 +157,22 @@ requires the result to be within `MUSIC_FALLBACK_TOLERANCE` seconds of the
 original length, and queues it in the failed track's place. Each id is only
 replaced once, so an unplayable track cannot set off a chain of searches. Both
 constants live in [`config/constants.py`](config/constants.py).
+
+### Spotify links
+
+Spotify serves no audio, so `/play` reads a link's metadata from its embed page
+and searches for the same recording on `MUSIC_SEARCH_SOURCES` (YouTube Music,
+YouTube, then SoundCloud), taking the first result within
+`MUSIC_FALLBACK_TOLERANCE` seconds of the original length. The Spotify API needs
+the app owner to hold Premium, so it is not used and LavaSrc's sources stay off.
+
+Tracks resolve `MUSIC_PREFETCH` ahead of playback and top up as each one starts,
+so a long playlist costs a search or two per track played rather than hundreds at
+once. `/queue` shows how many are still pending, and after `MUSIC_MISS_LIMIT`
+misses in a row the rest is dropped.
+
+The embed page returns at most `MUSIC_SPOTIFY_LIMIT` tracks for a playlist, and
+carries no ISRC, so a match rests on artist, title and length.
 
 ## Command Reference
 

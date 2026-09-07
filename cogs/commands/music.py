@@ -1,3 +1,5 @@
+from collections import deque
+
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -11,11 +13,14 @@ from config.constants import (
     MUSIC_DEFAULT_VOLUME,
     MUSIC_MAX_VOLUME,
     MUSIC_QUEUE_PAGE_SIZE,
+    MUSIC_SPOTIFY_LIMIT,
 )
 from db.database import get_guild_embed_color, get_music_volume
 from utils.embeds import success_embed
 from utils.errors import UserError
+from utils.mixins import SessionMixin
 from utils.music import (
+    fill_queue,
     format_track,
     format_track_length,
     parse_position,
@@ -27,6 +32,7 @@ from utils.music import (
     track_length,
 )
 from utils.paginator import PaginatorView
+from utils.spotify import fetch_entity, parse_spotify_url
 
 logger = logging.getLogger("music")
 
@@ -42,7 +48,7 @@ LOOP_MODES = {
 }
 
 
-class Music(commands.Cog):
+class Music(SessionMixin, commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
@@ -75,7 +81,9 @@ class Music(commands.Cog):
         return player
 
     @app_commands.command(name="play", description="Play a track, or add it to the queue")
-    @app_commands.describe(query="A search term, or a YouTube, YouTube Music, SoundCloud or Bandcamp link")
+    @app_commands.describe(
+        query="A search term, or a Spotify, YouTube, YouTube Music, SoundCloud or Bandcamp link"
+    )
     async def play(self, interaction: discord.Interaction, query: str):
         require_node()
         await interaction.response.defer()
@@ -85,6 +93,22 @@ class Music(commands.Cog):
         # announcements follow the channel actually being used.
         player.home = interaction.channel
 
+        color = await get_guild_embed_color(interaction.guild_id)
+        spotify = parse_spotify_url(query)
+        if spotify is not None:
+            embed = await self._queue_spotify(player, *spotify, color=color)
+        else:
+            embed = await self._queue_search(player, query, color)
+
+        # The manager cog announces the track itself once playback starts, so
+        # nothing is echoed here beyond the queue confirmation.
+        if not player.playing:
+            await player.play(player.queue.get())
+
+        await interaction.followup.send(embed=embed)
+
+    async def _queue_search(self, player: wavelink.Player, query: str, color: int) -> discord.Embed:
+        """Queues whatever the node resolves a query or link to."""
         try:
             # No source given, so wavelink's default applies: a bare query becomes
             # a YouTube Music search, which returns songs rather than the videos,
@@ -97,32 +121,58 @@ class Music(commands.Cog):
         if not results:
             raise UserError(f"No results for `{query[:100]}`.")
 
-        color = await get_guild_embed_color(interaction.guild_id)
-
         if isinstance(results, wavelink.Playlist):
             added = player.queue.put(results)
-            embed = discord.Embed(
+            return discord.Embed(
                 title="Playlist queued",
                 description=f"**{results.name}**\n{added} track{'s' if added != 1 else ''} added.",
                 color=color,
             )
-        else:
-            track = results[0]
-            player.queue.put(track)
-            embed = discord.Embed(
-                title="Queued",
-                description=format_track(track),
-                color=color,
-            )
-            if track.artwork:
-                embed.set_thumbnail(url=track.artwork)
 
-        # The manager cog announces the track itself once playback starts, so
-        # nothing is echoed here beyond the queue confirmation.
-        if not player.playing:
-            await player.play(player.queue.get())
+        track = results[0]
+        player.queue.put(track)
+        embed = discord.Embed(title="Queued", description=format_track(track), color=color)
+        if track.artwork:
+            embed.set_thumbnail(url=track.artwork)
+        return embed
 
-        await interaction.followup.send(embed=embed)
+    async def _queue_spotify(
+        self, player: wavelink.Player, kind: str, identifier: str, *, color: int
+    ) -> discord.Embed:
+        """Queues a Spotify link, which carries metadata the node can't stream."""
+        entity = await fetch_entity(self.session, kind, identifier)
+        if entity is None:
+            raise UserError("Couldn't read that Spotify link. Searching by name still works.")
+        if not entity.tracks:
+            raise UserError("That Spotify link has no tracks.")
+
+        pending = getattr(player, "pending_tracks", None)
+        if pending is None:
+            pending = player.pending_tracks = deque()
+        pending.extend(entity.tracks)
+
+        # Only enough to start playing is resolved here. The rest follows as the
+        # queue drains, from the manager cog's track start handler.
+        added = await fill_queue(player)
+        if not added and not player.playing and player.queue.is_empty:
+            raise UserError(f"Couldn't find a playable version of anything in **{entity.name}**.")
+
+        if entity.kind == "track" and added:
+            embed = discord.Embed(title="Queued", description=format_track(added[0]), color=color)
+            if added[0].artwork:
+                embed.set_thumbnail(url=added[0].artwork)
+            return embed
+
+        count = len(entity.tracks)
+        description = f"**{entity.name}**\n{count} track{'s' if count != 1 else ''} added."
+        if count == MUSIC_SPOTIFY_LIMIT:
+            description += f"\nSpotify lists at most {MUSIC_SPOTIFY_LIMIT}, so a longer one is cut short."
+        embed = discord.Embed(
+            title=f"{entity.kind.capitalize()} queued", description=description, color=color
+        )
+        if entity.artwork:
+            embed.set_thumbnail(url=entity.artwork)
+        return embed
 
     @play.autocomplete("query")
     async def play_autocomplete(self, interaction: discord.Interaction, current: str):
@@ -314,8 +364,14 @@ class Music(commands.Cog):
         if player.current:
             header = f"**Now playing**\n{format_track(player.current)}\n\n"
 
+        # Tracks from a Spotify link are resolved a few ahead of playback, so the
+        # rest of one aren't in the queue yet and would otherwise go unmentioned.
+        pending = len(getattr(player, "pending_tracks", ()) or ())
+        waiting = f", {pending} still resolving" if pending else ""
+
         if player.queue.is_empty:
-            pages = [f"{header}**Up next**\nThe queue is empty."]
+            empty = f"Resolving {pending} more." if pending else "The queue is empty."
+            pages = [f"{header}**Up next**\n{empty}"]
         else:
             tracks = list(player.queue)
             pages = []
@@ -326,7 +382,7 @@ class Music(commands.Cog):
                     for offset, track in enumerate(chunk)
                 ]
                 # The header repeats on every page so a page reads on its own.
-                pages.append(f"{header}**Up next** ({len(tracks)} total)\n" + "\n".join(lines))
+                pages.append(f"{header}**Up next** ({len(tracks)} total{waiting})\n" + "\n".join(lines))
 
         color = await get_guild_embed_color(interaction.guild_id)
         view = PaginatorView(pages, color)

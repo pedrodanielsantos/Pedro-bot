@@ -8,7 +8,7 @@ import wavelink
 
 from config.constants import EMBED_COLOR_WARNING, MUSIC_IDLE_TIMEOUT
 from db.database import get_guild_embed_color
-from utils.music import find_replacement, format_track
+from utils.music import fill_queue, find_replacement, format_track
 
 logger = logging.getLogger("music")
 
@@ -95,26 +95,29 @@ class MusicManager(commands.Cog):
             return
 
         channel = getattr(player, "home", None)
-        if channel is None:
-            return
+        if channel is not None:
+            track = payload.track
+            color = await get_guild_embed_color(channel.guild.id)
+            embed = discord.Embed(
+                title="Now playing",
+                description=format_track(track),
+                color=color,
+            )
+            if track.artwork:
+                embed.set_thumbnail(url=track.artwork)
+            if track.recommended:
+                embed.set_footer(text="Autoplayed recommendation")
 
-        track = payload.track
-        color = await get_guild_embed_color(channel.guild.id)
-        embed = discord.Embed(
-            title="Now playing",
-            description=format_track(track),
-            color=color,
-        )
-        if track.artwork:
-            embed.set_thumbnail(url=track.artwork)
-        if track.recommended:
-            embed.set_footer(text="Autoplayed recommendation")
+            try:
+                await channel.send(embed=embed)
+            except discord.HTTPException:
+                # A deleted or newly forbidden channel must not interrupt playback.
+                pass
 
-        try:
-            await channel.send(embed=embed)
-        except discord.HTTPException:
-            # A deleted or newly forbidden channel must not interrupt playback.
-            pass
+        # Last, since it searches the node: one track's worth per track played,
+        # which keeps a long Spotify playlist from resolving all at once. The
+        # announcement above shouldn't wait on it.
+        await fill_queue(player)
 
     @commands.Cog.listener()
     async def on_wavelink_track_exception(self, payload: wavelink.TrackExceptionEventPayload):
