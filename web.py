@@ -22,6 +22,13 @@ INTERNAL_API = "http://127.0.0.1:8001"
 BADGE_SECONDS = 2.0
 ERROR_BADGE_SECONDS = 10.0  # long enough to read the message
 
+# The internal API writes to its status stream at least once a second, an event
+# or a keepalive, so a longer gap means nothing more is coming.
+STATUS_STREAM_READ_TIMEOUT = 5.0
+# Backstop for a response that still won't end. Kept under the 10s a /web/reload
+# waits for the old server to release port 8000.
+GRACEFUL_SHUTDOWN_TIMEOUT = 5
+
 templates = Jinja2Templates(directory="templates")
 templates.env.globals["discord_version"] = discord.__version__
 
@@ -361,7 +368,13 @@ def create_app(supervisor, web_state):
                 return f"event: cogs\ndata: {last_cogs_epoch}\n\n"
 
             try:
-                timeout = aiohttp.ClientTimeout(total=None, sock_connect=0.5)
+                # The loop below only re-checks should_exit between lines, so an
+                # upstream that goes silent without closing holds this response
+                # open, and shutdown with it. sock_read raises into the handler
+                # below instead, which ends the stream.
+                timeout = aiohttp.ClientTimeout(
+                    total=None, sock_connect=0.5, sock_read=STATUS_STREAM_READ_TIMEOUT
+                )
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.get(f"{INTERNAL_API}/status/stream") as resp:
                         # A blank line ends an SSE event, so the next line starts a new one.
@@ -491,7 +504,12 @@ def create_app(supervisor, web_state):
 
 async def start(supervisor, web_state):
     app = create_app(supervisor, web_state)
-    config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_config=None)
+    config = uvicorn.Config(
+        app, host="0.0.0.0", port=8000, log_config=None,
+        # Bounds the wait on responses still open at shutdown. A /web/reload
+        # depends on that finishing: it aborts if port 8000 isn't free in 10s.
+        timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_TIMEOUT,
+    )
     quiet_uvicorn_logging()
     server = uvicorn.Server(config)
     web_state.web_server = server
