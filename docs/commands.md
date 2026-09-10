@@ -127,4 +127,8 @@ hidden from `/help` and excluded from the table above. Not part of the generated
 | `ç!sync [. \| ^]` | Sync slash commands (globally, to the current guild, or clear guild commands) |
 | `ç!devtools` | List all developer commands |
 | `ç!deletemessage <id>` | Delete one of the bot's own messages by ID |
+| `ç!join [channel]` | Connect to a voice channel for testing, yours if none is given |
+| `ç!leave` | Disconnect from the voice channel joined with `ç!join` |
+| `ç!deletecase <cases> [guild_id]` | Delete specific moderation cases and resync the case counter |
+| `ç!resetcases [guild_id]` | Wipe a guild's moderation case history and reset its counter |
 | `ç!reloadweb` | Reload the web dashboard without restarting the bot |

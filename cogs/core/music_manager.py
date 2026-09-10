@@ -13,7 +13,7 @@ from config.constants import (
     MUSIC_VOICE_RESUME_DELAY,
 )
 from db.database import get_guild_embed_color
-from utils.music import fill_queue, find_replacement, format_track
+from utils.music import active_player, fill_queue, find_replacement, format_track
 
 logger = logging.getLogger("music")
 
@@ -341,8 +341,8 @@ class MusicManager(commands.Cog):
         Also matters for lobbies: lobby_manager only deletes a lobby that has no
         human left in it, so a player sitting in one would keep it alive forever.
         """
-        player: wavelink.Player | None = member.guild.voice_client
-        if not player or not player.connected:
+        player = active_player(member.guild)
+        if player is None:
             return
 
         # Only react to someone leaving the channel the player is actually in.

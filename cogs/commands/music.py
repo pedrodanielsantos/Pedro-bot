@@ -22,6 +22,7 @@ from utils.embeds import success_embed
 from utils.errors import UserError
 from utils.mixins import SessionMixin
 from utils.music import (
+    active_player,
     fill_queue,
     format_track,
     format_track_length,
@@ -67,9 +68,9 @@ class Music(SessionMixin, commands.Cog):
     async def _ensure_player(self, interaction: discord.Interaction) -> wavelink.Player:
         """The guild's player, connecting to the caller's channel if needed."""
         channel = require_voice(interaction)
-        player: wavelink.Player | None = interaction.guild.voice_client
+        player = active_player(interaction.guild)
 
-        if player and player.connected:
+        if player is not None:
             if player.channel.id != channel.id:
                 raise UserError(f"I'm already playing in {player.channel.mention}.")
             return player
@@ -403,8 +404,8 @@ class Music(SessionMixin, commands.Cog):
 
     @skip.autocomplete("position")
     async def skip_autocomplete(self, interaction: discord.Interaction, current: str):
-        player: wavelink.Player | None = interaction.guild.voice_client
-        if not player or not player.connected:
+        player = active_player(interaction.guild)
+        if player is None:
             return []
 
         current = current.strip()
@@ -552,8 +553,8 @@ class Music(SessionMixin, commands.Cog):
 
     @app_commands.command(name="playing", description="Show the track currently playing")
     async def playing(self, interaction: discord.Interaction):
-        player: wavelink.Player | None = interaction.guild.voice_client
-        if not player or not player.connected or not player.current:
+        player = active_player(interaction.guild)
+        if player is None or not player.current:
             raise UserError("Nothing is playing.")
 
         # Deferred before the database read, which is otherwise done inside the
@@ -587,8 +588,8 @@ class Music(SessionMixin, commands.Cog):
 
     @app_commands.command(name="queue", description="Show the queue")
     async def queue(self, interaction: discord.Interaction):
-        player: wavelink.Player | None = interaction.guild.voice_client
-        if not player or not player.connected:
+        player = active_player(interaction.guild)
+        if player is None:
             raise UserError("I'm not playing anything right now.")
 
         await interaction.response.defer()

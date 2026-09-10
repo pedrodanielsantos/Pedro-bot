@@ -5,6 +5,7 @@ import aiohttp
 import discord
 from discord.ext import commands
 import os
+import wavelink
 from db.database import get_guild_embed_color, delete_mod_cases, reset_case_counter
 from utils.cogs import reload_shared_modules
 from utils.embeds import error_embed, success_embed
@@ -14,6 +15,45 @@ logger = logging.getLogger("dev")
 WEB_DASHBOARD = "http://127.0.0.1:8000"
 # SQLite caps host parameters per statement, and delete_mod_cases binds one per case.
 MAX_CASES_PER_DELETE = 500
+
+
+class TestVoiceClient(discord.VoiceProtocol):
+    """A voice connection that only ever joins, for ç!join.
+
+    discord.py's own VoiceClient encrypts and sends audio in-process, so it
+    needs PyNaCl and refuses to construct without it. This does what
+    wavelink.Player does instead: send the gateway voice state and stop there,
+    never opening the UDP session. Nothing here plays audio, which is all a
+    join/leave test needs.
+    """
+
+    async def connect(self, *, timeout: float = 60.0, reconnect: bool = True, self_deaf: bool = False, self_mute: bool = False):
+        await self.channel.guild.change_voice_state(
+            channel=self.channel, self_deaf=self_deaf, self_mute=self_mute
+        )
+
+    async def move_to(self, channel: discord.VoiceChannel):
+        await self.channel.guild.change_voice_state(channel=channel)
+
+    async def disconnect(self, *, force: bool = False):
+        await self.channel.guild.change_voice_state(channel=None)
+        # Drops the client off the guild, which is otherwise only done for a
+        # connection that closed its own socket.
+        self.cleanup()
+
+    async def on_voice_state_update(self, data: dict):
+        # Follows moves and disconnects made from Discord itself, so the client
+        # never points at a channel the bot has already left.
+        channel_id = data.get("channel_id")
+        if channel_id is None:
+            self.cleanup()
+            return
+        self.channel = self.client.get_channel(int(channel_id)) or self.channel
+
+    async def on_voice_server_update(self, data: dict):
+        # Where a real client would open the voice socket. Nothing to do.
+        pass
+
 
 class DeveloperTools(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -257,6 +297,81 @@ class DeveloperTools(commands.Cog):
         except Exception as e:
             embed = error_embed(f"Error: {e}")
             await ctx.reply(embed=embed, delete_after=5)
+
+    @commands.command(name="join", hidden=True)
+    async def join(self, ctx: commands.Context, *, channel: discord.VoiceChannel = None):
+        """
+        Connects to a voice channel for testing, yours if none is given
+        Usage: ç!join [channel]
+        """
+        if ctx.guild is None:
+            await ctx.reply(embed=error_embed("This only works in a guild."))
+            return
+
+        if channel is None:
+            voice = ctx.author.voice
+            if not voice or not voice.channel:
+                await ctx.reply(embed=error_embed("You aren't in a voice channel, so name one."))
+                return
+            channel = voice.channel
+
+        # A guild has one voice client, so the music player and this share the
+        # slot. Never taken from the player: it would drop playback mid-track.
+        existing = ctx.guild.voice_client
+        if isinstance(existing, wavelink.Player):
+            await ctx.reply(embed=error_embed(
+                f"The music player is in {existing.channel.mention}. Use `/stop` first."
+            ))
+            return
+
+        permissions = channel.permissions_for(ctx.guild.me)
+        if not permissions.connect:
+            await ctx.reply(embed=error_embed(f"I can't connect to {channel.mention}."))
+            return
+
+        try:
+            if existing is not None:
+                if existing.channel.id == channel.id:
+                    await ctx.reply(embed=error_embed(f"I'm already in {channel.mention}."))
+                    return
+                await existing.move_to(channel)
+            else:
+                # Neither a wavelink player nor discord.py's audio client: needs
+                # no Lavalink node, and utils.music.active_player() ignores
+                # anything that isn't a player.
+                await channel.connect(cls=TestVoiceClient, self_deaf=True)
+        except (discord.ClientException, discord.HTTPException, asyncio.TimeoutError) as e:
+            await ctx.reply(embed=error_embed(f"Could not join {channel.mention}: {e}"))
+            logger.error(f"Failed to join voice channel {channel.id}: {e}")
+            return
+
+        await ctx.reply(embed=success_embed(f"Joined {channel.mention}."))
+        logger.info(f"Joined voice channel {channel.id} in guild {ctx.guild.id}.")
+
+    @commands.command(name="leave", hidden=True)
+    async def leave(self, ctx: commands.Context):
+        """
+        Disconnects from the voice channel joined with ç!join
+        Usage: ç!leave
+        """
+        if ctx.guild is None:
+            await ctx.reply(embed=error_embed("This only works in a guild."))
+            return
+
+        voice_client = ctx.guild.voice_client
+        if voice_client is None:
+            await ctx.reply(embed=error_embed("I'm not in a voice channel."))
+            return
+        if isinstance(voice_client, wavelink.Player):
+            await ctx.reply(embed=error_embed(
+                f"That's the music player in {voice_client.channel.mention}. Use `/stop` instead."
+            ))
+            return
+
+        channel = voice_client.channel
+        await voice_client.disconnect(force=True)
+        await ctx.reply(embed=success_embed(f"Left {channel.mention}."))
+        logger.info(f"Left voice channel {channel.id} in guild {ctx.guild.id}.")
 
     @commands.command(name="deletecase", hidden=True)
     async def deletecase(self, ctx: commands.Context, cases: str, guild_id: int = None):

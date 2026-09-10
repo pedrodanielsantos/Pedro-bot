@@ -43,6 +43,19 @@ def require_node():
         raise UserError("Music is temporarily unavailable, the audio node is offline.")
 
 
+def active_player(guild: discord.Guild | None) -> wavelink.Player | None:
+    """The guild's connected music player, if it has one.
+
+    A guild has a single voice client, and the owner-only ç!join test connection
+    occupies the same slot without being a player. Anything that isn't one reads
+    here as nothing playing, so the music commands leave it alone.
+    """
+    player = guild.voice_client if guild else None
+    if not isinstance(player, wavelink.Player) or not player.connected:
+        return None
+    return player
+
+
 def require_voice(interaction: discord.Interaction) -> discord.VoiceChannel:
     """The voice channel the caller is in."""
     voice = getattr(interaction.user, "voice", None)
@@ -57,8 +70,8 @@ def require_player(interaction: discord.Interaction) -> wavelink.Player:
     Being in the same channel is required so someone in another channel can't
     skip or stop what a different group is listening to.
     """
-    player: wavelink.Player | None = interaction.guild.voice_client
-    if not player or not player.connected:
+    player = active_player(interaction.guild)
+    if player is None:
         raise UserError("I'm not playing anything right now.")
 
     voice = getattr(interaction.user, "voice", None)
