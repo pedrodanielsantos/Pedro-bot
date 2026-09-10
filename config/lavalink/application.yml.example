@@ -125,6 +125,10 @@ logging:
   file:
     path: ./logs/
   level:
+    # Left at INFO so this node's own logs/ keep the full record. run.py filters
+    # the two noisiest loggers (per-request payloads, playback stack traces) out
+    # of the bot's console instead, since the bot reports those failures itself.
+    # See _QUIET_NODE_LOGGERS. Set LOG_LEVEL=DEBUG in .env to see them anyway.
     root: INFO
     lavalink: INFO
   logback:

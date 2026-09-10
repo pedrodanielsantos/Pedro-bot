@@ -114,9 +114,9 @@ class ProcessSupervisor:
         await self.stop()
         await self.start()
 
-    def format_line(self, line: str) -> str:
-        """Rewrites one line of the child's output. Only called when
-        reformats_output is set."""
+    def format_line(self, line: str) -> str | None:
+        """Rewrites one line of the child's output, or returns None to drop it.
+        Only called when reformats_output is set."""
         return line
 
     async def _spawn(self):
@@ -154,7 +154,10 @@ class ProcessSupervisor:
             if self.reformats_output:
                 async for raw_line in proc.stdout:
                     line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
-                    self._emit(f"{self.format_line(line)}\n".encode("utf-8"))
+                    formatted = self.format_line(line)
+                    if formatted is None:
+                        continue
+                    self._emit(f"{formatted}\n".encode("utf-8"))
             else:
                 while chunk := await proc.stdout.read(4096):
                     self._emit(chunk)
@@ -215,6 +218,21 @@ _SPRING_LINE_RE = re.compile(
     r"(?P<level>[A-Z]+)\s+\d+\s+---\s+(?:\[[^\]]*\]\s*)+(?P<logger>\S+)\s*:\s(?P<msg>.*)$"
 )
 
+# Node loggers whose every line restates something the bot already reports, or
+# that carry no signal at all. Dropped from the console along with the trace body
+# that follows them; the node's own logs/ files are untouched either way.
+#
+# RequestLoggingFilter logs one line per HTTP call with the full payload inlined,
+# which for a play is an encoded track blob plus all fifteen equalizer bands.
+# LocalAudioTrackExecutor logs playback failures ("Suspicious exception for
+# playback of X", "Error in playback of X") as a Java cause chain, one stack
+# trace per YouTube client tried, which MusicManager reports as a single line
+# naming the track and the stand-in it queued.
+_QUIET_NODE_LOGGERS = frozenset({
+    "lavalink.RequestLoggingFilter",
+    "lavalink.LocalAudioTrackExecutor",
+})
+
 
 class LavalinkSupervisor(ProcessSupervisor):
     """Runs the Lavalink node the music cogs connect to.
@@ -231,6 +249,10 @@ class LavalinkSupervisor(ProcessSupervisor):
         super().__init__(sink, host_stdout)
         directory = os.getenv("LAVALINK_DIR")
         self.directory = Path(directory).expanduser() if directory else None
+
+        # Whether the last prefixed line was dropped, so its unprefixed
+        # continuation lines can be dropped with it. See format_line().
+        self._dropping = False
 
         # The readiness probe targets whatever LAVALINK_URI points at, so changing
         # the port in application.yml and .env doesn't leave it polling the old one.
@@ -267,10 +289,13 @@ class LavalinkSupervisor(ProcessSupervisor):
         """Restates a Spring Boot log line in the bot's own console format, so the
         node's output reads as part of the same log instead of a second one pasted
         in. Anything that doesn't match (the startup banner, stack traces) is left
-        exactly as printed."""
+        exactly as printed. Returns None for a line dropped as noise."""
         match = _SPRING_LINE_RE.match(line)
         if not match:
-            return line
+            # A stack trace frame or a blank line inside one. These carry no
+            # prefix of their own, so they belong to whichever prefixed line came
+            # last and are kept or dropped with it.
+            return None if self._dropping else line
 
         # WARN -> WARNING keeps the level names, and so the colors, in step with
         # logging's own. The logger is cut to its last segment and namespaced, so
@@ -278,6 +303,11 @@ class LavalinkSupervisor(ProcessSupervisor):
         level = "WARNING" if match["level"] == "WARN" else match["level"]
         timestamp = f"{match['day']}/{match['month']}/{match['year']} {match['time']}"
         name = f"lavalink.{match['logger'].rsplit('.', 1)[-1]}"
+
+        # At DEBUG the whole cause chain is the point, so nothing is dropped.
+        self._dropping = name in _QUIET_NODE_LOGGERS and not logger.isEnabledFor(logging.DEBUG)
+        if self._dropping:
+            return None
         return color_log_line(timestamp, level, name, match["msg"])
 
     async def wait_until_ready(self, timeout: float = 90):

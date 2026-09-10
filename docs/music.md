@@ -76,9 +76,24 @@ This is the part that breaks, not the infrastructure. Two settings in
   can never be the only client.
 
 When playback fails, the error enumerates every client with its own reason, which
-says whether any client still gets a direct URL. SoundCloud and Bandcamp are
-native Lavalink sources that never touch this path, so they make a good control
-test.
+says whether any client still gets a direct URL. That enumeration is a full Java
+stack trace per client, and three programs print it: the node, Wavelink, and the
+bot. Only the bot's own summary reaches the console; the other two are filtered
+out by `_QUIET_NODE_LOGGERS` in [`run.py`](../run.py) and
+`quiet_duplicate_loggers()` in [`utils/log.py`](../utils/log.py). Set
+`LOG_LEVEL=DEBUG` in `.env` to get the per-client reasons back, which is the
+point of this section, so expect to do that when diagnosing extraction.
+
+What stays at `INFO` is one line per failed track: **`WARNING`** when a stand-in
+took its place, **`ERROR`** when the track was lost outright. The node's own
+`logs/` keep the full trace either way.
+
+The exception's `severity` is not worth branching on: a login-walled video
+reports `suspicious` and a dead stand-in reports `fault`, while `common` does not
+appear at all, so it separates nothing a reader cares about.
+
+SoundCloud and Bandcamp are native Lavalink sources that never touch this path,
+so they make a good control test.
 
 Not every failure is an extraction problem. A playlist can carry entries whose
 underlying upload is deleted or region locked, where every client reports "This
@@ -99,11 +114,13 @@ so a chain terminates. Constants live in
 That retry matters most for SoundCloud, which is
 [dropping MP3 and Opus transcodings](https://developers.soundcloud.com/blog/api-streaming-urls/)
 for AAC HLS. Lavaplayer only selects `hls` and `progressive`, so a migrated
-track fails with `Invalid status code for soundcloud stream: 404`. No Lavalink
-release reads the AAC transcodings and there is no setting for it, so upgrading
-does not help. Migration is per track, so duplicate uploads usually still play,
-which is exactly what the retry finds. Expect that to fade as the rollout
-finishes.
+track fails with `Invalid status code for soundcloud stream: 404`. That string
+arrives as the exception's `cause`; its `message` is only the generic "Something
+broke when playing the track.", which is why `music_manager` appends the cause in
+parentheses rather than logging the message alone. No Lavalink release reads the
+AAC transcodings and there is no setting for it, so upgrading does not help.
+Migration is per track, so duplicate uploads usually still play, which is exactly
+what the retry finds. Expect that to fade as the rollout finishes.
 
 ## Spotify links
 

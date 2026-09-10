@@ -17,7 +17,11 @@ _LOG_LINE_RE = re.compile(
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
 LOG_FILE = os.path.join(LOG_DIR, "bot.log")
 CONSOLE_RAW_FILE = os.path.join(LOG_DIR, "console.raw")
-CONSOLE_RAW_MAX_BYTES = 5_000_000
+# A full reset, not a rolling window, so the Console page loses all its scrollback
+# each time this is hit. Sized for a long uptime's worth of history: the file is
+# truncated on every start anyway, and tail_log_file() scans backward from the end,
+# so a larger cap costs nothing at read time.
+CONSOLE_RAW_MAX_BYTES = 50_000_000
 
 _MUTED = "\x1b[38;2;114;118;125m"
 _ACCENT = "\x1b[38;2;88;101;242m"
@@ -160,6 +164,24 @@ def setup_logging(level=logging.INFO):
     root.addHandler(file_handler)
 
     _install_excepthooks()
+
+
+def quiet_duplicate_loggers():
+    """Mutes third-party loggers that restate an event the bot already reports
+    itself, so one failure produces one line instead of three.
+
+    wavelink logs every TrackExceptionEvent at ERROR with Lavalink's whole Java
+    cause chain, which for a YouTube load failure it prints twice over, once as
+    the message and again as the cause. It does this before dispatching the event
+    to MusicManager.on_wavelink_track_exception, which reports the same failure in
+    one line naming the track and what it did about it. The dispatch does not go
+    through this logger, so muting it changes no behaviour.
+
+    Skipped at DEBUG, where the full chain is what you're asking for.
+    """
+    if logging.getLogger().isEnabledFor(logging.DEBUG):
+        return
+    logging.getLogger("TrackException").setLevel(logging.CRITICAL)
 
 
 def quiet_uvicorn_logging():

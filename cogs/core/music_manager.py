@@ -36,6 +36,15 @@ def _extras_dict(track: wavelink.Playable) -> dict:
         return {}
 
 
+def _track_ref(track: wavelink.Playable) -> str:
+    """A track's identifier for a log line, capped in length. A YouTube id is
+    short, but a SoundCloud stand-in identifies itself by its full stream URL,
+    which on its own runs longer than the rest of the line. Only there to
+    correlate with the node's logs, and the title is alongside it either way."""
+    identifier = track.identifier or "?"
+    return identifier if len(identifier) <= 48 else f"{identifier[:48]}..."
+
+
 def _fallback_depth(track: wavelink.Playable) -> int:
     """How many stand-ins deep a track already is, 0 for one queued directly.
 
@@ -210,6 +219,20 @@ class MusicManager(commands.Cog):
         # client's own reason appears, so it is kept at debug level.
         message = (payload.exception.get("message") or "").strip()
         detail = message.splitlines()[0] if message else "unknown error"
+
+        # For a playback failure the message is often only "Something broke when
+        # playing the track."; the reason (an HTTP status, a decoder error) is in
+        # cause. Wavelink's own line was the only other place cause appeared, and
+        # that one is muted, so it has to be carried here or it is lost.
+        #
+        # For a load failure the two restate each other, cause being the same text
+        # behind its Java exception class, so it is only appended when it adds
+        # something. Both can carry the whole chain, hence first line only.
+        cause = (payload.exception.get("cause") or "").strip().splitlines()
+        cause = cause[0] if cause else ""
+        if cause and detail not in cause:
+            detail = f"{detail} ({cause})"
+
         logger.debug(f"Full exception for {payload.track.identifier}:\n{message}")
 
         # Lavalink already ended the track, so wavelink's autoplay has moved on
@@ -228,6 +251,12 @@ class MusicManager(commands.Cog):
     async def _replace_failed(self, player: wavelink.Player | None, track: wavelink.Playable, detail: str, *, skip: bool = False):
         """Queues a stand-in for a track that failed, and says so in the channel."""
         if player is None or not player.connected:
+            # No player left to queue a stand-in into, but the failure still
+            # happened and this is the only place it gets reported: the node's own
+            # line for it is filtered out of the console.
+            logger.warning(
+                f"Could not play {track.title!r} ({_track_ref(track)}): {detail}, player already gone"
+            )
             return
 
         # Every id that has failed on this player, so a repeated search walks past
@@ -248,15 +277,20 @@ class MusicManager(commands.Cog):
             try:
                 replacement = await find_replacement(track, exclude=tried)
             except Exception:
-                logger.exception(f"Could not search for a replacement for {track.identifier}")
+                logger.exception(f"Could not search for a replacement for {_track_ref(track)}")
 
         if replacement is not None:
-            outcome = f"replacing it with {replacement.identifier}"
+            outcome = f"replacing it with {_track_ref(replacement)}"
         elif depth >= MUSIC_FALLBACK_ATTEMPTS:
             outcome = f"giving up after {depth} stand-ins"
         else:
             outcome = "no replacement found"
-        logger.warning(f"Could not play {track.title!r} ({track.identifier}): {detail}, {outcome}")
+
+        # A track that recovered is routine. One that didn't is dropped from the
+        # queue outright, so it reads as an error instead of another warning among
+        # the warnings that led up to it.
+        log = logger.warning if replacement is not None else logger.error
+        log(f"Could not play {track.title!r} ({_track_ref(track)}): {detail}, {outcome}")
 
         if replacement is not None:
             replacement.extras = {**_extras_dict(track), "fallback_depth": depth + 1}

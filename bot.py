@@ -7,7 +7,7 @@ import sys
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from db.database import initialize_databases, close_all_databases
-from utils.log import setup_logging
+from utils.log import quiet_duplicate_loggers, setup_logging
 from utils.cogs import discover_cog_paths
 from utils.uptime import format_uptime
 import asyncio
@@ -37,6 +37,7 @@ if not TOKEN:
     raise SystemExit("DISCORD_BOT_TOKEN is not set. Add it to your .env file")
 
 setup_logging(os.getenv("LOG_LEVEL", "INFO"))
+quiet_duplicate_loggers()
 logger = logging.getLogger("bot")
 
 intents = discord.Intents.default()
