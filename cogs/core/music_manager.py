@@ -332,7 +332,9 @@ class MusicManager(commands.Cog):
             except discord.HTTPException:
                 pass
 
+        voice_channel = player.channel
         await player.disconnect()
+        logger.info(f"Left voice channel {voice_channel.id} in guild {voice_channel.guild.id} (idle timeout).")
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
@@ -354,7 +356,9 @@ class MusicManager(commands.Cog):
         if any(not m.bot for m in player.channel.members):
             return
 
+        voice_channel = player.channel
         await player.disconnect()
+        logger.info(f"Left voice channel {voice_channel.id} in guild {voice_channel.guild.id} (channel empty).")
 
 
 async def setup(bot: commands.Bot):

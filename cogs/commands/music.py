@@ -82,7 +82,10 @@ class Music(SessionMixin, commands.Cog):
         try:
             player = await channel.connect(cls=wavelink.Player, self_deaf=True)
         except discord.ClientException as e:
+            logger.error(f"Failed to join voice channel {channel.id}: {e}")
             raise UserError(f"Could not join {channel.mention}: {e}")
+
+        logger.info(f"Joined voice channel {channel.id} in guild {interaction.guild_id}.")
 
         # Queue playback without recommendations. AutoPlayMode.enabled would keep
         # inventing tracks after the queue empties, which is surprising by default.
@@ -460,8 +463,10 @@ class Music(SessionMixin, commands.Cog):
 
         player.queue.clear()
         pending_tracks(player).clear()
+        channel = player.channel
         await player.disconnect()
         await interaction.response.send_message(embed=success_embed("Stopped and cleared the queue."))
+        logger.info(f"Left voice channel {channel.id} in guild {interaction.guild_id}.")
 
     @app_commands.command(name="volume", description="Set or view the playback volume")
     @app_commands.describe(percent=f"1 to {MUSIC_MAX_VOLUME} (leave empty to view the current volume)")
