@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from collections import deque
 from collections.abc import Container
 from dataclasses import dataclass
@@ -8,10 +9,13 @@ import discord
 import wavelink
 
 from config.constants import (
+    MUSIC_AUTOCOMPLETE_LIMIT,
     MUSIC_FALLBACK_SOURCES,
     MUSIC_FALLBACK_TOLERANCE,
     MUSIC_MISS_LIMIT,
     MUSIC_PREFETCH,
+    MUSIC_SEARCH_CACHE,
+    MUSIC_SEARCH_CACHE_TTL,
     MUSIC_SEARCH_SOURCES,
 )
 from db.database import get_music_dj_role
@@ -188,6 +192,103 @@ class PendingTrack:
     @property
     def query(self) -> str:
         return f"{self.artists} {self.title}".strip()
+
+
+# Results of the /play and /insert query search, keyed by query. Playlists are
+# left out: only URLs reach them, URLs never autocomplete, and they're the
+# largest thing we'd hold.
+_search_cache: dict[str, tuple[float, list]] = {}
+# Running searches, so overlapping keystrokes await one request instead of several.
+_search_inflight: dict[str, asyncio.Task] = {}
+
+
+def _cache_key(query: str) -> str:
+    return query.strip().casefold()
+
+
+def cached_search(query: str) -> list | None:
+    """A query's cached results, or None if never searched or aged out."""
+    key = _cache_key(query)
+    entry = _search_cache.get(key)
+    if entry is None:
+        return None
+    expiry, results = entry
+    if expiry <= time.monotonic():
+        del _search_cache[key]
+        return None
+    return results
+
+
+def _best_cached(key: str, match) -> list | None:
+    """Results for the longest unexpired query the match accepts, as the most
+    typed and so the closest to what is being asked for."""
+    now = time.monotonic()
+    best: tuple[str, list] | None = None
+    for candidate, (expiry, results) in _search_cache.items():
+        if expiry <= now or not match(candidate):
+            continue
+        if best is None or len(candidate) > len(best[0]):
+            best = (candidate, results)
+    return None if best is None else best[1]
+
+
+def backspaced_search(query: str) -> list | None:
+    """Results already held for a longer query this one is a prefix of.
+    Backspacing is text being edited rather than a query someone means, so it's
+    answered from what they were just shown instead of asking the node."""
+    key = _cache_key(query)
+    return _best_cached(key, lambda candidate: candidate.startswith(key))
+
+
+def nearest_search(query: str) -> list | None:
+    """Results for the closest query already searched, for a keystroke with no
+    entry of its own. Either side may be the prefix, since this is a last resort
+    once the search itself hasn't landed in time."""
+    key = _cache_key(query)
+    return _best_cached(key, lambda c: c.startswith(key) or key.startswith(c))
+
+
+def _drop_exception(task: asyncio.Task):
+    """Consumes a failure nobody stayed to await, which asyncio would warn about.
+    Waiting callers still get it raised."""
+    if not task.cancelled():
+        task.exception()
+
+
+async def _run_search(key: str, query: str) -> list:
+    try:
+        results = await wavelink.Playable.search(query)
+    finally:
+        # Dropped before caching, so a failure isn't cached and the next attempt
+        # retries.
+        _search_inflight.pop(key, None)
+
+    if not isinstance(results, wavelink.Playlist):
+        # Oldest first, since a dict keeps insertion order. Trimmed to what
+        # either caller actually reads.
+        while len(_search_cache) >= MUSIC_SEARCH_CACHE:
+            del _search_cache[next(iter(_search_cache))]
+        expiry = time.monotonic() + MUSIC_SEARCH_CACHE_TTL
+        _search_cache[key] = (expiry, list(results[:MUSIC_AUTOCOMPLETE_LIMIT]))
+    return results
+
+
+async def cached_or_search(query: str):
+    """Searches the node, sharing one request among callers of the same query.
+    Raises whatever the search raises."""
+    results = cached_search(query)
+    if results is not None:
+        return results
+
+    key = _cache_key(query)
+    task = _search_inflight.get(key)
+    if task is None:
+        task = asyncio.create_task(_run_search(key, query))
+        task.add_done_callback(_drop_exception)
+        _search_inflight[key] = task
+    # Shielded, so a caller that gives up doesn't cancel the search for the
+    # others, or for the cache entry a later keystroke wants.
+    return await asyncio.shield(task)
 
 
 def search_author(track: wavelink.Playable) -> str:

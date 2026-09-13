@@ -27,8 +27,10 @@ MUSIC_IDLE_TIMEOUT = 300       # seconds with nothing playing before the bot dis
 MUSIC_VOICE_RESUME_DELAY = 6   # seconds to wait out a voice drop, over Lavalink's 5s playerUpdateInterval
 MUSIC_QUEUE_PAGE_SIZE = 10     # tracks per /queue page
 MUSIC_AUTOCOMPLETE_LIMIT = 25  # Discord's hard cap on autocomplete choices
-MUSIC_AUTOCOMPLETE_DEBOUNCE = 1.5  # seconds a keystroke waits to be superseded, over Discord's ~1.3s median gap between them
-MUSIC_AUTOCOMPLETE_CACHE = 64      # users whose last suggestions are kept, to answer them backspacing
+MUSIC_AUTOCOMPLETE_BUDGET = 3.0  # seconds Discord allows an autocomplete reply, which can't be deferred
+MUSIC_AUTOCOMPLETE_MARGIN = 0.6  # seconds of that budget held back for the reply to reach Discord
+MUSIC_SEARCH_CACHE = 64          # queries whose results are kept, shared by the query autocomplete and /play
+MUSIC_SEARCH_CACHE_TTL = 180     # seconds a cached search stays usable
 
 # Search prefixes tried, in order, to replace a track the node refuses to
 # stream. A YouTube Music entry that fails often has a plain YouTube upload that

@@ -9,9 +9,9 @@ from typing import Optional
 import wavelink
 
 from config.constants import (
-    MUSIC_AUTOCOMPLETE_CACHE,
-    MUSIC_AUTOCOMPLETE_DEBOUNCE,
+    MUSIC_AUTOCOMPLETE_BUDGET,
     MUSIC_AUTOCOMPLETE_LIMIT,
+    MUSIC_AUTOCOMPLETE_MARGIN,
     MUSIC_DEFAULT_VOLUME,
     MUSIC_MAX_VOLUME,
     MUSIC_QUEUE_PAGE_SIZE,
@@ -23,9 +23,13 @@ from utils.errors import UserError
 from utils.mixins import SessionMixin
 from utils.music import (
     active_player,
+    backspaced_search,
+    cached_or_search,
+    cached_search,
     fill_queue,
     format_track,
     format_track_length,
+    nearest_search,
     parse_position,
     pending_tracks,
     progress_bar,
@@ -57,13 +61,6 @@ LOOP_MODES = {
 class Music(SessionMixin, commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        # The newest autocomplete keystroke per user, so earlier ones can tell
-        # they have been superseded. Holds one small token per typist at most.
-        self._autocomplete_tokens: dict[int, object] = {}
-        # The last query each user was shown results for, with those results,
-        # so backspacing through it doesn't ask the node again. Capped at
-        # MUSIC_AUTOCOMPLETE_CACHE users.
-        self._autocomplete_results: dict[int, tuple[str, list]] = {}
 
     async def _ensure_player(self, interaction: discord.Interaction) -> wavelink.Player:
         """The guild's player, connecting to the caller's channel if needed."""
@@ -165,7 +162,8 @@ class Music(SessionMixin, commands.Cog):
             # a YouTube Music search, which returns songs rather than the videos,
             # covers and lyric uploads a plain YouTube search mixes in. A URL is
             # resolved directly and ignores the default.
-            results = await wavelink.Playable.search(query)
+            # Cached, so text the autocomplete just searched isn't searched again.
+            results = await cached_or_search(query)
         except wavelink.LavalinkLoadException as e:
             raise UserError(f"Could not load that: {e.error or 'the source refused the request'}")
 
@@ -264,49 +262,42 @@ class Music(SessionMixin, commands.Cog):
 
     async def _query_autocomplete(self, interaction: discord.Interaction, current: str):
         """Track suggestions for /play and /insert, which take the same query."""
-        # Dropping the token cancels a keystroke still waiting to search, so
-        # deleting the query doesn't leave one to fire for text that is gone.
-        user_id = interaction.user.id
-        if len(current) < AUTOCOMPLETE_MIN_LENGTH or not current.strip():
-            self._autocomplete_tokens.pop(user_id, None)
-            if not current:
-                self._autocomplete_results.pop(user_id, None)
+        if len(current.strip()) < AUTOCOMPLETE_MIN_LENGTH:
             return []
         # A pasted link is already exact, so there is nothing to suggest.
         if current.startswith(("http://", "https://")):
-            self._autocomplete_tokens.pop(user_id, None)
             return []
 
-        # Backspacing leaves a prefix of what was already searched, which is
-        # text being edited rather than a query someone means. What they were
-        # already shown is served again instead, since one backspace is a poor
-        # reason to ask the node anything. Typing forward is never a prefix of
-        # the last search, so it falls through and searches.
-        searched, previous = self._autocomplete_results.get(user_id, (None, None))
-        if searched is not None and searched.startswith(current):
-            self._autocomplete_tokens.pop(user_id, None)
-            return previous
+        results = cached_search(current)
+        if results is None:
+            # Typing forward is never a prefix of a longer search, so it falls
+            # through and searches. Backspacing is, and is served from the cache.
+            results = backspaced_search(current)
+        if results is None:
+            # An autocomplete can't be deferred, so the node gets what's left of
+            # Discord's 3 seconds and no more. A timeout isn't a failure: the
+            # search runs on and fills the cache for a later keystroke.
+            elapsed = (discord.utils.utcnow() - interaction.created_at).total_seconds()
+            budget = MUSIC_AUTOCOMPLETE_BUDGET - elapsed - MUSIC_AUTOCOMPLETE_MARGIN
+            if budget > 0:
+                try:
+                    results = await asyncio.wait_for(cached_or_search(current), budget)
+                except asyncio.TimeoutError:
+                    # Expected under load, and the search still fills the cache,
+                    # so it's only worth a line when chasing latency.
+                    logger.debug(f"Autocomplete for {current!r} outran its {budget:.1f}s budget")
+                    results = None
+                except Exception:
+                    # No error surface here, so a node failure shows as no
+                    # suggestions rather than a failed interaction. Logged, or
+                    # it's invisible.
+                    logger.warning(f"Autocomplete search failed for {current!r}", exc_info=True)
+                    results = None
+            # Beats an empty list while the real search is still on its way.
+            if results is None:
+                results = nearest_search(current)
 
-        # Discord fires this as you type, roughly once a second, and searching
-        # each one would hammer YouTube for results the next keystroke discards.
-        # Only the last of a burst is still current after the wait, so only it
-        # searches.
-        token = object()
-        self._autocomplete_tokens[user_id] = token
-        await asyncio.sleep(MUSIC_AUTOCOMPLETE_DEBOUNCE)
-        if self._autocomplete_tokens.get(user_id) is not token:
-            return []
-        # Dropped once claimed, so the map doesn't keep an entry per user seen.
-        self._autocomplete_tokens.pop(user_id, None)
-
-        try:
-            results = await wavelink.Playable.search(current)
-        except Exception:
-            # Autocomplete has no error surface, so a node hiccup shows as no
-            # suggestions rather than a failed interaction.
-            return []
-
-        if isinstance(results, wavelink.Playlist):
+        if results is None or isinstance(results, wavelink.Playlist):
             return []
 
         choices = []
@@ -319,12 +310,6 @@ class Music(SessionMixin, commands.Cog):
             # re-searched. Falls back to the label for a source without one.
             value = track.uri if track.uri and len(track.uri) <= 100 else label
             choices.append(app_commands.Choice(name=label, value=value))
-
-        # Capped, or a long lived bot keeps a result set per user who ever
-        # typed one. Oldest first, since a dict keeps insertion order.
-        while len(self._autocomplete_results) >= MUSIC_AUTOCOMPLETE_CACHE:
-            del self._autocomplete_results[next(iter(self._autocomplete_results))]
-        self._autocomplete_results[user_id] = (current, choices)
         return choices
 
     @app_commands.command(
