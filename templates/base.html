@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ bot_name or "Bot" }} {% block title %}Dashboard{% endblock %}</title>
-    {% if bot_avatar_url %}<link rel="icon" href="{{ bot_avatar_url }}">{% endif %}
+    {# Per page, so a tab is identifiable by its mark alone. The gear is the default. #}
+    <link rel="icon" href="{% block favicon %}/static/favicon-gear.svg{% endblock %}">
     <style>
         :root {
             /* Renders scrollbars and other native UI dark. */

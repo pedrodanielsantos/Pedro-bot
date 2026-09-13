@@ -52,7 +52,6 @@ def create_internal_app(bot, state):
         return {
             "ready": ready,
             "bot_name": bot.user.name if bot.user else None,
-            "bot_avatar_url": str(bot.user.display_avatar.url) if bot.user else None,
             "latency_ms": _latency_ms(bot) if ready else None,
             "guild_count": len(bot.guilds) if ready else None,
             "uptime": format_uptime(bot.launch_time),

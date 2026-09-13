@@ -178,7 +178,6 @@ def create_app(supervisor, web_state):
 
         return templates.TemplateResponse(request=request, name="dashboard.html", context={
             "bot_name": status.get("bot_name") or "Bot",
-            "bot_avatar_url": status.get("bot_avatar_url"),
             "is_ready": ready,
             "latency": status.get("latency_ms"),
             "guild_count": status.get("guild_count"),
@@ -424,7 +423,6 @@ def create_app(supervisor, web_state):
         logs = await asyncio.to_thread(tail_log_file, CONSOLE_RAW_FILE)
         return templates.TemplateResponse(request=request, name="console.html", context={
             "bot_name": status.get("bot_name") or "Bot",
-            "bot_avatar_url": status.get("bot_avatar_url"),
             "is_ready": bool(status.get("ready")),
             "logs": logs,
             "log_pos": log_pos,
