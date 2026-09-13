@@ -9,8 +9,7 @@
     <style>
         /* Served from static/fonts/, for the same reasons as static/vendor/: the
            dashboard works with no internet, and an upstream release cannot change
-           what renders without a commit. One family sets the whole interface, so
-           these two faces are everything the page loads. */
+           what renders without a commit. */
         @font-face {
             font-family: 'Roboto Mono';
             font-style: normal;
@@ -95,10 +94,9 @@
             text-decoration: none;
         }
 
-        /* Baseline, not centre: the title, the subtitle and the icon button are three
-           different heights, and centring each box leaves their text and glyphs sitting
-           at three different levels. The dot is a shape with no baseline, so it opts
-           back out. */
+        /* Baseline, not centre: the title, subtitle and icon button are different
+           heights, so centring each box leaves their glyphs at different levels. The
+           dot is a shape with no baseline, so it opts back out. */
         .header-left {
             display: flex;
             align-items: baseline;
@@ -137,9 +135,9 @@
         .icon-btn:hover { color: var(--text); background: var(--border); }
 
         /* An icon box has no baseline, so one is synthesized from its bottom edge and
-           the glyph lands high against the text. This drops it onto the middle of the
-           cap band, where the eye reads it as level. A margin would not do it: under
-           baseline alignment the box keeps its offset from the baseline either way. */
+           the glyph sits high against the text. This drops it onto the middle of the
+           cap band. A margin would not: under baseline alignment the box keeps its
+           offset from the baseline either way. */
         .header-left .icon-btn { position: relative; top: 2px; }
 
         main {
@@ -267,7 +265,8 @@
             line-height: 1.1;
         }
 
-        .stat-unit { font-size: 14px; font-weight: 400; color: var(--muted); }
+        /* Sized with the number it trails; the weight and colour do the demoting. */
+        .stat-unit { font-weight: 400; color: var(--muted); }
 
         /* Wraps rather than squeezing the buttons, since a narrow screen plus a
            transient badge ("Starting…") can widen the left side past the room. */
