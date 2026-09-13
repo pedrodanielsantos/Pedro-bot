@@ -407,7 +407,7 @@
 
         footer a:hover { color: var(--text); }
     </style>
-    <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js" defer></script>
+    <script src="{{ vendor['htmx.org'] }}" defer></script>
 </head>
 <body class="{% block body_class %}{% endblock %}">
     {% block content %}{% endblock %}

@@ -1,2 +1,5 @@
 * text=auto eol=crlf
 *.py text eol=crlf
+
+# Vendored upstream files, kept byte-identical to what was published.
+static/vendor/** -text

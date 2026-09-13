@@ -11,12 +11,15 @@ import discord
 import uvicorn
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from utils.cogs import discover_cog_paths, reload_shared_modules
 from utils.log import CONSOLE_RAW_FILE, log_file_size, quiet_uvicorn_logging, tail_log_file, tail_log_lines
+from utils.vendor import static_urls
 
 COGS_DIR = os.path.join(os.path.dirname(__file__), "cogs")
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 INTERNAL_API = "http://127.0.0.1:8001"
 
 BADGE_SECONDS = 2.0
@@ -31,6 +34,9 @@ GRACEFUL_SHUTDOWN_TIMEOUT = 5
 
 templates = Jinja2Templates(directory="templates")
 templates.env.globals["discord_version"] = discord.__version__
+# Versioned filenames, so the templates never hardcode one and a bump can't be
+# served stale from a browser cache.
+templates.env.globals["vendor"] = static_urls()
 
 
 def _commit_hash() -> str | None:
@@ -93,6 +99,7 @@ def _remaining(deadline):
 
 def create_app(supervisor, web_state):
     app = FastAPI(docs_url=None, redoc_url=None)
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     def _set_cog_badge(extension, error):
         seconds = ERROR_BADGE_SECONDS if error else BADGE_SECONDS

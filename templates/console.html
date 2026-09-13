@@ -27,7 +27,7 @@
 
 <script type="module">
     // ansi_up 6+ is ESM-only (no UMD/global build), hence the module import.
-    import { AnsiUp } from "https://unpkg.com/ansi_up@6/ansi_up.js";
+    import { AnsiUp } from "{{ vendor['ansi_up'] }}";
 
     document.addEventListener("DOMContentLoaded", () => {
         const consoleLog = document.getElementById("console-log");

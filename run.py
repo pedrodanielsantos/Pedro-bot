@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 import web
 from utils.log import RawConsoleSink, color_log_line, setup_logging
+from utils.vendor import check_for_updates
 
 # run.py needs LAVALINK_* to decide whether to supervise a node. bot.py loads
 # this again in its own process, which is a no-op the second time.
@@ -374,6 +375,13 @@ async def main():
     # a fresh one in its place, and that must not end run.py's own lifetime.
     web_task = asyncio.create_task(web.start(supervisor, web_state))
     web_task.add_done_callback(web._log_task_exception)
+
+    # Reports newer releases of the dashboard's vendored libraries. Backgrounded
+    # and failure-tolerant: it writes nothing, and nothing here waits on it. The
+    # notice lands in the console page because this process's stdout is teed there.
+    # Bound to a local because asyncio only holds a weak reference to a running
+    # task, and this one has no other owner to keep it from being collected.
+    update_check = asyncio.create_task(check_for_updates())
 
     try:
         await asyncio.Future()  # run until interrupted (Ctrl+C / CTRL_BREAK_EVENT)

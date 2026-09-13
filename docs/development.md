@@ -19,6 +19,7 @@ Pedro-bot/
 ├── db/                 # SQLite storage (aiosqlite)
 ├── utils/              # Runtime helpers
 ├── templates/          # Jinja2 templates for the dashboard
+├── static/             # Served at /static; vendored browser libraries
 └── scripts/            # Dev tooling (README generation, Lavalink install/diagnostics)
 ```
 
@@ -51,3 +52,25 @@ separate "docs" commits.
 >
 > Without this, commits still work, but the command table won't auto-update
 > until `py -3.13 scripts/gen_readme.py` is run manually.
+
+## Vendored browser libraries
+
+The dashboard serves htmx and ansi_up from `static/vendor/` rather than a CDN,
+so it still works with no internet and so an upstream release can't change what
+runs without a commit. Versions are pinned in `utils/vendor.py`.
+
+On startup, `run.py` checks npm in the background and logs a line in the console
+when a newer release exists. Nothing updates on its own. To take one:
+
+```bash
+py -3.13 scripts/update_vendor.py
+```
+
+Bump the version in `utils/vendor.py` first. The filename carries the version,
+so the new file lands alongside the old one, which the script names for you to
+delete in the same commit.
+
+Each library's upstream license is fetched next to it and must stay there.
+ansi_up is MIT, whose notice has to travel with the code, and its built file
+carries none of its own. htmx is 0BSD and requires nothing, but is kept the same
+way. Both are permissive and compatible with this project's AGPL-3.0.
