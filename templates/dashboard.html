@@ -176,18 +176,21 @@
         (function() {
             const el = document.getElementById('uptime-value');
 
+            // Demotes the units the way the latency card does, so the digits carry the
+            // value. utils/uptime.py stays plain: the bot log and /stats share it.
             function formatUptime(totalSeconds) {
                 const days = Math.floor(totalSeconds / 86400);
                 const hours = Math.floor(totalSeconds % 86400 / 3600);
                 const minutes = Math.floor(totalSeconds % 3600 / 60);
                 const seconds = Math.floor(totalSeconds % 60);
-                return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+                const unit = (value, symbol) => `${value}<span class="stat-unit">${symbol}</span>`;
+                return [unit(days, 'd'), unit(hours, 'h'), unit(minutes, 'm'), unit(seconds, 's')].join(' ');
             }
 
             function tick() {
                 const launch = Number(el.dataset.launch);
                 if (!launch) return;
-                el.textContent = formatUptime(Date.now() / 1000 - launch);
+                el.innerHTML = formatUptime(Date.now() / 1000 - launch);
             }
 
             tick();

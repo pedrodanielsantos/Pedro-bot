@@ -3,3 +3,4 @@
 
 # Vendored upstream files, kept byte-identical to what was published.
 static/vendor/** -text
+static/fonts/** -text

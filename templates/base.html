@@ -7,6 +7,27 @@
     {# Per page, so a tab is identifiable by its mark alone. The gear is the default. #}
     <link rel="icon" href="{% block favicon %}/static/favicon-gear.svg{% endblock %}">
     <style>
+        /* Served from static/fonts/, for the same reasons as static/vendor/: the
+           dashboard works with no internet, and an upstream release cannot change
+           what renders without a commit. One family sets the whole interface, so
+           these two faces are everything the page loads. */
+        @font-face {
+            font-family: 'Roboto Mono';
+            font-style: normal;
+            font-weight: 400;
+            font-display: swap;
+            src: url('/static/fonts/RobotoMono-Regular.woff2') format('woff2');
+        }
+
+        /* Bold is not decoration here: ansi_up renders the log's SGR 1 as one. */
+        @font-face {
+            font-family: 'Roboto Mono';
+            font-style: normal;
+            font-weight: 700;
+            font-display: swap;
+            src: url('/static/fonts/RobotoMono-Bold.woff2') format('woff2');
+        }
+
         :root {
             /* Renders scrollbars and other native UI dark. */
             color-scheme: dark;
@@ -28,10 +49,11 @@
             /* How wide the content column is allowed to get. Generous rather than
                narrow: wide enough that a row isn't mostly gap, capped so a very wide
                monitor doesn't stretch everything into air. Tune this one number. */
-            --page-max: 1280px;
-            /* Android has none of these and falls through to the generic, so advance
-               width still varies by platform; only the line box is ours to fix. */
-            --mono:    ui-monospace, SFMono-Regular, 'Consolas', Menlo, monospace;
+            --page-max: 1000px;
+            /* The whole interface, not just the log. Served by us, so the character
+               cell is the same on every platform rather than whatever the OS supplies;
+               the old stack stays behind it for the load, and for a failed fetch. */
+            --mono:    'Roboto Mono', ui-monospace, SFMono-Regular, 'Consolas', Menlo, monospace;
         }
 
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -39,7 +61,7 @@
         body {
             background: var(--bg);
             color: var(--text);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: var(--mono);
             font-size: 14px;
             line-height: 1.5;
             /* Stops mobile browsers inflating text on narrow screens. */
@@ -73,9 +95,13 @@
             text-decoration: none;
         }
 
+        /* Baseline, not centre: the title, the subtitle and the icon button are three
+           different heights, and centring each box leaves their text and glyphs sitting
+           at three different levels. The dot is a shape with no baseline, so it opts
+           back out. */
         .header-left {
             display: flex;
-            align-items: center;
+            align-items: baseline;
             flex-wrap: wrap;
             row-gap: 8px;
             gap: 10px;
@@ -86,6 +112,7 @@
             height: 9px;
             border-radius: 50%;
             flex-shrink: 0;
+            align-self: center;
         }
 
         .dot-online  { background: var(--green); }
@@ -108,6 +135,12 @@
         }
 
         .icon-btn:hover { color: var(--text); background: var(--border); }
+
+        /* An icon box has no baseline, so one is synthesized from its bottom edge and
+           the glyph lands high against the text. This drops it onto the middle of the
+           cap band, where the eye reads it as level. A margin would not do it: under
+           baseline alignment the box keeps its offset from the baseline either way. */
+        .header-left .icon-btn { position: relative; top: 2px; }
 
         main {
             width: 100%;
@@ -140,7 +173,6 @@
         /* A terminal surface, not prose: the character cell (advance width by line box)
            has to stay fixed or the log's ASCII art distorts. */
         .console {
-            font-family: var(--mono);
             font-size: 13px;
             line-height: 1.2;
             tab-size: 4;
@@ -193,7 +225,7 @@
             font-size: 11px;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.04em;
             color: var(--muted);
             margin-bottom: 10px;
         }
@@ -224,7 +256,7 @@
             font-size: 11px;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.04em;
             color: var(--muted);
             margin-bottom: 4px;
         }
@@ -262,7 +294,7 @@
 
         .guild-item:last-child { border-bottom: none; }
         .guild-name { font-size: 13px; }
-        .guild-meta { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+        .guild-meta { font-size: 11px; color: var(--muted); }
 
         table {
             width: 100%;
@@ -323,7 +355,7 @@
             font-size: 11px;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.06em;
+            letter-spacing: 0.04em;
             color: var(--muted);
             border-bottom: 1px solid var(--border);
             vertical-align: middle;
@@ -339,7 +371,7 @@
         /* Separators go between rows, so the last one has nothing to separate. */
         tbody tr:last-child td { border-bottom: none; }
 
-        td.mono { font-family: var(--mono); font-size: 12px; }
+        td.mono { font-size: 12px; }
 
         tbody tr { transition: background 0.12s; }
 
@@ -400,7 +432,6 @@
             color: var(--red);
             display: block;
             margin-top: 3px;
-            font-family: var(--mono);
         }
 
     </style>
