@@ -20,7 +20,9 @@
             --red:     #ed4245;
             --yellow:  #faa61a;
             --radius:  8px;
-            --mono:    'Consolas', 'Monaco', 'Courier New', monospace;
+            /* Android has none of these and falls through to the generic, so advance
+               width still varies by platform; only the line box is ours to fix. */
+            --mono:    ui-monospace, SFMono-Regular, 'Consolas', Menlo, monospace;
         }
 
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -31,13 +33,22 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             font-size: 14px;
             line-height: 1.5;
+            /* Stops mobile browsers inflating text on narrow screens. */
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+            /* svh is the viewport with the mobile browser's UI showing, so the page
+               never starts out taller than the screen. */
             min-height: 100vh;
+            min-height: 100svh;
             display: flex;
             flex-direction: column;
         }
 
+        ::selection { background: rgba(88, 101, 242, 0.35); }
+
         header {
             background: var(--surface);
+            border-bottom: 1px solid var(--border);
             padding: 14px 16px;
             display: flex;
             align-items: center;
@@ -99,18 +110,75 @@
             flex: 1;
         }
 
-        /* Locks the page to one screen so a flexed child can scroll internally. */
-        body.fill-viewport      { height: 100vh; }
+        /* Locks the page to one screen so a flexed child can scroll internally. 100vh
+           measures as if the mobile browser's UI were hidden, cutting off the footer
+           until it is; dvh tracks it instead. */
+        body.fill-viewport      { height: 100vh; height: 100dvh; }
         body.fill-viewport main { min-height: 0; }
 
-        /* Content that is the page itself: full width, flush against the header
-           and footer, no frame of its own. */
+        /* Content that is the page itself: full width, flush against the header and
+           footer, no frame of its own. Owns the gutter token so the log and the button
+           overlaid on it share one edge. */
         main.main-bleed {
+            --console-pad: 16px;
             max-width: none;
             padding: 0;
+            position: relative;
         }
 
         body.fill-viewport footer { margin-top: 0; }
+
+        /* A terminal surface, not prose: the character cell (advance width by line box)
+           has to stay fixed or the log's ASCII art distorts. */
+        .console {
+            font-family: var(--mono);
+            font-size: 13px;
+            line-height: 1.2;
+            tab-size: 4;
+            white-space: pre;
+            overflow: auto;
+            overscroll-behavior: contain;
+            padding-block: var(--console-pad);
+            flex: 1;
+            min-height: 0;
+        }
+
+        /* max-content keeps the trailing padding past a long line; 1lh keeps blank
+           lines, e.g. inside Lavalink's banner, from collapsing. */
+        .console-line {
+            display: block;
+            width: max-content;
+            min-width: 100%;
+            min-height: 1lh;
+            padding-inline: var(--console-pad);
+        }
+
+        .console-line:hover { background: rgba(255, 255, 255, 0.025); }
+        .console-empty      { color: var(--muted); }
+
+        /* Wrapped mode indents continuations so a split record still reads as one. */
+        .console.is-wrapped { white-space: pre-wrap; }
+
+        .console.is-wrapped .console-line {
+            width: auto;
+            padding-left: calc(var(--console-pad) + 4ch);
+            text-indent: -4ch;
+        }
+
+        /* Scrolled up means the tail is paused, so this doubles as that indicator. The
+           compound selector outweighs the .btn rules further down. Offsets are measured
+           in console.html: this sits against main, outside the log's scrollbars. */
+        .btn.console-jump {
+            position: absolute;
+            right: calc(var(--console-pad) + var(--scrollbar-w, 0px));
+            bottom: calc(var(--console-pad) + var(--scrollbar-h, 0px));
+            background: var(--surface);
+            opacity: 0;
+            pointer-events: none;
+            transition: background 0.12s, border-color 0.12s, opacity 0.15s;
+        }
+
+        .btn.console-jump.is-visible { opacity: 1; pointer-events: auto; }
 
         .section-label {
             font-size: 11px;
@@ -322,6 +390,7 @@
 
         footer {
             background: var(--surface);
+            border-top: 1px solid var(--border);
             margin-top: 28px;
             padding: 14px 16px;
             display: flex;

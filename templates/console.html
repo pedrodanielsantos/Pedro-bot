@@ -8,12 +8,20 @@
         <div id="header-status-dot" class="dot {{ 'dot-online' if is_ready else 'dot-offline' }}"></div>
         <span class="header-title">{{ bot_name }}</span>
         <span class="header-sub">/ Console</span>
+        <button type="button" id="console-wrap" class="icon-btn" style="margin-left: -8px;"
+            title="Toggle line wrapping"
+            aria-pressed="false">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 4h12M2 8h10a2.25 2.25 0 0 1 0 4.5H7M9 10.5l-2 2 2 2" />
+            </svg>
+        </button>
     </div>
     <a href="/" class="btn btn-fixed-width">Dashboard</a>
 </header>
 
 <main class="main-bleed">
-    <pre id="console-log" data-log-pos="{{ log_pos }}" style="font-family: var(--mono); font-size: 12px; white-space: pre-wrap; padding: 16px; flex: 1; min-height: 0; overflow-y: auto;"></pre>
+    <pre id="console-log" class="console" data-log-pos="{{ log_pos }}"><span id="console-empty" class="console-line console-empty">Waiting for output...</span></pre>
+    <button type="button" id="console-jump" class="btn console-jump">Scroll to bottom</button>
 </main>
 {% include "partials/console_log.html" %}
 
@@ -23,15 +31,47 @@
 
     document.addEventListener("DOMContentLoaded", () => {
         const consoleLog = document.getElementById("console-log");
+        const jumpBtn = document.getElementById("console-jump");
+        const wrapBtn = document.getElementById("console-wrap");
         const ansiUp = new AnsiUp();
         ansiUp.use_classes = false;
 
         const stickThreshold = 24;
         let stickToBottom = true;
 
-        // Shared by the initial static tail and every live SSE line.
+        // Off the bottom the live tail is effectively paused, so the button is both the
+        // way back and the only sign of it.
+        function setStick(on) {
+            stickToBottom = on;
+            jumpBtn.classList.toggle("is-visible", !on);
+        }
+
+        function pinToBottom() {
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+        }
+
+        // Publishes the log's scrollbar sizes, so the button positioned against main can
+        // sit level with the text gutter instead of over them. Observing the content box
+        // catches a scrollbar appearing, not just a window resize.
+        const mainEl = consoleLog.parentElement;
+        new ResizeObserver(() => {
+            mainEl.style.setProperty("--scrollbar-w", `${consoleLog.offsetWidth - consoleLog.clientWidth}px`);
+            mainEl.style.setProperty("--scrollbar-h", `${consoleLog.offsetHeight - consoleLog.clientHeight}px`);
+        }).observe(consoleLog);
+
+        // Placeholder for a log with nothing in it yet; the first line clears it.
+        let emptyState = document.getElementById("console-empty");
+
+        // Shared by the initial static tail and every live SSE line. One element per
+        // line, so wrap, padding and hover apply per record.
         function appendLine(rawLine) {
-            consoleLog.insertAdjacentHTML("beforeend", ansiUp.ansi_to_html(rawLine) + "\n");
+            if (emptyState) {
+                emptyState.remove();
+                emptyState = null;
+            }
+            consoleLog.insertAdjacentHTML(
+                "beforeend", `<span class="console-line">${ansiUp.ansi_to_html(rawLine)}</span>`
+            );
         }
 
         const initialData = document.getElementById("console-log-initial");
@@ -40,16 +80,34 @@
         }
 
         consoleLog.addEventListener("scroll", () => {
-            stickToBottom = consoleLog.scrollHeight - consoleLog.scrollTop - consoleLog.clientHeight < stickThreshold;
+            setStick(consoleLog.scrollHeight - consoleLog.scrollTop - consoleLog.clientHeight < stickThreshold);
         });
 
-        consoleLog.scrollTop = consoleLog.scrollHeight;
+        jumpBtn.addEventListener("click", pinToBottom);
+
+        // Off by default so the log keeps the character grid its ASCII art was drawn on.
+        function setWrap(on) {
+            consoleLog.classList.toggle("is-wrapped", on);
+            wrapBtn.setAttribute("aria-pressed", String(on));
+            // Re-wrapping changes scrollHeight without firing a scroll event.
+            if (stickToBottom) pinToBottom();
+        }
+
+        wrapBtn.addEventListener("click", () => {
+            const on = !consoleLog.classList.contains("is-wrapped");
+            localStorage.setItem("console-wrap", on ? "1" : "0");
+            setWrap(on);
+        });
+
+        setWrap(localStorage.getItem("console-wrap") === "1");
+
+        pinToBottom();
 
         // The box flexes to fill main, so resizing the window changes clientHeight
         // without firing a scroll event. Only re-pins if already stuck to the bottom,
         // so a reader scrolled up through history isn't yanked back down.
         window.addEventListener("resize", () => {
-            if (stickToBottom) consoleLog.scrollTop = consoleLog.scrollHeight;
+            if (stickToBottom) pinToBottom();
         });
 
         // Starts at the byte offset the static render above already covers, so a
@@ -62,9 +120,7 @@
         const logSource = new EventSource(logPos ? `/console/logs/stream?last_id=${logPos}` : "/console/logs/stream");
         logSource.onmessage = (e) => {
             appendLine(e.data);
-            if (stickToBottom) {
-                consoleLog.scrollTop = consoleLog.scrollHeight;
-            }
+            if (stickToBottom) pinToBottom();
         };
 
         // Mirrors the header dot across tabs.
