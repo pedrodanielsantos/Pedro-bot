@@ -2,12 +2,10 @@ import asyncio
 import importlib
 import logging
 import os
-import subprocess
 import sys
 import time
 
 import aiohttp
-import discord
 import uvicorn
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -33,24 +31,10 @@ STATUS_STREAM_READ_TIMEOUT = 5.0
 GRACEFUL_SHUTDOWN_TIMEOUT = 5
 
 templates = Jinja2Templates(directory="templates")
-templates.env.globals["discord_version"] = discord.__version__
 # Versioned filenames, so the templates never hardcode one and a bump can't be
 # served stale from a browser cache.
 templates.env.globals["vendor"] = static_urls()
 
-
-def _commit_hash() -> str | None:
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, check=True, timeout=5,
-        )
-        return result.stdout.strip()
-    except (subprocess.SubprocessError, OSError):
-        return None
-
-
-templates.env.globals["commit_hash"] = _commit_hash()
 logger = logging.getLogger("web")
 
 
