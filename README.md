@@ -30,8 +30,8 @@ without a restart.
   the member can rename and resize, cleaned up automatically when empty.
 - **Music**: queue-based playback from YouTube, YouTube Music, SoundCloud and
   Bandcamp through a self-hosted Lavalink node, with Spotify links matched to a
-  YouTube or SoundCloud stream, plus search autocomplete, seeking, looping and an
-  optional DJ role.
+  YouTube or SoundCloud stream, plus opt-in search suggestions, seeking, looping
+  and an optional DJ role.
 - **GIF generation**: 25 effects (petpet, heart lock, explode, glitch, etc.)
   applied to an avatar, URL, or attachment via the Jeyy API.
 - **Autoroles & welcome messages**: auto-assign roles to new members, greet them

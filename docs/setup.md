@@ -40,6 +40,7 @@ LOG_LEVEL=DEBUG                      # optional; defaults to INFO
 LAVALINK_DIR=C:\lavalink             # music; where setup_lavalink.py installed the node
 LAVALINK_URI=http://127.0.0.1:2333   # music; the node's address
 LAVALINK_PASSWORD=your_node_password # music; must match application.yml
+MUSIC_AUTOCOMPLETE=true              # music; optional, defaults to false, see Track suggestions
 ```
 
 The three `LAVALINK_*` values are printed by `scripts/setup_lavalink.py`. Leave
@@ -52,6 +53,11 @@ Non-secret defaults (lobby names, voice region, embed colors, etc.) live in
 on `on_ready`. Set it to `false` to skip that and avoid Discord's rate limits
 when restarting often. Sync manually anytime with the dashboard's **Sync**
 button or `ç!sync`.
+
+`MUSIC_AUTOCOMPLETE` defaults to `false`. It is read once at import and decides
+whether `/play` and `/insert` are synced with track suggestions at all, so
+changing it needs a restart and a sync to reach Discord. See
+[Track suggestions](music.md#track-suggestions).
 
 ## Bot permissions
 

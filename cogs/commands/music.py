@@ -3,6 +3,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import logging
+import os
 import random
 from typing import Optional
 
@@ -50,6 +51,10 @@ logger = logging.getLogger("music")
 # Minimum characters before /play autocomplete queries the node, under which
 # there is nothing specific enough to suggest.
 AUTOCOMPLETE_MIN_LENGTH = 3
+
+# Track suggestions, off unless the host asks for them. Read at import because
+# the suggestions are part of the command Discord syncs, not a runtime choice.
+MUSIC_AUTOCOMPLETE = os.getenv("MUSIC_AUTOCOMPLETE", "false").lower() == "true"
 
 LOOP_MODES = {
     "off": wavelink.QueueMode.normal,
@@ -148,10 +153,6 @@ class Music(SessionMixin, commands.Cog):
             await player.play(player.queue.get())
 
         await interaction.followup.send(embed=embed)
-
-    @insert.autocomplete("query")
-    async def insert_autocomplete(self, interaction: discord.Interaction, current: str):
-        return await self._query_autocomplete(interaction, current)
 
     async def _queue_search(
         self, player: wavelink.Player, query: str, color: int, *, front: bool = False
@@ -256,10 +257,6 @@ class Music(SessionMixin, commands.Cog):
             embed.set_thumbnail(url=entity.artwork)
         return embed
 
-    @play.autocomplete("query")
-    async def play_autocomplete(self, interaction: discord.Interaction, current: str):
-        return await self._query_autocomplete(interaction, current)
-
     async def _query_autocomplete(self, interaction: discord.Interaction, current: str):
         """Track suggestions for /play and /insert, which take the same query."""
         if len(current.strip()) < AUTOCOMPLETE_MIN_LENGTH:
@@ -311,6 +308,12 @@ class Music(SessionMixin, commands.Cog):
             value = track.uri if track.uri and len(track.uri) <= 100 else label
             choices.append(app_commands.Choice(name=label, value=value))
         return choices
+
+    if MUSIC_AUTOCOMPLETE:
+        # Discord shows its suggestion box for any option registered here, empty
+        # or not, so registering is the switch, not what the callback returns.
+        play.autocomplete("query")(_query_autocomplete)
+        insert.autocomplete("query")(_query_autocomplete)
 
     @app_commands.command(
         name="skip", description="Skip the current track, or drop tracks from the queue"

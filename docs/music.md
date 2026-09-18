@@ -135,6 +135,31 @@ AAC transcodings and there is no setting for it, so upgrading does not help.
 Migration is per track, so duplicate uploads usually still play, which is exactly
 what the retry finds. Expect that to fade as the rollout finishes.
 
+## Track suggestions
+
+`/play` and `/insert` can suggest tracks while a query is typed, which is off
+unless `MUSIC_AUTOCOMPLETE=true` is set in `.env`. Discord decides when to ask:
+its docs only promise suggestions "as they type" and name no interval, so a
+query typed slowly or in pauses might be searched several times over, where the
+same query sent costs one search.
+
+The flag is read at import and decides whether the callbacks are registered, so
+it reaches Discord as part of the synced command rather than being read per
+interaction. Changing it needs a restart and a sync.
+
+What softens that is the cache: `MUSIC_SEARCH_CACHE` queries for
+`MUSIC_SEARCH_CACHE_TTL` seconds, shared with `/play` so a query sent as typed
+isn't searched again. Backspacing is served from it, since a shorter query is a
+prefix of one already searched, while typing forward isn't and so searches.
+Queries shorter than `AUTOCOMPLETE_MIN_LENGTH` in
+[`cogs/commands/music.py`](../cogs/commands/music.py) and pasted links never
+search at all.
+
+Picking a suggestion sends the track's URI rather than the text, so the node
+resolves it directly instead of searching. A track with no URI, or one over
+Discord's 100 character limit for a choice value, sends its label instead, which
+is searched like any other query.
+
 ## Spotify links
 
 Spotify serves no audio, so `/play` reads a link's metadata from its embed page

@@ -10,7 +10,8 @@ class CommandLogger(commands.Cog):
         self.bot.tree.interaction_check = self.log_interaction
 
     async def log_interaction(self, interaction: discord.Interaction) -> bool:
-        # The tree check also runs for autocomplete, which fires once per keystroke.
+        # The tree check also runs for autocomplete, which might fire multiple
+        # times while typing.
         if interaction.type is not discord.InteractionType.application_command:
             return True
 
