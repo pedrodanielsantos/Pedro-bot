@@ -42,6 +42,15 @@ MUSIC_FALLBACK_TOLERANCE = 15  # seconds a replacement may differ in length from
 # see the transcoding note in docs/music.md.
 MUSIC_FALLBACK_ATTEMPTS = 3
 
+# Words marking a different version of the same song, penalised unless the
+# wanted title carries them too.
+MUSIC_VERSION_MARKERS = (
+    "remix", "live", "cover", "acoustic", "instrumental", "karaoke",
+    "sped up", "slowed", "nightcore", "reverb", "8d", "mashup",
+    "bootleg", "flip", "rework", "vip",
+)
+MUSIC_MATCH_FLOOR = 0.6  # fraction of the wanted title's words a candidate must carry
+
 # Search prefixes tried, in order, for a track known only by its metadata, such
 # as one from a Spotify link. ytmsearch leads because it returns songs rather
 # than the covers and lyric uploads a plain YouTube search mixes in.

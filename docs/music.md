@@ -101,7 +101,20 @@ video is not available". For those, `music_manager` re-searches the author,
 minus any `- Topic` suffix naming an auto-generated channel, and the title
 against `MUSIC_FALLBACK_SOURCES` (plain YouTube first, then SoundCloud),
 requires the result to be within `MUSIC_FALLBACK_TOLERANCE` seconds of the
-original length, and queues it in the failed track's place.
+original length, and queues the best match in the failed track's place.
+
+Length alone picks the wrong song, since a cover, a live take or a sped up edit
+runs about as long as the original and any of them can outrank it in a source's
+results. So candidates inside that window are scored instead: what share of the
+wanted title's words a candidate carries, minus the artist's own words since the
+author is scored separately and an upload titled "Artist - Song" would otherwise
+count it twice, which must reach `MUSIC_MATCH_FLOOR`,
+then the author and how close the length is as tiebreakers, minus a penalty for
+each of `MUSIC_VERSION_MARKERS` it carries that the wanted title does not. The
+penalty outweighs the tiebreakers, so a marked version only wins when nothing
+else matched, and a remix asked for by name keeps its marker unpenalised. A
+source is only left behind once nothing in it clears the floor, which keeps the
+common case at one search.
 
 A stand-in can fail too, so the search repeats with every identifier already
 tried excluded, up to `MUSIC_FALLBACK_ATTEMPTS` deep. That depth rides on the
@@ -126,8 +139,7 @@ what the retry finds. Expect that to fade as the rollout finishes.
 
 Spotify serves no audio, so `/play` reads a link's metadata from its embed page
 and searches for the same recording on `MUSIC_SEARCH_SOURCES` (YouTube Music,
-YouTube, then SoundCloud), taking the first result within
-`MUSIC_FALLBACK_TOLERANCE` seconds of the original length. The Spotify API needs
+YouTube, then SoundCloud), scored the same way a stand-in is. The Spotify API needs
 the app owner to hold Premium, so it is not used and LavaSrc's sources stay off.
 
 Tracks resolve `MUSIC_PREFETCH` ahead of playback, only the one about to play,

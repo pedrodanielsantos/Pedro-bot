@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import time
 from collections import deque
 from collections.abc import Container
@@ -12,11 +13,13 @@ from config.constants import (
     MUSIC_AUTOCOMPLETE_LIMIT,
     MUSIC_FALLBACK_SOURCES,
     MUSIC_FALLBACK_TOLERANCE,
+    MUSIC_MATCH_FLOOR,
     MUSIC_MISS_LIMIT,
     MUSIC_PREFETCH,
     MUSIC_SEARCH_CACHE,
     MUSIC_SEARCH_CACHE_TTL,
     MUSIC_SEARCH_SOURCES,
+    MUSIC_VERSION_MARKERS,
 )
 from db.database import get_music_dj_role
 from utils.errors import UserError
@@ -305,18 +308,113 @@ def search_author(track: wavelink.Playable) -> str:
     return author
 
 
-async def search_matching(
-    query: str, length: int, sources: tuple[str, ...], *, exclude: Container[str] = ()
-) -> wavelink.Playable | None:
-    """The first result across sources close enough in length to be the same recording.
+_BRACKETED = re.compile(r"[(\[{][^)\]}]*[)\]}]")
+_PUNCTUATION = re.compile(r"[^\w\s]")
 
-    Length is the cheap signal that a candidate isn't a remix, a live version or
-    an hour long mix. exclude drops identifiers already known to be unplayable,
-    so a repeated search walks past them to the next candidate instead of
-    returning the same dead result.
+# Weights for _match_score. Title overlap decides; the rest only break ties.
+# The penalty outweighs both bonuses, so an unwanted version never wins against
+# an otherwise equal candidate.
+_AUTHOR_WEIGHT = 0.15
+_LENGTH_WEIGHT = 0.10
+_MARKER_PENALTY = 0.30
+
+
+def _title_words(text: str, *, drop_bracketed: bool = False) -> set[str]:
+    """A title reduced to comparable words.
+
+    drop_bracketed is for the title being looked for, where "(Remastered 2011)"
+    and the like are qualifiers an upload rarely repeats, so counting them would
+    only ever lower the match. A candidate keeps them: words it carries beyond
+    the ones wanted cost it nothing, and dropping them would hide the version of
+    a remix that was asked for by name.
+    """
+    lowered = text.casefold()
+    if drop_bracketed:
+        lowered = _BRACKETED.sub(" ", lowered)
+    return set(_PUNCTUATION.sub(" ", lowered).split())
+
+
+def _version_markers(text: str) -> set[str]:
+    """Version words the text carries, read before brackets are stripped.
+
+    Matched on word boundaries, or "live" would be found inside "delivery".
+    """
+    lowered = text.casefold()
+    return {
+        marker for marker in MUSIC_VERSION_MARKERS
+        if re.search(rf"\b{re.escape(marker)}\b", lowered)
+    }
+
+
+def _match_score(
+    candidate: wavelink.Playable,
+    wanted: set[str],
+    author_words: set[str],
+    markers: set[str],
+    length: int,
+) -> float | None:
+    """How well a candidate matches what was asked for, or None if it can't be it."""
+    candidate_words = _title_words(candidate.title)
+    carried = len(wanted & candidate_words) / len(wanted)
+    if carried < MUSIC_MATCH_FLOOR:
+        return None
+
+    score = carried
+    if author_words:
+        # The author travels in either field: a title is often "Artist - Song",
+        # while an upload's own author may name the channel instead.
+        found = author_words & (candidate_words | _title_words(candidate.author or ""))
+        score += _AUTHOR_WEIGHT * len(found) / len(author_words)
+
+    # Closer in length is likelier to be the same recording, inside the window
+    # the caller already accepted.
+    off_by = abs(candidate.length - length) / (MUSIC_FALLBACK_TOLERANCE * 1000)
+    score += _LENGTH_WEIGHT * (1 - off_by)
+
+    # Only versions that weren't asked for, so a remix stays findable by name.
+    return score - _MARKER_PENALTY * len(_version_markers(candidate.title) - markers)
+
+
+async def search_matching(
+    query: str,
+    length: int,
+    sources: tuple[str, ...],
+    *,
+    title: str | None = None,
+    author: str = "",
+    exclude: Container[str] = (),
+) -> wavelink.Playable | None:
+    """The best match for a recording across sources, or None if nothing fits.
+
+    Length gates a candidate and the title decides between what is left, since a
+    cover or a live take sits at the original's length and length alone would
+    take whichever the source ranked first. A source is only left behind once
+    nothing in it clears MUSIC_MATCH_FLOOR.
+
+    title and author are what is being looked for, where query is how to ask for
+    it. Without them the query is scored against itself, which still ranks but
+    reads the artist as part of the title.
+
+    Scoring runs on titles alone, so a source that names tracks differently to
+    the one a track came from will match less well, not wrongly.
+
+    exclude drops identifiers already known to be unplayable, so a repeated
+    search walks past them instead of returning the same dead result.
     """
     if not query:
         return None
+
+    looking_for = title if title is not None else query
+    author_words = _title_words(author)
+    wanted = _title_words(looking_for, drop_bracketed=True)
+    # A failed upload's title usually leads with the artist, which the author is
+    # scored on separately. Left in, it would be counted twice, and a stand-in
+    # titled with the song alone would fall under the floor. Kept when the title
+    # is nothing but the artist, which leaves nothing else to match on.
+    wanted = (wanted - author_words) or wanted
+    if not wanted:
+        return None
+    markers = _version_markers(looking_for)
 
     for source in sources:
         try:
@@ -328,11 +426,20 @@ async def search_matching(
         if isinstance(results, wavelink.Playlist):
             continue
 
+        best = None
+        best_score = 0.0
         for candidate in results:
             if candidate.is_stream or candidate.identifier in exclude:
                 continue
-            if abs(candidate.length - length) <= MUSIC_FALLBACK_TOLERANCE * 1000:
-                return candidate
+            if abs(candidate.length - length) > MUSIC_FALLBACK_TOLERANCE * 1000:
+                continue
+
+            score = _match_score(candidate, wanted, author_words, markers, length)
+            if score is not None and (best is None or score > best_score):
+                best, best_score = candidate, score
+
+        if best is not None:
+            return best
 
     return None
 
@@ -355,13 +462,27 @@ async def find_replacement(
     if track.is_stream:
         return None
 
-    query = " ".join(part for part in (search_author(track), track.title) if part).strip()
-    return await search_matching(query, track.length, MUSIC_FALLBACK_SOURCES, exclude=exclude)
+    author = search_author(track)
+    query = " ".join(part for part in (author, track.title) if part).strip()
+    return await search_matching(
+        query,
+        track.length,
+        MUSIC_FALLBACK_SOURCES,
+        title=track.title,
+        author=author,
+        exclude=exclude,
+    )
 
 
 async def resolve_pending(track: PendingTrack) -> wavelink.Playable | None:
     """A playable source for a metadata-only track, or None if no source has it."""
-    return await search_matching(track.query, track.duration, MUSIC_SEARCH_SOURCES)
+    return await search_matching(
+        track.query,
+        track.duration,
+        MUSIC_SEARCH_SOURCES,
+        title=track.title,
+        author=track.artists,
+    )
 
 
 def pending_tracks(player: wavelink.Player) -> deque:
