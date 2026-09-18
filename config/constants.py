@@ -46,8 +46,8 @@ MUSIC_FALLBACK_ATTEMPTS = 3
 # as one from a Spotify link. ytmsearch leads because it returns songs rather
 # than the covers and lyric uploads a plain YouTube search mixes in.
 MUSIC_SEARCH_SOURCES = ("ytmsearch", "ytsearch", "scsearch")
-# A page's worth, so /queue's first page always has a link on every track and
-# only the pages past it show anything unresolved.
-MUSIC_PREFETCH = MUSIC_QUEUE_PAGE_SIZE
+# Only the track about to play, so each queued track costs one search and no
+# more. Everything behind it stays unresolved in /queue until its turn comes.
+MUSIC_PREFETCH = 1
 MUSIC_MISS_LIMIT = 5       # unresolvable tracks in a row before the rest are dropped
 MUSIC_SPOTIFY_LIMIT = 100  # tracks Spotify's embed page returns for a playlist
