@@ -77,7 +77,7 @@ lavalink:
   # Only one copy may be installed. Delete plugins/youtube-plugin-*.jar before
   # starting, or Lavalink loads both and the older one may win.
   plugins:
-    - dependency: "dev.lavalink.youtube:youtube-plugin:f45bbb7aebfcbc1c553769e04af6cd43afa8b7c3"
+    - dependency: "dev.lavalink.youtube:youtube-plugin:2be8e542d3f6f178e048dca565892684c2e40177"
       snapshot: true
 
   server:
