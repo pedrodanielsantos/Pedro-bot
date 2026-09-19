@@ -45,6 +45,7 @@ from utils.music import (
 from utils.paginator import PaginatorView
 from utils.parsing import parse_number_spec
 from utils.spotify import fetch_entity, parse_spotify_url
+from utils.tidal import fetch_track, parse_tidal_url
 
 logger = logging.getLogger("music")
 
@@ -100,7 +101,7 @@ class Music(SessionMixin, commands.Cog):
 
     @app_commands.command(name="play", description="Play a track, or add it to the queue")
     @app_commands.describe(
-        query="A search term, or a Spotify, YouTube, YouTube Music, SoundCloud or Bandcamp link"
+        query="A search term, or a Spotify, Tidal, YouTube, YouTube Music, SoundCloud or Bandcamp link"
     )
     async def play(self, interaction: discord.Interaction, query: str):
         require_node()
@@ -112,11 +113,7 @@ class Music(SessionMixin, commands.Cog):
         player.home = interaction.channel
 
         color = await get_guild_embed_color(interaction.guild_id)
-        spotify = parse_spotify_url(query)
-        if spotify is not None:
-            embed = await self._queue_spotify(player, *spotify, color=color)
-        else:
-            embed = await self._queue_search(player, query, color)
+        embed = await self._queue_query(player, query, color)
 
         # The manager cog announces the track itself once playback starts, so
         # nothing is echoed here beyond the queue confirmation.
@@ -127,7 +124,7 @@ class Music(SessionMixin, commands.Cog):
 
     @app_commands.command(name="insert", description="Add a track to the front of the queue")
     @app_commands.describe(
-        query="A search term, or a Spotify, YouTube, YouTube Music, SoundCloud or Bandcamp link"
+        query="A search term, or a Spotify, Tidal, YouTube, YouTube Music, SoundCloud or Bandcamp link"
     )
     async def insert(self, interaction: discord.Interaction, query: str):
         require_node()
@@ -143,16 +140,26 @@ class Music(SessionMixin, commands.Cog):
         player.home = interaction.channel
 
         color = await get_guild_embed_color(interaction.guild_id)
-        spotify = parse_spotify_url(query)
-        if spotify is not None:
-            embed = await self._queue_spotify(player, *spotify, color=color, front=True)
-        else:
-            embed = await self._queue_search(player, query, color, front=True)
+        embed = await self._queue_query(player, query, color, front=True)
 
         if not player.playing:
             await player.play(player.queue.get())
 
         await interaction.followup.send(embed=embed)
+
+    async def _queue_query(
+        self, player: wavelink.Player, query: str, color: int, *, front: bool = False
+    ) -> discord.Embed:
+        """Queues a query, routing the links the node resolves no audio for."""
+        spotify = parse_spotify_url(query)
+        if spotify is not None:
+            return await self._queue_spotify(player, *spotify, color=color, front=front)
+
+        tidal = parse_tidal_url(query)
+        if tidal is not None:
+            return await self._queue_tidal(player, *tidal, color=color, front=front)
+
+        return await self._queue_search(player, query, color, front=front)
 
     async def _queue_search(
         self, player: wavelink.Player, query: str, color: int, *, front: bool = False
@@ -255,6 +262,48 @@ class Music(SessionMixin, commands.Cog):
         )
         if entity.artwork:
             embed.set_thumbnail(url=entity.artwork)
+        return embed
+
+    async def _queue_tidal(
+        self,
+        player: wavelink.Player,
+        kind: str,
+        identifier: str,
+        *,
+        color: int,
+        front: bool = False,
+    ) -> discord.Embed:
+        """Queues a Tidal link, which carries metadata the node can't stream."""
+        # Only a track page lists its own metadata. An album or playlist page
+        # names itself and nothing else, so there is nothing to queue from it.
+        if kind != "track":
+            raise UserError(
+                f"I can only play a single Tidal track, not a {kind}. "
+                "Searching by name still works."
+            )
+
+        pending = await fetch_track(self.session, identifier)
+        if pending is None:
+            raise UserError("Couldn't read that Tidal link. Searching by name still works.")
+
+        # One track, so it is resolved here either way rather than through the
+        # pending queue, which exists to spread a long playlist out.
+        resolved = await resolve_pending(pending)
+        if resolved is None:
+            raise UserError(f"Couldn't find a playable version of **{pending.title}**.")
+
+        if front:
+            player.queue.put_at(0, resolved)
+        else:
+            player.queue.put(resolved)
+
+        embed = discord.Embed(
+            title="Playing next" if front else "Queued",
+            description=format_track(resolved),
+            color=color,
+        )
+        if resolved.artwork:
+            embed.set_thumbnail(url=resolved.artwork)
         return embed
 
     async def _query_autocomplete(self, interaction: discord.Interaction, current: str):

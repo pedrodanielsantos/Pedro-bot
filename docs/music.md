@@ -18,11 +18,12 @@ handles encryption, including DAVE, on its side.
 | --- | --- |
 | `Lavalink.jar` | Standalone node on `127.0.0.1:2333`, started by `run.py` |
 | [`youtube-source`](https://github.com/lavalink-devs/youtube-source) | YouTube and YouTube Music extraction, pinned to a snapshot |
-| [`LavaSrc`](https://github.com/topi314/LavaSrc) | Installed but all sources off, see [Spotify links](#spotify-links) |
+| [`LavaSrc`](https://github.com/topi314/LavaSrc) | Installed but all sources off, see [Spotify links](#spotify-links) and [Tidal links](#tidal-links) |
 | [`cogs/core/music_manager.py`](../cogs/core/music_manager.py) | Owns the node connection and playback lifecycle |
 | [`cogs/commands/music.py`](../cogs/commands/music.py) | The slash commands |
 | [`utils/music.py`](../utils/music.py) | Player lookup, DJ gating, track formatting, track search |
 | [`utils/spotify.py`](../utils/spotify.py) | Spotify link parsing and metadata |
+| [`utils/tidal.py`](../utils/tidal.py) | Tidal link parsing and metadata |
 
 The node is **optional**. With `LAVALINK_DIR` unset, or `Lavalink.jar`,
 `application.yml` or `java` missing, `run.py` logs which one and skips the node,
@@ -178,3 +179,37 @@ away, with the tracks it hasn't looked up yet carrying no link. `/skip` and
 
 The embed page returns at most `MUSIC_SPOTIFY_LIMIT` tracks for a playlist, and
 carries no ISRC, so a match rests on artist, title and length.
+
+## Tidal links
+
+Handled the same way and for the same reason: Tidal serves no audio here, so
+`/play` reads the metadata and the recording is found elsewhere. LavaSrc could
+resolve these instead, but its Tidal source needs an undocumented token and
+throws at startup without one, so its sources stay off and
+[`utils/tidal.py`](../utils/tidal.py) reads the page directly.
+
+A track page embeds the recording as schema.org JSON-LD, which answers anonymous
+callers and carries the title, artists and duration. The page holds more than
+one such block in no promised order, so the one typed `MusicRecording` is picked
+rather than the first. Its cover art is read past: the embed shows the resolved
+track's own, exactly as a Spotify track does.
+
+`listen.tidal.com`, `www.tidal.com` and `tidal.com` all match, with `/browse/`
+optional, and any of them is fetched as one canonical URL. An artist link is not
+matched, since searching the name is the better answer for one.
+
+**Only single tracks.** An album page carries its own name and no track list,
+and a playlist page carries no such block at all, so there is nothing to queue
+from either. Album, playlist and mix links are all refused with a message
+naming the kind, rather than half-played. That is the one thing the token would
+buy.
+
+### The ISRC is ignored
+
+The page carries an ISRC, which names the exact recording and so looks like a
+better key than the title. No source here indexes it: YouTube Music answers a
+code with unrelated results and plain YouTube with none, so searching it costs a
+request and finds nothing. Scoring such a result on title would defeat the point
+of the code, and not scoring it leaves only the length check between a wrong
+track and the queue. So it is read past, and a pending track costs one search
+whichever link it came from.

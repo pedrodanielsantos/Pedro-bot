@@ -170,9 +170,9 @@ def parse_position(value: str) -> int:
 class PendingTrack:
     """A track known only by its metadata, still to be found on a playable source.
 
-    Spotify links produce these, since such a link carries no audio and every
-    track has to be searched for elsewhere. Nothing here is Spotify specific, so
-    another metadata-only source can queue them the same way.
+    Spotify and Tidal links produce these, since such a link carries no audio
+    and every track has to be searched for elsewhere. Nothing here is specific
+    to either, so another metadata-only source can queue them the same way.
     """
 
     title: str
