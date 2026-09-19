@@ -23,7 +23,7 @@ handles encryption, including DAVE, on its side.
 | [`cogs/commands/music.py`](../cogs/commands/music.py) | The slash commands |
 | [`utils/music.py`](../utils/music.py) | Player lookup, DJ gating, track formatting, track search |
 | [`utils/spotify.py`](../utils/spotify.py) | Spotify link parsing and metadata |
-| [`utils/tidal.py`](../utils/tidal.py) | Tidal link parsing and metadata |
+| [`utils/tidal.py`](../utils/tidal.py) | Tidal link parsing and metadata, via the API or the page |
 
 The node is **optional**. With `LAVALINK_DIR` unset, or `Lavalink.jar`,
 `application.yml` or `java` missing, `run.py` logs which one and skips the node,
@@ -186,7 +186,64 @@ Handled the same way and for the same reason: Tidal serves no audio here, so
 `/play` reads the metadata and the recording is found elsewhere. LavaSrc could
 resolve these instead, but its Tidal source needs an undocumented token and
 throws at startup without one, so its sources stay off and
-[`utils/tidal.py`](../utils/tidal.py) reads the page directly.
+[`utils/tidal.py`](../utils/tidal.py) reads Tidal directly.
+
+`listen.tidal.com`, `www.tidal.com` and `tidal.com` all match, with `/browse/`
+optional. An artist link is deliberately not matched: there is no one recording
+behind it, so it falls through to the ordinary search like any other text.
+
+There are two readers, and which one runs depends on whether `TIDAL_CLIENT_ID`
+and `TIDAL_CLIENT_SECRET` are set:
+
+| Link | With credentials | Without |
+| --- | --- | --- |
+| Track | API | Track page |
+| Album, playlist | API | Refused, with a message saying why |
+| Mix | Refused, no endpoint exists for one | Refused |
+
+### The API
+
+An app registered at [developer.tidal.com](https://developer.tidal.com) is free
+and needs no paid account. Its client credentials mint a four hour token, cached
+and shared between commands, and dropped early if it stops being accepted, so a
+rotated secret costs one request rather than every request until it expires. The
+catalogue needs no scopes: album, playlist and track reads all sit at the
+`THIRD_PARTY` tier that self-serve registration grants. No country is sent,
+since only title, artists and length are read.
+
+One request returns the collection, its cover art, its first 20 tracks with
+their artists, and a cursor for the next 20. `include=items,items.artists` is
+what pulls the artists along; without it each track would cost a request of its
+own. Only `items` is documented, so if the nested form ever stops working the
+tracks arrive without artists and are searched on title alone, which is logged.
+
+Past a burst of about eight, requests are refused with a `429` carrying
+`Retry-After`, and no headers advertise the budget. One wait and one retry is
+the whole strategy: a second refusal means something else is using the budget,
+and the command gives up rather than holding the interaction open.
+
+### Why collections stop at 100
+
+`MUSIC_PLAYLIST_LIMIT` caps what one link contributes. Pages hold 20 and the
+cursor has to be followed one at a time, so 100 tracks is five requests and
+about a second, while a 10,000 track playlist would be 500 requests and run
+straight into the rate limit.
+
+Everything is read up front rather than a page at a time, which matters because
+`/queue`, `/skip` and `/shuffle` all work from
+[`queued_tracks`](../utils/music.py). Paging lazily would leave them acting on
+whatever happened to be loaded, so a shuffle would reorder the first 20 and
+leave the rest in order. Within the cap, a Tidal collection behaves exactly like
+a Spotify one.
+
+The count is exact, so where Spotify can only guess that it was cut short, a
+Tidal collection says which 100 of how many were taken.
+
+A playlist may also hold videos. They carry no recording to search for, so they
+are skipped, and the total comes from `numberOfTrackItems` rather than
+`numberOfItems` so the two agree.
+
+### Without credentials
 
 A track page embeds the recording as schema.org JSON-LD, which answers anonymous
 callers and carries the title, artists and duration. The page holds more than
@@ -194,19 +251,14 @@ one such block in no promised order, so the one typed `MusicRecording` is picked
 rather than the first. Its cover art is read past: the embed shows the resolved
 track's own, exactly as a Spotify track does.
 
-`listen.tidal.com`, `www.tidal.com` and `tidal.com` all match, with `/browse/`
-optional, and any of them is fetched as one canonical URL. An artist link is not
-matched, since searching the name is the better answer for one.
-
-**Only single tracks.** An album page carries its own name and no track list,
-and a playlist page carries no such block at all, so there is nothing to queue
-from either. Album, playlist and mix links are all refused with a message
-naming the kind, rather than half-played. That is the one thing the token would
-buy.
+This is the fallback rather than the default because the API is the sanctioned
+route, is versioned, and does not depend on a page keeping its markup. It stays
+because it needs nothing configured, so track links work on a fresh clone. An
+album or playlist page carries no track list, so it cannot stand in there.
 
 ### The ISRC is ignored
 
-The page carries an ISRC, which names the exact recording and so looks like a
+Both readers carry an ISRC, which names the exact recording and so looks like a
 better key than the title. No source here indexes it: YouTube Music answers a
 code with unrelated results and plain YouTube with none, so searching it costs a
 request and finds nothing. Scoring such a result on title would defeat the point

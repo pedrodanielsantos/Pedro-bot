@@ -41,10 +41,19 @@ LAVALINK_DIR=C:\lavalink             # music; where setup_lavalink.py installed 
 LAVALINK_URI=http://127.0.0.1:2333   # music; the node's address
 LAVALINK_PASSWORD=your_node_password # music; must match application.yml
 MUSIC_AUTOCOMPLETE=true              # music; optional, defaults to false, see Track suggestions
+
+TIDAL_CLIENT_ID=your_tidal_client_id         # music; optional, Tidal albums and playlists
+TIDAL_CLIENT_SECRET=your_tidal_client_secret # music; optional, pairs with the id
 ```
 
 The three `LAVALINK_*` values are printed by `scripts/setup_lavalink.py`. Leave
 them out to run without music.
+
+The two `TIDAL_*` values come from an app registered at
+[developer.tidal.com](https://developer.tidal.com), which is free and needs no
+paid account. They are only read for Tidal links: without them single tracks
+still play and albums and playlists are refused. See
+[Tidal links](music.md#tidal-links).
 
 Non-secret defaults (lobby names, voice region, embed colors, etc.) live in
 [`config/constants.py`](../config/constants.py).

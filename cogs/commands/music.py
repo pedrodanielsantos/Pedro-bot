@@ -45,7 +45,13 @@ from utils.music import (
 from utils.paginator import PaginatorView
 from utils.parsing import parse_number_spec
 from utils.spotify import fetch_entity, parse_spotify_url
-from utils.tidal import fetch_track, parse_tidal_url
+from utils.tidal import (
+    api_configured,
+    fetch_collection,
+    fetch_track,
+    fetch_track_api,
+    parse_tidal_url,
+)
 
 logger = logging.getLogger("music")
 
@@ -274,15 +280,22 @@ class Music(SessionMixin, commands.Cog):
         front: bool = False,
     ) -> discord.Embed:
         """Queues a Tidal link, which carries metadata the node can't stream."""
-        # Only a track page lists its own metadata. An album or playlist page
-        # names itself and nothing else, so there is nothing to queue from it.
+        # A mix is a Tidal-side radio with no public endpoint behind it, so
+        # there is nothing to read whether the API is configured or not.
+        if kind == "mix":
+            raise UserError("I can't read Tidal mixes. Searching by name still works.")
+
         if kind != "track":
-            raise UserError(
-                f"I can only play a single Tidal track, not a {kind}. "
-                "Searching by name still works."
+            return await self._queue_tidal_collection(
+                player, kind, identifier, color=color, front=front
             )
 
-        pending = await fetch_track(self.session, identifier)
+        # The API reads a track too, and is the sanctioned route, so the page is
+        # only read when there are no credentials to use.
+        if api_configured():
+            pending = await fetch_track_api(self.session, identifier)
+        else:
+            pending = await fetch_track(self.session, identifier)
         if pending is None:
             raise UserError("Couldn't read that Tidal link. Searching by name still works.")
 
@@ -304,6 +317,54 @@ class Music(SessionMixin, commands.Cog):
         )
         if resolved.artwork:
             embed.set_thumbnail(url=resolved.artwork)
+        return embed
+
+    async def _queue_tidal_collection(
+        self,
+        player: wavelink.Player,
+        kind: str,
+        identifier: str,
+        *,
+        color: int,
+        front: bool = False,
+    ) -> discord.Embed:
+        """Queues a Tidal album or playlist, which only the API can list."""
+        # Same as a Spotify collection: inserting one would mean playing it out
+        # of order, so it is refused first, since credentials wouldn't help.
+        if front:
+            raise UserError(f"I can only insert a single track. Use `/play` for a Tidal {kind}.")
+
+        if not api_configured():
+            raise UserError(
+                f"I need Tidal API credentials to read a {kind}. Single tracks and "
+                "searching by name work without them."
+            )
+
+        collection = await fetch_collection(self.session, kind, identifier)
+        if collection is None:
+            raise UserError(f"Couldn't read that Tidal {kind}. Searching by name still works.")
+        if not collection.tracks:
+            raise UserError(f"That Tidal {kind} has no tracks.")
+
+        pending_tracks(player).extend(collection.tracks)
+
+        added = await fill_queue(player)
+        if not added and not player.playing and player.queue.is_empty:
+            raise UserError(
+                f"Couldn't find a playable version of anything in **{collection.name}**."
+            )
+
+        count = len(collection.tracks)
+        description = f"**{collection.name}**\n{count} track{'s' if count != 1 else ''} added."
+        if collection.total > count:
+            # Unlike Spotify, the real length is known, so it is named rather
+            # than hinted at.
+            description += f"\nThe first {count} of {collection.total}, which is as many as I take."
+        embed = discord.Embed(
+            title=f"{kind.capitalize()} queued", description=description, color=color
+        )
+        if collection.artwork:
+            embed.set_thumbnail(url=collection.artwork)
         return embed
 
     async def _query_autocomplete(self, interaction: discord.Interaction, current: str):

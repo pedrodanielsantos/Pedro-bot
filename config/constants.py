@@ -60,3 +60,8 @@ MUSIC_SEARCH_SOURCES = ("ytmsearch", "ytsearch", "scsearch")
 MUSIC_PREFETCH = 1
 MUSIC_MISS_LIMIT = 5       # unresolvable tracks in a row before the rest are dropped
 MUSIC_SPOTIFY_LIMIT = 100  # tracks Spotify's embed page returns for a playlist
+# Tracks taken from one Tidal album or playlist. Spotify needs no such cap: its
+# embed page stops at MUSIC_SPOTIFY_LIMIT on its own. Tidal pages hold 20 each,
+# so 100 is five requests, against a burst of about eight before it starts
+# refusing, which is why raising this runs into the rate limit.
+MUSIC_PLAYLIST_LIMIT = 100
