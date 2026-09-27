@@ -17,8 +17,8 @@ plugins:
     allowDirectPlaylistIds: true
     # Queried in order, first success wins, so this is ordered by how likely a
     # client is to return a plain HTTPS format URL rather than a SABR-only
-    # response. Every client is listed because which ones work varies by IP and
-    # region, and a client that fails only costs one request.
+    # response. Nearly every client is listed because which ones work varies by
+    # IP and region, and a client that fails only costs one request.
     #
     # MUSIC resolves music.youtube.com and ytmsearch but does not stream, so it
     # cannot be the only entry. ANDROID_MUSIC and the TV clients return Opus,
@@ -28,6 +28,9 @@ plugins:
     # format URLs, ANDROID_VR reports "This video requires login", and
     # WEBEMBEDDED reports "Video player configuration error". They are kept as
     # last resorts since they cost nothing once an earlier client succeeds.
+    #
+    # ANDROID is the one left out: broken upstream with no known fix, which the
+    # plugin warns about on every start.
     clients:
       - MUSIC
       - ANDROID_MUSIC
@@ -35,7 +38,6 @@ plugins:
       - TV
       - IOS
       - MWEB
-      - ANDROID
       - WEB
       - WEBEMBEDDED
       - ANDROID_VR

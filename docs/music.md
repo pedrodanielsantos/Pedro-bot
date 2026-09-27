@@ -70,11 +70,12 @@ This is the part that breaks, not the infrastructure. Two settings in
   [here](https://maven.lavalink.dev/snapshots/dev/lavalink/youtube/youtube-plugin/).
   Only one copy may be installed: delete any `plugins/youtube-plugin-*.jar`
   before starting.
-- **All ten clients are listed**, ordered by how likely each is to return a plain
-  HTTPS URL. Which ones work varies by IP and region, and a client that fails
-  costs one request, so a short list risks total playback failure. `MUSIC`
+- **Every client but one is listed**, ordered by how likely each is to return a
+  plain HTTPS URL. Which ones work varies by IP and region, and a client that
+  fails costs one request, so a short list risks total playback failure. `MUSIC`
   resolves `music.youtube.com` links and `ytmsearch` but does not stream, so it
-  can never be the only client.
+  can never be the only client. The exception is `ANDROID`, which the plugin
+  reports as broken with no known fix on every start.
 
 When playback fails, the error enumerates every client with its own reason, which
 says whether any client still gets a direct URL. That enumeration is a full Java
