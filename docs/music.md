@@ -137,6 +137,46 @@ AAC transcodings and there is no setting for it, so upgrading does not help.
 Migration is per track, so duplicate uploads usually still play, which is exactly
 what the retry finds. Expect that to fade as the rollout finishes.
 
+### Signature ciphers
+
+YouTube hands some clients a stream URL whose signature is scrambled, and the
+recipe for unscrambling it is a short function buried in the player's
+`base.js`. The plugin downloads that script and finds the function by pattern
+matching, because the script is minified and its names are not stable. A player
+whose function no longer matches the pattern produces this, at `ERROR`:
+
+```
+lavalink.LocalSignatureCipherManager: Problematic YouTube player script
+/s/player/<hash>/player_embed.vflset/<locale>/base.js detected
+(issue detected with script: must find sig function). Dumped to <temp file>
+```
+
+Three things are worth knowing before diagnosing it:
+
+- **It is not caused by any one client.** `CipherManager.getPlayerScript()`
+  always fetches `https://www.youtube.com/embed/` and takes the `jsUrl` that page
+  advertises, whatever client asked. The result is cached and shared. Removing
+  clients from the list does not change which script is parsed, and the
+  `player_embed` in the path names YouTube's page, not the `WEBEMBEDDED` client.
+- **The locale in the path is not the cause either.** It is YouTube localizing
+  that page for the node. Two locale builds of one player differ only in
+  translated text and where the minifier wrapped the lines.
+- **Playback usually survives it.** `Android` and `Ios` set
+  `requirePlayerScript()` to false, and a format can carry no signature at all,
+  so a client that needs no deciphering plays normally while this fails. The
+  line returns whenever the cached script is refreshed and the pattern still
+  does not match.
+
+If deciphering ever becomes load-bearing, because the clients that need no
+signature stop returning direct URLs, the fix is a remote cipher server. Setting
+`plugins.youtube.remoteCipher` (`url`, `password`, `userAgent`) swaps
+`LocalSignatureCipherManager` for `RemoteCipherManager`, which posts the
+signature to a service that executes the player script instead of pattern
+matching it. [yt-cipher](https://github.com/kikkia/yt-cipher) is the one upstream
+recommends, self-hosted or via its public instance. Verify the script variant
+first: yt-cipher documents that only the `IAS` variants consistently work, and
+the URL above is the embed variant.
+
 ## Track suggestions
 
 `/play` and `/insert` can suggest tracks while a query is typed, which is off
