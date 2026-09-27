@@ -59,7 +59,7 @@ class Library(NamedTuple):
 # the notice to travel with the code, and the built file carries none of its own.
 # htmx is 0BSD and requires nothing, but is kept alongside for consistency.
 VENDORED = (
-    Library("htmx.org", "2.0.10", "dist/htmx.min.js", "htmx-{version}.min.js", "LICENSE"),
+    Library("htmx.org", "2.0.11", "dist/htmx.min.js", "htmx-{version}.min.js", "LICENSE"),
     Library("ansi_up", "6.0.6", "ansi_up.js", "ansi_up-{version}.js", "LICENSE"),
 )
 
