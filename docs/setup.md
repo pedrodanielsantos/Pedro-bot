@@ -36,6 +36,7 @@ CAT_API_KEY=your_cat_api_key         # /cat
 DOG_API_KEY=your_dog_api_key         # /dog
 SYNC_ON_STARTUP=false                # optional; skip the automatic command sync on every restart
 LOG_LEVEL=DEBUG                      # optional; defaults to INFO
+WEB_HOST=0.0.0.0                     # optional; defaults to 127.0.0.1, see Dashboard
 
 LAVALINK_DIR=C:\lavalink             # music; where setup_lavalink.py installed the node
 LAVALINK_URI=http://127.0.0.1:2333   # music; the node's address
@@ -62,6 +63,10 @@ Non-secret defaults (lobby names, voice region, embed colors, etc.) live in
 on `on_ready`. Set it to `false` to skip that and avoid Discord's rate limits
 when restarting often. Sync manually anytime with the dashboard's **Sync**
 button or `ç!sync`.
+
+`WEB_HOST` defaults to `127.0.0.1`, so the dashboard is reachable from the host
+only. Set it to `0.0.0.0` to serve it on the network, which has no
+authentication in front of it. See [Dashboard](dashboard.md).
 
 `MUSIC_AUTOCOMPLETE` defaults to `false`. It is read once at import and decides
 whether `/play` and `/insert` are synced with track suggestions at all, so

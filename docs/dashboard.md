@@ -9,10 +9,13 @@ Because the supervisor hosts it and the bot runs as a separate child process,
 the dashboard stays up when the bot crashes or is stopped, which is what gives
 you a Start button to bring it back.
 
+It binds `127.0.0.1:8000`, so it is reachable from the host only. Set
+`WEB_HOST=0.0.0.0` in `.env` to serve it on the network.
+
 > [!WARNING]
-> The dashboard binds `0.0.0.0:8000` and has no authentication. Anyone who can
-> reach that port can stop the bot and reload cogs, so keep it behind a firewall
-> or bind it to loopback in [`web.py`](../web.py) if the host is exposed.
+> There is no authentication. Anyone who can reach the port can stop the bot,
+> reload cogs and read the console, so only widen `WEB_HOST` on a network you
+> trust, and keep the port behind a firewall.
 
 ## Console
 

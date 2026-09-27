@@ -493,8 +493,14 @@ def create_app(supervisor, web_state):
 
 async def start(supervisor, web_state):
     app = create_app(supervisor, web_state)
+    # The dashboard has no authentication, and its endpoints stop the bot, reload
+    # cogs and stream the console. Loopback by default, so reaching it means
+    # reaching the host; set WEB_HOST=0.0.0.0 in .env to serve it on the network.
+    # Read here rather than at import: run.py imports this module before it calls
+    # load_dotenv(), so a module-level read would miss .env on the first import.
+    host = os.getenv("WEB_HOST", "127.0.0.1")
     config = uvicorn.Config(
-        app, host="0.0.0.0", port=8000, log_config=None,
+        app, host=host, port=8000, log_config=None,
         # Bounds the wait on responses still open at shutdown. A /web/reload
         # depends on that finishing: it aborts if port 8000 isn't free in 10s.
         timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_TIMEOUT,
