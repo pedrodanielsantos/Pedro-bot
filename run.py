@@ -234,6 +234,22 @@ _QUIET_NODE_LOGGERS = frozenset({
     "lavalink.LocalAudioTrackExecutor",
 })
 
+# Rewrites applied to a node line's message before it reaches the console. The
+# line is kept, only the matched value is replaced; the node's own logs/ files
+# are untouched.
+#
+# YoutubeAccessTokenTracker prints the visitor id it obtained in full, which
+# identifies the node's YouTube session.
+_REDACTIONS = (
+    (re.compile(r"(visitor id succeeded, new one is )[^\s,]+"), r"\1<redacted>"),
+)
+
+
+def _redact(msg: str) -> str:
+    for pattern, replacement in _REDACTIONS:
+        msg = pattern.sub(replacement, msg)
+    return msg
+
 
 class LavalinkSupervisor(ProcessSupervisor):
     """Runs the Lavalink node the music cogs connect to.
@@ -290,7 +306,8 @@ class LavalinkSupervisor(ProcessSupervisor):
         """Restates a Spring Boot log line in the bot's own console format, so the
         node's output reads as part of the same log instead of a second one pasted
         in. Anything that doesn't match (the startup banner, stack traces) is left
-        exactly as printed. Returns None for a line dropped as noise."""
+        exactly as printed, and _REDACTIONS is applied to whatever does match.
+        Returns None for a line dropped as noise."""
         match = _SPRING_LINE_RE.match(line)
         if not match:
             # A stack trace frame or a blank line inside one. These carry no
@@ -309,7 +326,7 @@ class LavalinkSupervisor(ProcessSupervisor):
         self._dropping = name in _QUIET_NODE_LOGGERS and not logger.isEnabledFor(logging.DEBUG)
         if self._dropping:
             return None
-        return color_log_line(timestamp, level, name, match["msg"])
+        return color_log_line(timestamp, level, name, _redact(match["msg"]))
 
     async def wait_until_ready(self, timeout: float = 90):
         """Blocks until the node accepts connections, so the bot doesn't come up
