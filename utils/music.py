@@ -312,11 +312,8 @@ _BRACKETED = re.compile(r"[(\[{][^)\]}]*[)\]}]")
 _PUNCTUATION = re.compile(r"[^\w\s]")
 
 # Weights for _match_score. Title overlap decides; the rest only break ties.
-# The penalty outweighs both bonuses, so an unwanted version never wins against
-# an otherwise equal candidate.
 _AUTHOR_WEIGHT = 0.15
 _LENGTH_WEIGHT = 0.10
-_MARKER_PENALTY = 0.30
 
 
 def _title_words(text: str, *, drop_bracketed: bool = False) -> set[str]:
@@ -354,6 +351,12 @@ def _match_score(
     length: int,
 ) -> float | None:
     """How well a candidate matches what was asked for, or None if it can't be it."""
+    # A version that wasn't asked for is a different recording, so skipping the
+    # track beats playing it. Markers the wanted title carries are fine, so a
+    # remix stays findable by name.
+    if _version_markers(candidate.title) - markers:
+        return None
+
     candidate_words = _title_words(candidate.title)
     carried = len(wanted & candidate_words) / len(wanted)
     if carried < MUSIC_MATCH_FLOOR:
@@ -369,10 +372,7 @@ def _match_score(
     # Closer in length is likelier to be the same recording, inside the window
     # the caller already accepted.
     off_by = abs(candidate.length - length) / (MUSIC_FALLBACK_TOLERANCE * 1000)
-    score += _LENGTH_WEIGHT * (1 - off_by)
-
-    # Only versions that weren't asked for, so a remix stays findable by name.
-    return score - _MARKER_PENALTY * len(_version_markers(candidate.title) - markers)
+    return score + _LENGTH_WEIGHT * (1 - off_by)
 
 
 async def search_matching(

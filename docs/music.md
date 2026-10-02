@@ -103,7 +103,7 @@ video is not available". For those, `music_manager` re-searches the author,
 minus any `- Topic` suffix naming an auto-generated channel, and the title
 against `MUSIC_FALLBACK_SOURCES` (plain YouTube first, then SoundCloud),
 requires the result to be within `MUSIC_FALLBACK_TOLERANCE` seconds of the
-original length, and queues the best match in the failed track's place.
+original length, and plays the best match in the failed track's place.
 
 Length alone picks the wrong song, since a cover, a live take or a sped up edit
 runs about as long as the original and any of them can outrank it in a source's
@@ -111,12 +111,12 @@ results. So candidates inside that window are scored instead: what share of the
 wanted title's words a candidate carries, minus the artist's own words since the
 author is scored separately and an upload titled "Artist - Song" would otherwise
 count it twice, which must reach `MUSIC_MATCH_FLOOR`,
-then the author and how close the length is as tiebreakers, minus a penalty for
-each of `MUSIC_VERSION_MARKERS` it carries that the wanted title does not. The
-penalty outweighs the tiebreakers, so a marked version only wins when nothing
-else matched, and a remix asked for by name keeps its marker unpenalised. A
-source is only left behind once nothing in it clears the floor, which keeps the
-common case at one search.
+then the author and how close the length is as tiebreakers. A candidate
+carrying any of `MUSIC_VERSION_MARKERS` that the wanted title does not is ruled
+out, since a remix or a cover is a different recording and skipping the track
+beats playing one. A remix asked for by name carries its marker in the wanted
+title, so other remixes stay eligible for it. A source is only left behind once
+nothing in it clears the floor, which keeps the common case at one search.
 
 A stand-in can fail too, so the search repeats with every identifier already
 tried excluded, up to `MUSIC_FALLBACK_ATTEMPTS` deep. That depth rides on the
@@ -136,6 +136,39 @@ parentheses rather than logging the message alone. No Lavalink release reads the
 AAC transcodings and there is no setting for it, so upgrading does not help.
 Migration is per track, so duplicate uploads usually still play, which is exactly
 what the retry finds. Expect that to fade as the rollout finishes.
+
+### Advancing the queue
+
+Wavelink's autoplay is off (`AutoPlayMode.disabled`), and `music_manager`
+starts the next track from its `on_wavelink_track_end` handler instead. Autoplay
+moves on as soon as a track ends, so a failed track's stand-in, found a second
+later, could only play after whatever had already started. It also stops for
+good once three loads in a row fail: its error count is checked before it is
+reset, so even the next successful track cannot clear it.
+
+A failed load arrives as a `TrackExceptionEvent` followed by a `TrackEndEvent`
+with reason `loadFailed`. The exception handler only records the error on the
+player. The end handler reads it, searches for a stand-in and plays it straight
+away, or moves to the next queued track when there is none. A `TrackStuckEvent`
+takes the same path: the track is marked stuck and skipped, and its end is
+treated as a failed load.
+
+A track that fails with nothing to replace it gets one line in the channel,
+`Couldn't find a playable version of <title>, skipping.`
+
+### Now playing
+
+Lavaplayer dispatches `TrackStartEvent` before the track is loaded, so a track
+that is about to fail starts like any other. The announcement waits for audio:
+it polls the node's player state every `MUSIC_ANNOUNCE_POLL` seconds until the
+reported position moves past 0. That position is the timecode of the last frame
+handed to Discord, so it only moves once the track is audible. A track that ends
+first is never announced, and one with no audio after `MUSIC_ANNOUNCE_TIMEOUT`
+seconds, extended while paused, is left unannounced.
+
+A stand-in's announcement carries a footer naming the track it replaces. The
+original's title and author ride on the stand-in's `extras` next to its
+fallback depth, so a stand-in for a stand-in still names what was queued.
 
 ### Signature ciphers
 

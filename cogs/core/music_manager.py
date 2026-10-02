@@ -7,13 +7,15 @@ import os
 import wavelink
 
 from config.constants import (
-    EMBED_COLOR_WARNING,
+    MUSIC_ANNOUNCE_POLL,
+    MUSIC_ANNOUNCE_TIMEOUT,
     MUSIC_FALLBACK_ATTEMPTS,
     MUSIC_IDLE_TIMEOUT,
     MUSIC_VOICE_RESUME_DELAY,
 )
 from db.database import get_guild_embed_color
-from utils.music import active_player, fill_queue, find_replacement, format_track
+from utils.embeds import error_embed
+from utils.music import active_player, fill_queue, find_replacement, format_track, search_author
 
 logger = logging.getLogger("music")
 
@@ -56,6 +58,73 @@ def _fallback_depth(track: wavelink.Playable) -> int:
         return int(_extras_dict(track).get("fallback_depth", 0))
     except (TypeError, ValueError):
         return 0
+
+
+def _original(track: wavelink.Playable) -> tuple[str, str]:
+    """Title and author of the track a stand-in replaces, or of the track itself.
+
+    Set on the first stand-in and carried down the chain, so a stand-in for a
+    stand-in still names what was queued.
+    """
+    extras = _extras_dict(track)
+    if "original_title" in extras:
+        return str(extras["original_title"]), str(extras.get("original_author", ""))
+    return track.title, search_author(track)
+
+
+def _cancel_announcement(player: wavelink.Player, track: wavelink.Playable | None = None):
+    """Drops a pending "Now playing", only if it is for track when one is given."""
+    pending = getattr(player, "announcement", None)
+    if pending is None:
+        return
+    announced, task = pending
+    if track is None or announced == track:
+        task.cancel()
+        player.announcement = None
+
+
+def _pop_failure(player: wavelink.Player, track: wavelink.Playable) -> tuple[str, bool] | None:
+    """The failure recorded for track as (detail, stuck), cleared either way."""
+    failure = getattr(player, "track_failure", None)
+    player.track_failure = None
+    if failure is None or failure[0] != track:
+        return None
+    return failure[1], failure[2]
+
+
+async def _wait_for_audio(player: wavelink.Player, track: wavelink.Playable) -> bool:
+    """Whether the node starts sending track's audio.
+
+    The position Lavalink reports is the timecode of the last frame handed to
+    Discord, so it only moves once audio is actually going out. False if the
+    track stops being the one playing first, or nothing arrives within
+    MUSIC_ANNOUNCE_TIMEOUT, which a pause extends.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + MUSIC_ANNOUNCE_TIMEOUT
+    while True:
+        await asyncio.sleep(MUSIC_ANNOUNCE_POLL)
+        if not player.connected:
+            return False
+
+        try:
+            info = await player.node.fetch_player_info(player.guild.id)
+        except Exception:
+            # Nothing has reported the track failing, so announcing it is the
+            # better guess than staying silent.
+            logger.warning(f"Could not check playback of {_track_ref(track)}", exc_info=True)
+            return True
+
+        if info is None or info.track is None or info.track != track:
+            return False
+        if info.state.position > 0:
+            return True
+
+        if info.paused:
+            deadline = loop.time() + MUSIC_ANNOUNCE_TIMEOUT
+        elif loop.time() >= deadline:
+            logger.debug(f"No audio from {_track_ref(track)} after {MUSIC_ANNOUNCE_TIMEOUT}s, not announcing it")
+            return False
 
 
 class MusicManager(commands.Cog):
@@ -186,30 +255,81 @@ class MusicManager(commands.Cog):
         if not player:
             return
 
-        channel = getattr(player, "home", None)
-        if channel is not None:
-            track = payload.track
-            color = await get_guild_embed_color(channel.guild.id)
-            embed = discord.Embed(
-                title="Now playing",
-                description=format_track(track),
-                color=color,
-            )
-            if track.artwork:
-                embed.set_thumbnail(url=track.artwork)
-            if track.recommended:
-                embed.set_footer(text="Autoplayed recommendation")
+        # Lavalink sends this before the track has loaded, so a track that is
+        # about to fail starts too. The announcement waits for its audio.
+        _cancel_announcement(player)
+        if getattr(player, "home", None) is not None:
+            task = asyncio.create_task(self._announce(player, payload.track))
+            player.announcement = (payload.track, task)
 
-            try:
-                await channel.send(embed=embed)
-            except discord.HTTPException:
-                # A deleted or newly forbidden channel must not interrupt playback.
-                pass
-
-        # Last, since it searches the node: one track's worth per track played,
-        # which keeps a long Spotify playlist from resolving all at once. The
-        # announcement above shouldn't wait on it.
+        # Searches the node: one track's worth per track played, which keeps a
+        # long Spotify playlist from resolving all at once.
         await fill_queue(player)
+
+    async def _announce(self, player: wavelink.Player, track: wavelink.Playable):
+        """Posts "Now playing" for track once its audio is going out."""
+        if not await _wait_for_audio(player, track):
+            return
+
+        channel = getattr(player, "home", None)
+        if channel is None:
+            return
+
+        embed = discord.Embed(
+            title="Now playing",
+            description=format_track(track),
+            color=await get_guild_embed_color(channel.guild.id),
+        )
+        if track.artwork:
+            embed.set_thumbnail(url=track.artwork)
+        if "original_title" in _extras_dict(track):
+            title, author = _original(track)
+            original = f"{title} by {author}" if author else title
+            embed.set_footer(text=f"Original unavailable: {original}")
+
+        try:
+            await channel.send(embed=embed)
+        except discord.HTTPException:
+            # A deleted or newly forbidden channel must not interrupt playback.
+            pass
+
+    @commands.Cog.listener()
+    async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload):
+        """Moves the queue on. Wavelink's autoplay is left off, since it starts the
+        next track before a failed one's stand-in is found, and stops for good
+        after three failures in a row."""
+        player = payload.player
+        if player is None:
+            return
+
+        track = payload.track
+        _cancel_announcement(player, track)
+        failure = _pop_failure(player, track)
+
+        # replaced: something else was played over it. cleanup: the player is gone.
+        if payload.reason not in ("finished", "stopped", "loadFailed") or not player.connected:
+            return
+
+        if payload.reason == "loadFailed" or (failure is not None and failure[1]):
+            await self._recover(player, track, failure[0] if failure else "unknown error")
+            return
+
+        if failure is not None:
+            # Failed after audio had started, so it was heard and is not replaced.
+            logger.warning(f"{track.title!r} ({_track_ref(track)}) stopped partway: {failure[0]}")
+
+        await self._play_next(player)
+
+    async def _play_next(self, player: wavelink.Player):
+        """Starts the next queued track, unless something is already playing."""
+        if not player.connected or player.current is not None:
+            return
+        try:
+            track = player.queue.get()
+        except wavelink.QueueEmpty:
+            return
+        # In track loop mode get() hands back the same track, already in history.
+        await player.play(track, add_history=player.queue.mode is not wavelink.QueueMode.loop)
 
     @commands.Cog.listener()
     async def on_wavelink_track_exception(self, payload: wavelink.TrackExceptionEventPayload):
@@ -235,29 +355,37 @@ class MusicManager(commands.Cog):
 
         logger.debug(f"Full exception for {payload.track.identifier}:\n{message}")
 
-        # Lavalink already ended the track, so wavelink's autoplay has moved on
-        # by itself. Only the replacement and the notice are added here.
-        await self._replace_failed(payload.player, payload.track, detail)
+        player = payload.player
+        if player is None or not player.connected:
+            # No player left to recover in, but the failure still happened and
+            # this is the only place it gets reported: the node's own line for it
+            # is filtered out of the console.
+            logger.warning(
+                f"Could not play {payload.track.title!r} ({_track_ref(payload.track)}): {detail}, player already gone"
+            )
+            return
+
+        # Left for the track end that follows, which decides what plays next and
+        # logs the outcome. Both events are dispatched as tasks in the order the
+        # node sent them, and this runs before any await, so it is in place first.
+        player.track_failure = (payload.track, detail, False)
 
     @commands.Cog.listener()
     async def on_wavelink_track_stuck(self, payload: wavelink.TrackStuckEventPayload):
         """A track that stopped producing audio without reporting an error."""
-        # No track end follows this event, so nothing advances the queue on its
-        # own and the track has to be skipped explicitly.
-        await self._replace_failed(
-            payload.player, payload.track, "the stream stopped responding", skip=True
-        )
-
-    async def _replace_failed(self, player: wavelink.Player | None, track: wavelink.Playable, detail: str, *, skip: bool = False):
-        """Queues a stand-in for a track that failed, and says so in the channel."""
-        if player is None or not player.connected:
-            # No player left to queue a stand-in into, but the failure still
-            # happened and this is the only place it gets reported: the node's own
-            # line for it is filtered out of the console.
-            logger.warning(
-                f"Could not play {track.title!r} ({_track_ref(track)}): {detail}, player already gone"
-            )
+        player = payload.player
+        if player is None or not player.connected or player.current != payload.track:
             return
+        # No track end follows this event, so the track is stopped here. Marked
+        # stuck, so the end recovers it like a failed load rather than moving on.
+        player.track_failure = (payload.track, "the stream stopped responding", True)
+        await player.skip(force=True)
+
+    async def _recover(self, player: wavelink.Player, track: wavelink.Playable, detail: str):
+        """Plays a stand-in in place of a track that failed, or moves on without one."""
+        # Or loop all would bring it back to fail again on every pass.
+        if player.queue.history is not None:
+            player.queue.history.remove(track)
 
         # Every id that has failed on this player, so a repeated search walks past
         # them to the next candidate. A stand-in is not added until it fails too,
@@ -292,32 +420,39 @@ class MusicManager(commands.Cog):
         log = logger.warning if replacement is not None else logger.error
         log(f"Could not play {track.title!r} ({_track_ref(track)}): {detail}, {outcome}")
 
-        if replacement is not None:
-            replacement.extras = {**_extras_dict(track), "fallback_depth": depth + 1}
-            # The queue has already advanced by the time the search returns, so
-            # the stand-in goes to the front and plays next rather than in place.
-            player.queue.put_at(0, replacement)
+        if not player.connected:
+            return
 
-        # Sent before playback starts, so it lands ahead of the "Now playing"
-        # the stand-in triggers rather than after it.
+        title, author = _original(track)
+        if replacement is not None:
+            # Names the original for the stand-in's "Now playing" footer.
+            replacement.extras = {
+                "original_title": title,
+                "original_author": author,
+                **_extras_dict(track),
+                "fallback_depth": depth + 1,
+            }
+            if player.current is None:
+                await player.play(
+                    replacement, add_history=player.queue.mode is not wavelink.QueueMode.loop
+                )
+            else:
+                # Something was started during the search, e.g. by /play, so the
+                # stand-in plays next rather than cutting it off.
+                player.queue.put_at(0, replacement)
+            return
+
         channel = getattr(player, "home", None)
         if channel is not None:
-            description = f"Couldn't play {format_track(track)}."
-            description += f"\nPlaying {format_track(replacement)} instead." if replacement else "\nSkipping it."
+            name = discord.utils.escape_markdown(title)
             try:
-                await channel.send(embed=discord.Embed(description=description, color=EMBED_COLOR_WARNING))
+                await channel.send(embed=error_embed(f"Couldn't find a playable version of **{name}**, skipping."))
             except discord.HTTPException:
                 pass
 
-        if skip:
-            await player.skip(force=True)
-        elif replacement is not None and not player.playing:
-            # Nothing followed the failed track, or autoplay gave up after three
-            # consecutive failures, so the stand-in has to be started here.
-            try:
-                await player.play(player.queue.get())
-            except wavelink.QueueEmpty:
-                pass
+        # Or track loop mode hands the failed track straight back.
+        player.queue.loaded = None
+        await self._play_next(player)
 
     @commands.Cog.listener()
     async def on_wavelink_inactive_player(self, player: wavelink.Player):

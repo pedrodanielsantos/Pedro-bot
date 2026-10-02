@@ -96,9 +96,9 @@ class Music(SessionMixin, commands.Cog):
 
         logger.info(f"Joined voice channel {channel.id} in guild {interaction.guild_id}.")
 
-        # Queue playback without recommendations. AutoPlayMode.enabled would keep
-        # inventing tracks after the queue empties, which is surprising by default.
-        player.autoplay = wavelink.AutoPlayMode.partial
+        # music_manager advances the queue itself, so a failed track's stand-in
+        # plays in its place. Any other mode would also start the next track.
+        player.autoplay = wavelink.AutoPlayMode.disabled
 
         volume = await get_music_volume(interaction.guild_id)
         await player.set_volume(volume if volume is not None else MUSIC_DEFAULT_VOLUME)
@@ -498,8 +498,8 @@ class Music(SessionMixin, commands.Cog):
         await interaction.response.send_message(embed=success_embed(description))
 
         # Skipping the resolved stretch leaves the queue short, or empty. Nothing
-        # else refills it: with autoplay partial an empty queue never starts a
-        # track, so no track start arrives to do it and the tail is stranded.
+        # else refills it: an empty queue never starts a track, so no track
+        # start arrives to do it and the tail is stranded.
         # Last, since it searches, and the reply shouldn't wait on it.
         await fill_queue(player)
 

@@ -16,7 +16,6 @@ VOICE_REGION_AUTOMATIC = "automatic"
 
 # Embed settings
 EMBED_COLOR = 0x4c4c54
-EMBED_COLOR_WARNING = 0xffcc4d
 SUCCESS_COLOR = 0x77b255
 ERROR_COLOR = 0xdd2e44
 
@@ -25,6 +24,8 @@ MUSIC_DEFAULT_VOLUME = 60      # percent, overridable per guild with /set musicv
 MUSIC_MAX_VOLUME = 150         # above this the Opus encoder clips audibly
 MUSIC_IDLE_TIMEOUT = 300       # seconds with nothing playing before the bot disconnects
 MUSIC_VOICE_RESUME_DELAY = 6   # seconds to wait out a voice drop, over Lavalink's 5s playerUpdateInterval
+MUSIC_ANNOUNCE_POLL = 0.5      # seconds between checks for a started track's first audio
+MUSIC_ANNOUNCE_TIMEOUT = 15    # seconds without audio before a track goes unannounced, past trackStuckThresholdMs
 MUSIC_QUEUE_PAGE_SIZE = 10     # tracks per /queue page
 MUSIC_AUTOCOMPLETE_LIMIT = 25  # Discord's hard cap on autocomplete choices
 MUSIC_AUTOCOMPLETE_BUDGET = 3.0  # seconds Discord allows an autocomplete reply, which can't be deferred
@@ -42,8 +43,8 @@ MUSIC_FALLBACK_TOLERANCE = 15  # seconds a replacement may differ in length from
 # see the transcoding note in docs/music.md.
 MUSIC_FALLBACK_ATTEMPTS = 3
 
-# Words marking a different version of the same song, penalised unless the
-# wanted title carries them too.
+# Words marking a different version of the same song. A candidate carrying one
+# is ruled out unless the wanted title carries it too.
 MUSIC_VERSION_MARKERS = (
     "remix", "live", "cover", "acoustic", "instrumental", "karaoke",
     "sped up", "slowed", "nightcore", "reverb", "8d", "mashup",
