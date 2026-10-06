@@ -35,6 +35,12 @@ class ServerConfig(commands.Cog):
 
         music_volume = settings["music_default_volume"]
 
+        music_channel_id = settings["music_announce_channel_id"]
+        if music_channel_id is None:
+            music_channel_value = f"{NOT_SET}, follows where /play was last used"
+        else:
+            music_channel_value = format_channel(guild, music_channel_id)
+
         # Unset values name the effective default rather than reading as missing,
         # since both fall back to something rather than being disabled.
         lines = [
@@ -46,6 +52,7 @@ class ServerConfig(commands.Cog):
             f"**Autoroles:** {format_roles(guild, autoroles)}",
             f"**DJ role:** {dj_value}",
             f"**Music volume:** {music_volume}%" if music_volume else f"**Music volume:** {MUSIC_DEFAULT_VOLUME}% (default)",
+            f"**Music channel:** {music_channel_value}",
         ]
 
         color = await get_guild_embed_color(interaction.guild_id)

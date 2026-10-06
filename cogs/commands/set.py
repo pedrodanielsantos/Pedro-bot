@@ -3,7 +3,13 @@ from discord import app_commands
 from discord.ext import commands
 from typing import Optional
 
-from db.database import set_embed_color, set_guild_lobby_region, set_music_dj_role, set_music_volume
+from db.database import (
+    set_embed_color,
+    set_guild_lobby_region,
+    set_music_announce_channel,
+    set_music_dj_role,
+    set_music_volume,
+)
 from config.constants import EMBED_COLOR, MUSIC_DEFAULT_VOLUME, MUSIC_MAX_VOLUME
 from utils.color import parse_hex_color
 from utils.embeds import success_embed
@@ -97,6 +103,33 @@ class Set(commands.GroupCog, group_name="set"):
 
         await set_music_volume(interaction.guild_id, percent)
         embed = success_embed(f"New players will start at **{percent}%** volume.")
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="musicchannel", description="Set or reset the channel music announcements are posted in")
+    @app_commands.describe(channel="The channel to announce in (leave empty to follow wherever /play was last used)")
+    async def music_channel(self, interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
+        await require_permission(interaction, "administrator")
+
+        if channel is None:
+            await set_music_announce_channel(interaction.guild_id, None)
+            embed = success_embed(
+                "Music channel has been reset, announcements follow the channel "
+                "`/play` or `/insert` was last used in."
+            )
+            await interaction.response.send_message(embed=embed)
+            return
+
+        # Sends there fail silently, so a channel the bot can't post in would
+        # read as announcements stopping.
+        permissions = channel.permissions_for(interaction.guild.me)
+        if not (permissions.view_channel and permissions.send_messages and permissions.embed_links):
+            raise UserError(f"I need permission to view, send messages and embed links in {channel.mention}.")
+
+        await set_music_announce_channel(interaction.guild_id, channel.id)
+        embed = success_embed(
+            f"Music announcements and playback changes will now be posted in {channel.mention}. "
+            "Commands still work in any channel."
+        )
         await interaction.response.send_message(embed=embed)
 
 async def setup(bot: commands.Bot):

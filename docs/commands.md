@@ -107,6 +107,7 @@
 | `/set djrole` | Set or reset the role required to control music playback |
 | `/set embedcolor` | Set or reset the server's embed color |
 | `/set lobbyregion` | Set or reset the voice region new lobbies are created in |
+| `/set musicchannel` | Set or reset the channel music announcements are posted in |
 | `/set musicvolume` | Set or reset the volume new players start at |
 | `/setup lobbies` | Setup temporary voice-chat system with user-created lobbies |
 | `/welcome channel` | Set or disable the welcome message channel |

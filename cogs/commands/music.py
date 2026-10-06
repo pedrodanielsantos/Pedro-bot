@@ -30,6 +30,7 @@ from utils.music import (
     fill_queue,
     format_track,
     format_track_length,
+    music_channel,
     nearest_search,
     parse_position,
     pending_tracks,
@@ -105,17 +106,54 @@ class Music(SessionMixin, commands.Cog):
 
         return player
 
+    async def _elsewhere(self, interaction: discord.Interaction) -> discord.abc.Messageable | None:
+        """The music channel, if the command was run outside it. Read before any
+        defer, since a deferred reply can't change whether it is ephemeral."""
+        channel = await music_channel(interaction.guild)
+        if channel is None or channel.id == interaction.channel_id:
+            return None
+        return channel
+
+    async def _reply(
+        self,
+        interaction: discord.Interaction,
+        embed: discord.Embed,
+        channel: discord.abc.Messageable | None,
+    ):
+        """Replies in place, or privately with a public copy in the music channel,
+        so a change made from elsewhere is still seen by everyone listening."""
+        private = channel is not None
+        if interaction.response.is_done():
+            await interaction.followup.send(embed=embed, ephemeral=private)
+        else:
+            await interaction.response.send_message(embed=embed, ephemeral=private)
+
+        if channel is None:
+            return
+
+        public = embed.copy()
+        public.set_footer(
+            text=f"Requested by {interaction.user.display_name}",
+            icon_url=interaction.user.display_avatar.url,
+        )
+        try:
+            await channel.send(embed=public)
+        except discord.HTTPException as e:
+            # The caller already has their reply, so this only goes unseen.
+            logger.warning(f"Could not post to music channel {channel.id} in guild {interaction.guild_id}: {e}")
+
     @app_commands.command(name="play", description="Play a track, or add it to the queue")
     @app_commands.describe(
         query="A search term, or a Spotify, Tidal, YouTube, YouTube Music, SoundCloud or Bandcamp link"
     )
     async def play(self, interaction: discord.Interaction, query: str):
         require_node()
-        await interaction.response.defer()
+        elsewhere = await self._elsewhere(interaction)
+        await interaction.response.defer(ephemeral=elsewhere is not None)
 
         player = await self._ensure_player(interaction)
-        # Where "Now playing" and idle notices go, set on every /play so the
-        # announcements follow the channel actually being used.
+        # Where "Now playing" and idle notices go when no music channel is set,
+        # updated on every /play so they follow the channel actually being used.
         player.home = interaction.channel
 
         color = await get_guild_embed_color(interaction.guild_id)
@@ -126,7 +164,7 @@ class Music(SessionMixin, commands.Cog):
         if not player.playing:
             await player.play(player.queue.get())
 
-        await interaction.followup.send(embed=embed)
+        await self._reply(interaction, embed, elsewhere)
 
     @app_commands.command(name="insert", description="Add a track to the front of the queue")
     @app_commands.describe(
@@ -134,7 +172,8 @@ class Music(SessionMixin, commands.Cog):
     )
     async def insert(self, interaction: discord.Interaction, query: str):
         require_node()
-        await interaction.response.defer()
+        elsewhere = await self._elsewhere(interaction)
+        await interaction.response.defer(ephemeral=elsewhere is not None)
 
         player = await self._ensure_player(interaction)
         # With nothing queued this is exactly what /play does, so gating it would
@@ -151,7 +190,7 @@ class Music(SessionMixin, commands.Cog):
         if not player.playing:
             await player.play(player.queue.get())
 
-        await interaction.followup.send(embed=embed)
+        await self._reply(interaction, embed, elsewhere)
 
     async def _queue_query(
         self, player: wavelink.Player, query: str, color: int, *, front: bool = False
@@ -441,8 +480,10 @@ class Music(SessionMixin, commands.Cog):
 
             skipped = player.current
             await player.skip(force=True)
-            await interaction.response.send_message(
-                embed=success_embed(f"Skipped {format_track(skipped, with_author=False)}")
+            await self._reply(
+                interaction,
+                success_embed(f"Skipped {format_track(skipped, with_author=False)}"),
+                await self._elsewhere(interaction),
             )
             return
 
@@ -495,7 +536,7 @@ class Music(SessionMixin, commands.Cog):
             if len(removed) > len(listed):
                 description += f"\n- and {len(removed) - len(listed)} more"
 
-        await interaction.response.send_message(embed=success_embed(description))
+        await self._reply(interaction, success_embed(description), await self._elsewhere(interaction))
 
         # Skipping the resolved stretch leaves the queue short, or empty. Nothing
         # else refills it: an empty queue never starts a track, so no track
@@ -541,7 +582,7 @@ class Music(SessionMixin, commands.Cog):
             raise UserError("Nothing is playing.")
 
         await player.pause(True)
-        await interaction.response.send_message(embed=success_embed("Paused."))
+        await self._reply(interaction, success_embed("Paused."), await self._elsewhere(interaction))
 
     @app_commands.command(name="resume", description="Resume playback")
     async def resume(self, interaction: discord.Interaction):
@@ -552,7 +593,7 @@ class Music(SessionMixin, commands.Cog):
             raise UserError("Playback isn't paused.")
 
         await player.pause(False)
-        await interaction.response.send_message(embed=success_embed("Resumed."))
+        await self._reply(interaction, success_embed("Resumed."), await self._elsewhere(interaction))
 
     @app_commands.command(name="stop", description="Stop playback, clear the queue and leave")
     async def stop(self, interaction: discord.Interaction):
@@ -563,7 +604,9 @@ class Music(SessionMixin, commands.Cog):
         pending_tracks(player).clear()
         channel = player.channel
         await player.disconnect()
-        await interaction.response.send_message(embed=success_embed("Stopped and cleared the queue."))
+        await self._reply(
+            interaction, success_embed("Stopped and cleared the queue."), await self._elsewhere(interaction)
+        )
         logger.info(f"Left voice channel {channel.id} in guild {interaction.guild_id}.")
 
     @app_commands.command(name="volume", description="Set or view the playback volume")
@@ -582,7 +625,9 @@ class Music(SessionMixin, commands.Cog):
             raise UserError(f"Volume must be between 1 and {MUSIC_MAX_VOLUME}.")
 
         await player.set_volume(percent)
-        await interaction.response.send_message(embed=success_embed(f"Volume set to **{percent}%**."))
+        await self._reply(
+            interaction, success_embed(f"Volume set to **{percent}%**."), await self._elsewhere(interaction)
+        )
 
     @app_commands.command(name="seek", description="Jump to a position in the current track")
     @app_commands.describe(position="A timestamp like 90, 1:30 or 1:02:15")
@@ -600,8 +645,8 @@ class Music(SessionMixin, commands.Cog):
             raise UserError(f"That's past the end of the track (`{track_length(player.current)}`).")
 
         await player.seek(milliseconds)
-        await interaction.response.send_message(
-            embed=success_embed(f"Jumped to `{position}`.")
+        await self._reply(
+            interaction, success_embed(f"Jumped to `{position}`."), await self._elsewhere(interaction)
         )
 
     @app_commands.command(name="shuffle", description="Shuffle the queue")
@@ -613,17 +658,18 @@ class Music(SessionMixin, commands.Cog):
         if len(tracks) < 2:
             raise UserError("There aren't enough tracks queued to shuffle.")
 
+        elsewhere = await self._elsewhere(interaction)
+        embed = success_embed(f"Shuffled **{len(tracks)}** tracks.")
+
         pending = pending_tracks(player)
         if not pending:
             player.queue.shuffle()
-            await interaction.response.send_message(
-                embed=success_embed(f"Shuffled **{len(tracks)}** tracks.")
-            )
+            await self._reply(interaction, embed, elsewhere)
             return
 
         # fill_queue searches, so this can outlast the three seconds Discord
         # allows for a first response.
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=elsewhere is not None)
 
         # Everything goes to the tail so a resolved track can land anywhere in
         # the new order, not just in the stretch already resolved. fill_queue
@@ -634,9 +680,7 @@ class Music(SessionMixin, commands.Cog):
         pending.extend(tracks)
         await fill_queue(player)
 
-        await interaction.followup.send(
-            embed=success_embed(f"Shuffled **{len(tracks)}** tracks.")
-        )
+        await self._reply(interaction, embed, elsewhere)
 
     @app_commands.command(name="loop", description="Set the loop mode")
     @app_commands.describe(mode="What to repeat")
@@ -650,8 +694,8 @@ class Music(SessionMixin, commands.Cog):
         await require_dj(interaction, player)
 
         player.queue.mode = LOOP_MODES[mode.value]
-        await interaction.response.send_message(
-            embed=success_embed(f"Loop mode set to **{mode.name}**.")
+        await self._reply(
+            interaction, success_embed(f"Loop mode set to **{mode.name}**."), await self._elsewhere(interaction)
         )
 
     @app_commands.command(name="playing", description="Show the track currently playing")

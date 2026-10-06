@@ -21,7 +21,7 @@ from config.constants import (
     MUSIC_SEARCH_SOURCES,
     MUSIC_VERSION_MARKERS,
 )
-from db.database import get_music_dj_role
+from db.database import get_music_announce_channel, get_music_dj_role
 from utils.errors import UserError
 
 logger = logging.getLogger("music")
@@ -86,6 +86,18 @@ def require_player(interaction: discord.Interaction) -> wavelink.Player:
         raise UserError(f"You must be in {player.channel.mention} to use that.")
 
     return player
+
+
+async def music_channel(guild: discord.Guild) -> discord.abc.GuildChannel | None:
+    """The guild's configured music channel, or None if unset or since deleted."""
+    channel_id = await get_music_announce_channel(guild.id)
+    return guild.get_channel(channel_id) if channel_id else None
+
+
+async def announce_channel(player: wavelink.Player) -> discord.abc.Messageable | None:
+    """Where the player's announcements go: the music channel, else wherever
+    /play or /insert last ran. Read per message, so a change applies mid-session."""
+    return await music_channel(player.guild) or getattr(player, "home", None)
 
 
 async def require_dj(interaction: discord.Interaction, player: wavelink.Player):

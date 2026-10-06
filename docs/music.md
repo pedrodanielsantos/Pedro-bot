@@ -21,7 +21,7 @@ handles encryption, including DAVE, on its side.
 | [`LavaSrc`](https://github.com/topi314/LavaSrc) | Installed but all sources off, see [Spotify links](#spotify-links) and [Tidal links](#tidal-links) |
 | [`cogs/core/music_manager.py`](../cogs/core/music_manager.py) | Owns the node connection and playback lifecycle |
 | [`cogs/commands/music.py`](../cogs/commands/music.py) | The slash commands |
-| [`utils/music.py`](../utils/music.py) | Player lookup, DJ gating, track formatting, track search |
+| [`utils/music.py`](../utils/music.py) | Player lookup, DJ gating, announce channel, track formatting, track search |
 | [`utils/spotify.py`](../utils/spotify.py) | Spotify link parsing and metadata |
 | [`utils/tidal.py`](../utils/tidal.py) | Tidal link parsing and metadata, via the API or the page |
 
@@ -209,6 +209,48 @@ matching it. [yt-cipher](https://github.com/kikkia/yt-cipher) is the one upstrea
 recommends, self-hosted or via its public instance. Verify the script variant
 first: yt-cipher documents that only the `IAS` variants consistently work, and
 the URL above is the embed variant.
+
+## Announcements
+
+Three messages are posted without a command asking for them, all from
+`music_manager`:
+
+| Message | When |
+| --- | --- |
+| Now playing | Once a track's audio starts, see [Now playing](#now-playing) |
+| Couldn't find a playable version of X, skipping. | A failed track has no stand-in |
+| Left #channel after being idle. | Nothing has played for `MUSIC_IDLE_TIMEOUT` seconds |
+
+Leaving because the voice channel emptied is silent.
+
+Where they go is resolved by `announce_channel()` in
+[`utils/music.py`](../utils/music.py) each time one is sent:
+
+1. The guild's music channel, set with `/set musicchannel`.
+2. Otherwise `player.home`, the channel `/play` or `/insert` last ran in. Both
+   update it on every call, before the query is searched, so a `/play` that finds
+   nothing still moves it. An `/insert` refused by the DJ role does not. No other
+   command touches it, and it is dropped with the player on disconnect.
+
+Being read per message, a music channel set, changed or reset mid-session
+applies from the next announcement. One deleted since it was set falls back to
+`player.home`, and `/serverconfig` shows it as deleted.
+
+### Command replies
+
+Commands run in any channel either way. With a music channel set, the commands
+that change playback (`/play`, `/insert`, `/skip`, `/pause`, `/resume`, `/stop`,
+`/shuffle`, `/loop`, `/seek`, and `/volume` with a value) reply privately when
+run outside it, and post a public copy there carrying the caller's name, so a
+change made from elsewhere is still seen by everyone listening. Run inside it,
+or with none set, they reply publicly in place.
+
+`/queue`, `/playing` and `/volume` without a value only report, so they always
+reply in place.
+
+Whether a reply is ephemeral is fixed by the first response, so `/play`,
+`/insert` and `/shuffle` read the setting before deferring. Errors after that
+defer follow it: private when run elsewhere, public otherwise.
 
 ## Track suggestions
 

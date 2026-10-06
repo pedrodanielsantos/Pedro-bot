@@ -15,7 +15,14 @@ from config.constants import (
 )
 from db.database import get_guild_embed_color
 from utils.embeds import error_embed
-from utils.music import active_player, fill_queue, find_replacement, format_track, search_author
+from utils.music import (
+    active_player,
+    announce_channel,
+    fill_queue,
+    find_replacement,
+    format_track,
+    search_author,
+)
 
 logger = logging.getLogger("music")
 
@@ -271,7 +278,7 @@ class MusicManager(commands.Cog):
         if not await _wait_for_audio(player, track):
             return
 
-        channel = getattr(player, "home", None)
+        channel = await announce_channel(player)
         if channel is None:
             return
 
@@ -442,7 +449,7 @@ class MusicManager(commands.Cog):
                 player.queue.put_at(0, replacement)
             return
 
-        channel = getattr(player, "home", None)
+        channel = await announce_channel(player)
         if channel is not None:
             name = discord.utils.escape_markdown(title)
             try:
@@ -457,7 +464,7 @@ class MusicManager(commands.Cog):
     @commands.Cog.listener()
     async def on_wavelink_inactive_player(self, player: wavelink.Player):
         """Fired once nothing has played for MUSIC_IDLE_TIMEOUT seconds."""
-        channel = getattr(player, "home", None)
+        channel = await announce_channel(player)
         if channel is not None:
             try:
                 await channel.send(embed=discord.Embed(
