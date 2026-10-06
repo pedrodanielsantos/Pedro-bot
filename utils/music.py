@@ -1,10 +1,11 @@
 import asyncio
+import copy
 import logging
 import re
 import time
 from collections import deque
 from collections.abc import Container
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from urllib.parse import parse_qs, urlsplit
 
 import discord
@@ -191,6 +192,7 @@ class PendingTrack:
     title: str
     artists: str
     duration: int  # milliseconds, matching Playable.length
+    requester_id: int | None = None  # carried onto the resolved track's extras
 
     # Named after the Playable attributes format_track reads, so a pending track
     # renders through it unchanged. No uri, so it shows as plain text.
@@ -208,6 +210,17 @@ class PendingTrack:
     @property
     def query(self) -> str:
         return f"{self.artists} {self.title}".strip()
+
+
+def with_requester(track, user_id: int):
+    """A copy of a Playable or PendingTrack naming who queued it, for the "Now
+    playing" footer. Copied, since search results are cached and shared."""
+    if isinstance(track, PendingTrack):
+        return replace(track, requester_id=user_id)
+    tagged = copy.copy(track)
+    # Rides to Lavalink as userData and back on the track's events.
+    tagged.extras = {**dict(track.extras), "requester_id": user_id}
+    return tagged
 
 
 # Results of the /play and /insert query search, keyed by query. Playlists are
@@ -638,6 +651,8 @@ async def fill_queue(player: wavelink.Player) -> list[wavelink.Playable]:
                 continue
 
             misses = 0
+            if track.requester_id is not None:
+                resolved = with_requester(resolved, track.requester_id)
             player.queue.put(resolved)
             added.append(resolved)
 

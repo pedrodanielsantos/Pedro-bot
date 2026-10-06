@@ -282,17 +282,30 @@ class MusicManager(commands.Cog):
         if channel is None:
             return
 
+        extras = _extras_dict(track)
+        description = format_track(track)
+        if "original_title" in extras:
+            title, author = _original(track)
+            original = f"{title} by {author}" if author else title
+            description += f"\nOriginal unavailable: {discord.utils.escape_markdown(original)}"
+
         embed = discord.Embed(
             title="Now playing",
-            description=format_track(track),
+            description=description,
             color=await get_guild_embed_color(channel.guild.id),
         )
         if track.artwork:
             embed.set_thumbnail(url=track.artwork)
-        if "original_title" in _extras_dict(track):
-            title, author = _original(track)
-            original = f"{title} by {author}" if author else title
-            embed.set_footer(text=f"Original unavailable: {original}")
+
+        # Unlike a command reply, nothing else here shows who queued it.
+        # No footer once they have left the guild.
+        requester_id = extras.get("requester_id")
+        requester = channel.guild.get_member(requester_id) if isinstance(requester_id, int) else None
+        if requester is not None:
+            embed.set_footer(
+                text=f"Requested by {requester.display_name}",
+                icon_url=requester.display_avatar.url,
+            )
 
         try:
             await channel.send(embed=embed)
@@ -432,7 +445,7 @@ class MusicManager(commands.Cog):
 
         title, author = _original(track)
         if replacement is not None:
-            # Names the original for the stand-in's "Now playing" footer.
+            # Names the original on the stand-in's "Now playing".
             replacement.extras = {
                 "original_title": title,
                 "original_author": author,

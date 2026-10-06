@@ -1,6 +1,7 @@
 import discord
 
 from config.constants import ERROR_COLOR, SUCCESS_COLOR
+from db.database import get_guild_embed_color
 
 
 def error_embed(description: str) -> discord.Embed:
@@ -9,6 +10,11 @@ def error_embed(description: str) -> discord.Embed:
 
 def success_embed(description: str) -> discord.Embed:
     return discord.Embed(description=description, color=SUCCESS_COLOR)
+
+
+async def guild_embed(guild_id: int, description: str) -> discord.Embed:
+    """A plain embed in the guild's configured color."""
+    return discord.Embed(description=description, color=await get_guild_embed_color(guild_id))
 
 
 async def send_error(interaction: discord.Interaction, message: str, *, ephemeral: bool = True):

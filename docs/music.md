@@ -239,19 +239,33 @@ handed to Discord, so it only moves once the track is audible. A track that ends
 first, or has no audio after `MUSIC_ANNOUNCE_TIMEOUT` seconds (extended while
 paused), is not announced.
 
-A stand-in's announcement carries a footer naming the track it replaces. The
+The announcement's footer names who queued the track, from a `requester_id` in
+its `extras`. `with_requester()` in [`utils/music.py`](../utils/music.py) sets
+it on a copy, since search results are cached and shared. Spotify and Tidal
+tracks left pending carry it on their `PendingTrack` until `fill_queue` resolves
+them. A requester who has since left the guild gets no footer.
+
+A stand-in's announcement adds a line naming the track it replaces. The
 original's title and author ride on the stand-in's `extras` next to its fallback
-depth, so a stand-in for a stand-in still names what was queued.
+depth and requester, so a stand-in for a stand-in still names what was queued.
 
 ### Command replies
 
 Commands work in any channel. With a music channel set, the ones that change
 playback (`/play`, `/insert`, `/skip`, `/pause`, `/resume`, `/stop`,
 `/shuffle`, `/loop`, `/seek`, and `/volume` with a value) reply privately when
-run elsewhere, and post a public copy in the music channel naming the caller.
-Run inside it, or with none set, they reply publicly in place. `/queue`,
-`/playing` and `/volume` without a value only report, so they always reply in
-place.
+run elsewhere, and post a public copy in the music channel. Run inside it, or
+with none set, they reply publicly in place. `/queue`, `/playing` and `/volume`
+without a value only report, so they always reply in place.
+
+The copy names the caller in a "Requested by" footer, since a message the bot
+sends itself has none of the "used /command" header Discord puts on a reply.
+
+Music replies and announcements use the server's embed color, through
+`guild_embed()` in [`utils/embeds.py`](../utils/embeds.py) for plain replies.
+None use `success_embed`'s green, so in a channel full of them only errors
+stand out, in red. `/set djrole`, `/set musicvolume` and `/set musicchannel` are
+server configuration, so they keep success green like `/set lobbyregion`.
 
 Whether a reply is ephemeral is fixed by the first response, so `/play`,
 `/insert` and `/shuffle` read the setting before deferring. Errors after that

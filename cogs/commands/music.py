@@ -19,7 +19,7 @@ from config.constants import (
     MUSIC_SPOTIFY_LIMIT,
 )
 from db.database import get_guild_embed_color, get_music_volume
-from utils.embeds import success_embed
+from utils.embeds import guild_embed
 from utils.errors import UserError
 from utils.mixins import SessionMixin
 from utils.music import (
@@ -42,6 +42,7 @@ from utils.music import (
     require_voice,
     resolve_pending,
     track_length,
+    with_requester,
 )
 from utils.paginator import PaginatorView
 from utils.parsing import parse_number_spec
@@ -157,7 +158,7 @@ class Music(SessionMixin, commands.Cog):
         player.home = interaction.channel
 
         color = await get_guild_embed_color(interaction.guild_id)
-        embed = await self._queue_query(player, query, color)
+        embed = await self._queue_query(player, query, color, requester=interaction.user.id)
 
         # The manager cog announces the track itself once playback starts, so
         # nothing is echoed here beyond the queue confirmation.
@@ -185,7 +186,9 @@ class Music(SessionMixin, commands.Cog):
         player.home = interaction.channel
 
         color = await get_guild_embed_color(interaction.guild_id)
-        embed = await self._queue_query(player, query, color, front=True)
+        embed = await self._queue_query(
+            player, query, color, requester=interaction.user.id, front=True
+        )
 
         if not player.playing:
             await player.play(player.queue.get())
@@ -193,21 +196,25 @@ class Music(SessionMixin, commands.Cog):
         await self._reply(interaction, embed, elsewhere)
 
     async def _queue_query(
-        self, player: wavelink.Player, query: str, color: int, *, front: bool = False
+        self, player: wavelink.Player, query: str, color: int, *, requester: int, front: bool = False
     ) -> discord.Embed:
         """Queues a query, routing the links the node resolves no audio for."""
         spotify = parse_spotify_url(query)
         if spotify is not None:
-            return await self._queue_spotify(player, *spotify, color=color, front=front)
+            return await self._queue_spotify(
+                player, *spotify, color=color, requester=requester, front=front
+            )
 
         tidal = parse_tidal_url(query)
         if tidal is not None:
-            return await self._queue_tidal(player, *tidal, color=color, front=front)
+            return await self._queue_tidal(
+                player, *tidal, color=color, requester=requester, front=front
+            )
 
-        return await self._queue_search(player, query, color, front=front)
+        return await self._queue_search(player, query, color, requester=requester, front=front)
 
     async def _queue_search(
-        self, player: wavelink.Player, query: str, color: int, *, front: bool = False
+        self, player: wavelink.Player, query: str, color: int, *, requester: int, front: bool = False
     ) -> discord.Embed:
         """Queues whatever the node resolves a query or link to."""
         try:
@@ -225,21 +232,22 @@ class Music(SessionMixin, commands.Cog):
             raise UserError(f"No results for `{query[:100]}`.")
 
         if isinstance(results, wavelink.Playlist):
+            tracks = [with_requester(track, requester) for track in results.tracks]
             if front:
                 # Ascending indices, so the playlist keeps its own order while
                 # sitting ahead of everything already queued.
-                for offset, track in enumerate(results.tracks):
+                for offset, track in enumerate(tracks):
                     player.queue.put_at(offset, track)
-                added = len(results.tracks)
+                added = len(tracks)
             else:
-                added = player.queue.put(results)
+                added = player.queue.put(tracks)
             return discord.Embed(
                 title="Playlist up next" if front else "Playlist queued",
                 description=f"**{results.name}**\n{added} track{'s' if added != 1 else ''} added.",
                 color=color,
             )
 
-        track = results[0]
+        track = with_requester(results[0], requester)
         if front:
             player.queue.put_at(0, track)
         else:
@@ -254,7 +262,14 @@ class Music(SessionMixin, commands.Cog):
         return embed
 
     async def _queue_spotify(
-        self, player: wavelink.Player, kind: str, identifier: str, *, color: int, front: bool = False
+        self,
+        player: wavelink.Player,
+        kind: str,
+        identifier: str,
+        *,
+        color: int,
+        requester: int,
+        front: bool = False,
     ) -> discord.Embed:
         """Queues a Spotify link, which carries metadata the node can't stream."""
         # An album or playlist is resolved a few tracks at a time as the queue
@@ -277,6 +292,7 @@ class Music(SessionMixin, commands.Cog):
             if resolved is None:
                 raise UserError(f"Couldn't find a playable version of **{entity.name}**.")
 
+            resolved = with_requester(resolved, requester)
             player.queue.put_at(0, resolved)
             embed = discord.Embed(
                 title="Playing next", description=format_track(resolved), color=color
@@ -285,7 +301,7 @@ class Music(SessionMixin, commands.Cog):
                 embed.set_thumbnail(url=resolved.artwork)
             return embed
 
-        pending_tracks(player).extend(entity.tracks)
+        pending_tracks(player).extend(with_requester(track, requester) for track in entity.tracks)
 
         # Only enough to start playing is resolved here. The rest follows as the
         # queue drains, from the manager cog's track start handler.
@@ -317,6 +333,7 @@ class Music(SessionMixin, commands.Cog):
         identifier: str,
         *,
         color: int,
+        requester: int,
         front: bool = False,
     ) -> discord.Embed:
         """Queues a Tidal link, which carries metadata the node can't stream."""
@@ -327,7 +344,7 @@ class Music(SessionMixin, commands.Cog):
 
         if kind != "track":
             return await self._queue_tidal_collection(
-                player, kind, identifier, color=color, front=front
+                player, kind, identifier, color=color, requester=requester, front=front
             )
 
         # The API reads a track too, and is the sanctioned route, so the page is
@@ -345,6 +362,7 @@ class Music(SessionMixin, commands.Cog):
         if resolved is None:
             raise UserError(f"Couldn't find a playable version of **{pending.title}**.")
 
+        resolved = with_requester(resolved, requester)
         if front:
             player.queue.put_at(0, resolved)
         else:
@@ -366,6 +384,7 @@ class Music(SessionMixin, commands.Cog):
         identifier: str,
         *,
         color: int,
+        requester: int,
         front: bool = False,
     ) -> discord.Embed:
         """Queues a Tidal album or playlist, which only the API can list."""
@@ -386,7 +405,7 @@ class Music(SessionMixin, commands.Cog):
         if not collection.tracks:
             raise UserError(f"That Tidal {kind} has no tracks.")
 
-        pending_tracks(player).extend(collection.tracks)
+        pending_tracks(player).extend(with_requester(track, requester) for track in collection.tracks)
 
         added = await fill_queue(player)
         if not added and not player.playing and player.queue.is_empty:
@@ -483,7 +502,7 @@ class Music(SessionMixin, commands.Cog):
             await player.skip(force=True)
             await self._reply(
                 interaction,
-                success_embed(f"Skipped {format_track(skipped, with_author=False)}"),
+                await guild_embed(interaction.guild_id, f"Skipped {format_track(skipped, with_author=False)}"),
                 await self._elsewhere(interaction),
             )
             return
@@ -537,7 +556,7 @@ class Music(SessionMixin, commands.Cog):
             if len(removed) > len(listed):
                 description += f"\n- and {len(removed) - len(listed)} more"
 
-        await self._reply(interaction, success_embed(description), await self._elsewhere(interaction))
+        await self._reply(interaction, await guild_embed(interaction.guild_id, description), await self._elsewhere(interaction))
 
         # Skipping the resolved stretch leaves the queue short, or empty. Nothing
         # else refills it: an empty queue never starts a track, so no track
@@ -583,7 +602,7 @@ class Music(SessionMixin, commands.Cog):
             raise UserError("Nothing is playing.")
 
         await player.pause(True)
-        await self._reply(interaction, success_embed("Paused."), await self._elsewhere(interaction))
+        await self._reply(interaction, await guild_embed(interaction.guild_id, "Paused."), await self._elsewhere(interaction))
 
     @app_commands.command(name="resume", description="Resume playback")
     async def resume(self, interaction: discord.Interaction):
@@ -594,7 +613,7 @@ class Music(SessionMixin, commands.Cog):
             raise UserError("Playback isn't paused.")
 
         await player.pause(False)
-        await self._reply(interaction, success_embed("Resumed."), await self._elsewhere(interaction))
+        await self._reply(interaction, await guild_embed(interaction.guild_id, "Resumed."), await self._elsewhere(interaction))
 
     @app_commands.command(name="stop", description="Stop playback, clear the queue and leave")
     async def stop(self, interaction: discord.Interaction):
@@ -606,7 +625,9 @@ class Music(SessionMixin, commands.Cog):
         channel = player.channel
         await player.disconnect()
         await self._reply(
-            interaction, success_embed("Stopped and cleared the queue."), await self._elsewhere(interaction)
+            interaction,
+            await guild_embed(interaction.guild_id, "Stopped and cleared the queue."),
+            await self._elsewhere(interaction),
         )
         logger.info(f"Left voice channel {channel.id} in guild {interaction.guild_id}.")
 
@@ -617,7 +638,7 @@ class Music(SessionMixin, commands.Cog):
 
         if percent is None:
             await interaction.response.send_message(
-                embed=success_embed(f"Volume is at **{player.volume}%**.")
+                embed=await guild_embed(interaction.guild_id, f"Volume is at **{player.volume}%**.")
             )
             return
 
@@ -627,7 +648,9 @@ class Music(SessionMixin, commands.Cog):
 
         await player.set_volume(percent)
         await self._reply(
-            interaction, success_embed(f"Volume set to **{percent}%**."), await self._elsewhere(interaction)
+            interaction,
+            await guild_embed(interaction.guild_id, f"Volume set to **{percent}%**."),
+            await self._elsewhere(interaction),
         )
 
     @app_commands.command(name="seek", description="Jump to a position in the current track")
@@ -647,7 +670,9 @@ class Music(SessionMixin, commands.Cog):
 
         await player.seek(milliseconds)
         await self._reply(
-            interaction, success_embed(f"Jumped to `{position}`."), await self._elsewhere(interaction)
+            interaction,
+            await guild_embed(interaction.guild_id, f"Jumped to `{position}`."),
+            await self._elsewhere(interaction),
         )
 
     @app_commands.command(name="shuffle", description="Shuffle the queue")
@@ -660,7 +685,7 @@ class Music(SessionMixin, commands.Cog):
             raise UserError("There aren't enough tracks queued to shuffle.")
 
         elsewhere = await self._elsewhere(interaction)
-        embed = success_embed(f"Shuffled **{len(tracks)}** tracks.")
+        embed = await guild_embed(interaction.guild_id, f"Shuffled **{len(tracks)}** tracks.")
 
         pending = pending_tracks(player)
         if not pending:
@@ -696,7 +721,9 @@ class Music(SessionMixin, commands.Cog):
 
         player.queue.mode = LOOP_MODES[mode.value]
         await self._reply(
-            interaction, success_embed(f"Loop mode set to **{mode.name}**."), await self._elsewhere(interaction)
+            interaction,
+            await guild_embed(interaction.guild_id, f"Loop mode set to **{mode.name}**."),
+            await self._elsewhere(interaction),
         )
 
     @app_commands.command(name="playing", description="Show the track currently playing")
