@@ -5,6 +5,7 @@ import time
 from collections import deque
 from collections.abc import Container
 from dataclasses import dataclass
+from urllib.parse import parse_qs, urlsplit
 
 import discord
 import wavelink
@@ -263,6 +264,19 @@ def nearest_search(query: str) -> list | None:
     return _best_cached(key, lambda c: c.startswith(key) or key.startswith(c))
 
 
+def _cached_track(uri: str) -> wavelink.Playable | None:
+    """A track held from any unexpired search whose link is uri."""
+    uri = uri.strip()
+    now = time.monotonic()
+    for expiry, results in _search_cache.values():
+        if expiry <= now:
+            continue
+        for track in results:
+            if track.uri == uri:
+                return track
+    return None
+
+
 def _drop_exception(task: asyncio.Task):
     """Consumes a failure nobody stayed to await, which asyncio would warn about.
     Waiting callers still get it raised."""
@@ -270,9 +284,66 @@ def _drop_exception(task: asyncio.Task):
         task.exception()
 
 
+# A YouTube video id, as youtube-source matches one.
+_VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}")
+
+# Lists youtube-source reads past, loading the video alone: each needs a
+# signed-in account.
+_IGNORED_LISTS = ("LL", "WL", "LM")
+
+
+def _ytm_video_id(query: str) -> str | None:
+    """The video id of a single-track YouTube Music link, else None."""
+    parts = urlsplit(query.strip())
+    if parts.hostname != "music.youtube.com" or parts.path != "/watch":
+        return None
+
+    params = parse_qs(parts.query)
+    # Any other list makes the link a playlist or radio, which loads as one.
+    lists = params.get("list")
+    if lists and not lists[0].startswith(_IGNORED_LISTS):
+        return None
+
+    ids = params.get("v")
+    if not ids or not _VIDEO_ID.fullmatch(ids[0]):
+        return None
+    return ids[0]
+
+
+async def _ytm_track(video_id: str) -> wavelink.Playable | None:
+    """The YouTube Music search result for a video id, if the search returns it.
+
+    A link loads through the video endpoint, which credits the uploading channel
+    ("Artist - Topic") and gives the video thumbnail. A YouTube Music search
+    result credits the artist and carries the listing's album art instead.
+    """
+    try:
+        results = await wavelink.Playable.search(video_id, source="ytmsearch")
+    except wavelink.LavalinkLoadException as e:
+        logger.debug(f"YouTube Music search for {video_id} failed: {e.error}")
+        return None
+
+    if isinstance(results, wavelink.Playlist):
+        return None
+    track = next((track for track in results if track.identifier == video_id), None)
+    logger.debug(f"YouTube Music search for {video_id}: {'hit' if track else 'miss'}")
+    return track
+
+
+async def _load(query: str):
+    """What the node resolves a query to. A YouTube Music track link is searched
+    by its id first, so a hit costs no more than loading the link would."""
+    video_id = _ytm_video_id(query)
+    if video_id is not None:
+        track = await _ytm_track(video_id)
+        if track is not None:
+            return [track]
+    return await wavelink.Playable.search(query)
+
+
 async def _run_search(key: str, query: str) -> list:
     try:
-        results = await wavelink.Playable.search(query)
+        results = await _load(query)
     finally:
         # Dropped before caching, so a failure isn't cached and the next attempt
         # retries.
@@ -294,6 +365,12 @@ async def cached_or_search(query: str):
     results = cached_search(query)
     if results is not None:
         return results
+
+    # A picked suggestion sends its result's link, which would load as a plain
+    # video. The result itself is still held under the text that was typed.
+    track = _cached_track(query)
+    if track is not None:
+        return [track]
 
     key = _cache_key(query)
     task = _search_inflight.get(key)

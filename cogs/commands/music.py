@@ -214,7 +214,8 @@ class Music(SessionMixin, commands.Cog):
             # No source given, so wavelink's default applies: a bare query becomes
             # a YouTube Music search, which returns songs rather than the videos,
             # covers and lyric uploads a plain YouTube search mixes in. A URL is
-            # resolved directly and ignores the default.
+            # resolved directly and ignores the default, except a YouTube Music
+            # track link, which is searched by its id first.
             # Cached, so text the autocomplete just searched isn't searched again.
             results = await cached_or_search(query)
         except wavelink.LavalinkLoadException as e:
