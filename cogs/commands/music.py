@@ -27,6 +27,7 @@ from utils.music import (
     backspaced_search,
     cached_or_search,
     cached_search,
+    enqueue,
     fill_queue,
     format_track,
     format_track_length,
@@ -160,6 +161,11 @@ class Music(SessionMixin, commands.Cog):
         color = await get_guild_embed_color(interaction.guild_id)
         embed = await self._queue_query(player, query, color, requester=interaction.user.id)
 
+        # Idle with an empty queue, enqueue put the track behind a pending tail,
+        # so its head is resolved to have something to start.
+        if not player.playing and player.queue.is_empty:
+            await fill_queue(player)
+
         # The manager cog announces the track itself once playback starts, so
         # nothing is echoed here beyond the queue confirmation.
         if not player.playing:
@@ -238,9 +244,9 @@ class Music(SessionMixin, commands.Cog):
                 # sitting ahead of everything already queued.
                 for offset, track in enumerate(tracks):
                     player.queue.put_at(offset, track)
-                added = len(tracks)
             else:
-                added = player.queue.put(tracks)
+                enqueue(player, tracks)
+            added = len(tracks)
             return discord.Embed(
                 title="Playlist up next" if front else "Playlist queued",
                 description=f"**{results.name}**\n{added} track{'s' if added != 1 else ''} added.",
@@ -251,7 +257,7 @@ class Music(SessionMixin, commands.Cog):
         if front:
             player.queue.put_at(0, track)
         else:
-            player.queue.put(track)
+            enqueue(player, [track])
         embed = discord.Embed(
             title="Playing next" if front else "Queued",
             description=format_track(track),
@@ -285,17 +291,23 @@ class Music(SessionMixin, commands.Cog):
         if not entity.tracks:
             raise UserError("That Spotify link has no tracks.")
 
-        if front:
-            # Resolved directly rather than through the pending queue, which
-            # fill_queue would append to the back.
+        if front or entity.kind == "track":
+            # One track, so it is resolved here like a Tidal one rather than
+            # through the pending queue, which exists to spread a long playlist
+            # out. The reply then names the track that was actually found.
             resolved = await resolve_pending(entity.tracks[0])
             if resolved is None:
                 raise UserError(f"Couldn't find a playable version of **{entity.name}**.")
 
             resolved = with_requester(resolved, requester)
-            player.queue.put_at(0, resolved)
+            if front:
+                player.queue.put_at(0, resolved)
+            else:
+                enqueue(player, [resolved])
             embed = discord.Embed(
-                title="Playing next", description=format_track(resolved), color=color
+                title="Playing next" if front else "Queued",
+                description=format_track(resolved),
+                color=color,
             )
             if resolved.artwork:
                 embed.set_thumbnail(url=resolved.artwork)
@@ -308,12 +320,6 @@ class Music(SessionMixin, commands.Cog):
         added = await fill_queue(player)
         if not added and not player.playing and player.queue.is_empty:
             raise UserError(f"Couldn't find a playable version of anything in **{entity.name}**.")
-
-        if entity.kind == "track" and added:
-            embed = discord.Embed(title="Queued", description=format_track(added[0]), color=color)
-            if added[0].artwork:
-                embed.set_thumbnail(url=added[0].artwork)
-            return embed
 
         count = len(entity.tracks)
         description = f"**{entity.name}**\n{count} track{'s' if count != 1 else ''} added."
@@ -366,7 +372,7 @@ class Music(SessionMixin, commands.Cog):
         if front:
             player.queue.put_at(0, resolved)
         else:
-            player.queue.put(resolved)
+            enqueue(player, [resolved])
 
         embed = discord.Embed(
             title="Playing next" if front else "Queued",

@@ -201,6 +201,12 @@ player. The end handler reads it and plays a stand-in straight away, or the next
 queued track when there is none. A `TrackStuckEvent` takes the same path: the
 track is marked stuck and skipped, and its end is treated as a failed load.
 
+Queue loop mode replays `queue.history`, so what goes into it matters. In track
+loop mode `get()` hands back the loaded track, which is already in history, so
+that repeat is played with `add_history=False`. Everything else goes in,
+including the track `get()` pops after a `/skip` unloads the loop, and a
+stand-in, which takes the failed track's place in history.
+
 ## Announcements
 
 Three messages are posted without a command asking for them, all from
@@ -327,7 +333,20 @@ stay off.
 Only `MUSIC_PREFETCH` tracks are resolved ahead of playback, topped up as each
 one starts and after `/skip` drops part of the queue, so a long playlist costs a
 search per track played rather than hundreds at once. After `MUSIC_MISS_LIMIT`
-misses in a row the rest is dropped.
+misses in a row the rest is dropped. A single track link is resolved straight
+away instead, like a Tidal one, so the reply names the track found.
+
+The queue plays before the pending tail, so tracks already playable when queued
+(a search, a link or its playlist, a single Spotify or Tidal track) go through
+`enqueue()` in [`utils/music.py`](../utils/music.py), which adds them to the
+tail while one is pending. They then play after it, and `fill_queue` moves them
+across without a search. `/insert` still puts what it queues at the front.
+
+A track can end while the track start's `fill_queue` is still searching, e.g.
+on a quick `/skip`, and find the queue empty. `_play_next` then waits on that
+search through `fill_queue`'s lock before taking the next track. Otherwise
+playback would stall with the tail still pending, or in queue loop mode wrap
+around to the start before the tail had played.
 
 The metadata arrives in one request, so `/queue` lists the whole playlist right
 away, with tracks not yet looked up carrying no link. `/skip` and `/shuffle`

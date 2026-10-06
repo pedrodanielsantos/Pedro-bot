@@ -591,7 +591,8 @@ def pending_tracks(player: wavelink.Player) -> deque:
     """The player's queued tail, created on first use.
 
     Holds PendingTrack, plus any already playable track pushed back out of the
-    queue by a reorder. fill_queue passes those through without searching again.
+    queue by a reorder or queued behind it by enqueue. fill_queue passes those
+    through without searching again.
     """
     pending = getattr(player, "pending_tracks", None)
     if pending is None:
@@ -606,6 +607,16 @@ def queued_tracks(player: wavelink.Player) -> list:
     tail of a Spotify playlist isn't treated as though it weren't queued yet.
     """
     return list(player.queue) + list(pending_tracks(player))
+
+
+def enqueue(player: wavelink.Player, tracks: list[wavelink.Playable]):
+    """Adds playable tracks after everything queued. Behind a pending tail they
+    join it, since the queue plays first and would put them ahead of it."""
+    pending = pending_tracks(player)
+    if pending:
+        pending.extend(tracks)
+    else:
+        player.queue.put(tracks)
 
 
 async def fill_queue(player: wavelink.Player) -> list[wavelink.Playable]:

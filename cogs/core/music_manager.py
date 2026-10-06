@@ -21,6 +21,7 @@ from utils.music import (
     fill_queue,
     find_replacement,
     format_track,
+    pending_tracks,
     search_author,
 )
 
@@ -344,12 +345,24 @@ class MusicManager(commands.Cog):
         """Starts the next queued track, unless something is already playing."""
         if not player.connected or player.current is not None:
             return
+
+        # In track loop mode get() hands back the loaded track, already in
+        # history. Anything it pops instead is new, e.g. after /skip unloads it.
+        repeat = player.queue.mode is wavelink.QueueMode.loop and player.queue.loaded is not None
+
+        # A track that ends while the track start's fill_queue is still
+        # searching finds the queue empty, which would stall playback with the
+        # tail still pending. fill_queue holds a lock, so this waits on that
+        # search rather than starting another.
+        if not repeat and player.queue.is_empty and pending_tracks(player):
+            await fill_queue(player)
+            if not player.connected or player.current is not None:
+                return
         try:
             track = player.queue.get()
         except wavelink.QueueEmpty:
             return
-        # In track loop mode get() hands back the same track, already in history.
-        await player.play(track, add_history=player.queue.mode is not wavelink.QueueMode.loop)
+        await player.play(track, add_history=not repeat)
 
     @commands.Cog.listener()
     async def on_wavelink_track_exception(self, payload: wavelink.TrackExceptionEventPayload):
@@ -453,9 +466,9 @@ class MusicManager(commands.Cog):
                 "fallback_depth": depth + 1,
             }
             if player.current is None:
-                await player.play(
-                    replacement, add_history=player.queue.mode is not wavelink.QueueMode.loop
-                )
+                # Into history in every mode, in place of the failed track
+                # taken out above, so a later queue loop still plays it.
+                await player.play(replacement)
             else:
                 # Something was started during the search, e.g. by /play, so the
                 # stand-in plays next rather than cutting it off.
