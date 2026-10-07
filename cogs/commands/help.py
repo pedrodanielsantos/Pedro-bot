@@ -20,7 +20,7 @@ COMMAND_CATEGORIES = {
     "resume": "Music",
     "stop": "Music",
     "queue": "Music",
-    "playing": "Music",
+    "nowplaying": "Music",
     "volume": "Music",
     "seek": "Music",
     "shuffle": "Music",

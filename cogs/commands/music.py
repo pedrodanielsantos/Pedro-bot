@@ -732,8 +732,8 @@ class Music(SessionMixin, commands.Cog):
             await self._elsewhere(interaction),
         )
 
-    @app_commands.command(name="playing", description="Show the track currently playing")
-    async def playing(self, interaction: discord.Interaction):
+    @app_commands.command(name="nowplaying", description="Show the track currently playing")
+    async def nowplaying(self, interaction: discord.Interaction):
         player = active_player(interaction.guild)
         if player is None or not player.current:
             raise UserError("Nothing is playing.")

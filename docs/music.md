@@ -261,8 +261,8 @@ Commands work in any channel. With a music channel set, the ones that change
 playback (`/play`, `/insert`, `/skip`, `/pause`, `/resume`, `/stop`,
 `/shuffle`, `/loop`, `/seek`, and `/volume` with a value) reply privately when
 run elsewhere, and post a public copy in the music channel. Run inside it, or
-with none set, they reply publicly in place. `/queue`, `/playing` and `/volume`
-without a value only report, so they always reply in place.
+with none set, they reply publicly in place. `/queue`, `/nowplaying` and
+`/volume` without a value only report, so they always reply in place.
 
 The copy names the caller in a "Requested by" footer, since a message the bot
 sends itself has none of the "used /command" header Discord puts on a reply.
