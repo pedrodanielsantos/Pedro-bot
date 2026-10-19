@@ -96,10 +96,16 @@ class LobbyManager(commands.Cog):
                 continue
 
             if self._is_empty(ch):
+                # An unhandled exception here stops the loop for good.
                 try:
                     await ch.delete(reason="Empty user lobby (periodic cleanup)")
-                finally:
-                    await lobby_delete(channel_id)
+                except discord.NotFound:
+                    pass  # Already gone, e.g. deleted by on_voice_state_update.
+                except discord.HTTPException as e:
+                    # Row kept so the next tick retries instead of orphaning the channel.
+                    logger.warning(f"Failed to delete empty lobby {channel_id} in guild {guild_id}: {e}")
+                    continue
+                await lobby_delete(channel_id)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(LobbyManager(bot))
