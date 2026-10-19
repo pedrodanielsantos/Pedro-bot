@@ -75,10 +75,28 @@ changing it needs a restart and a sync to reach Discord. See
 
 ## Bot permissions
 
-The bot's role needs **View Channel**, **Connect**, **Speak**, **Send Messages**
-and **Embed Links**. **Move Members** is optional and lets it join a channel that
-is at its user limit. Channel and category overwrites beat role permissions, so
-grant these on the category the lobbies live in.
+Invite the bot with this link, replacing `CLIENT_ID` with the Client ID from the
+Developer Portal's **OAuth2** page:
+
+```
+https://discord.com/oauth2/authorize?client_id=CLIENT_ID&permissions=1099800103958&integration_type=0&scope=applications.commands+bot
+```
+
+The permissions integer covers:
+
+- View Channels
+- Manage Channels
+- Manage Roles
+- Kick Members
+- Ban Members
+- Moderate Members
+- Send Messages
+- Embed Links
+- Attach Files
+- Read Message History
+- Connect
+- Speak
+- Move Members
 
 ## Intents
 
