@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import re
+import shutil
 import sys
 import threading
 from collections import deque
@@ -17,11 +18,13 @@ _LOG_LINE_RE = re.compile(
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
 LOG_FILE = os.path.join(LOG_DIR, "bot.log")
 CONSOLE_RAW_FILE = os.path.join(LOG_DIR, "console.raw")
-# A full reset, not a rolling window, so the Console page loses all its scrollback
-# each time this is hit. Sized for a long uptime's worth of history: the file is
-# truncated on every start anyway, and tail_log_file() scans backward from the end,
-# so a larger cap costs nothing at read time.
+# Rolls over to console.raw.1 when hit, so the Console page loses its scrollback but
+# the file keeps it. Sized for a long uptime's worth of history: tail_log_file() scans
+# backward from the end, so a larger cap costs nothing at read time.
 CONSOLE_RAW_MAX_BYTES = 50_000_000
+# Older files kept as console.raw.1 (newest) to .N. Each start and each hit of the
+# cap rolls one over.
+CONSOLE_RAW_BACKUPS = 5
 
 _MUTED = "\x1b[38;2;114;118;125m"
 _ACCENT = "\x1b[38;2;88;101;242m"
@@ -86,23 +89,55 @@ class BufferHandler(logging.Handler):
 
 class RawConsoleSink:
     """Writer for logs/console.raw, the raw stdout/stderr tee for the web console's
-    live view. Separate from bot.log. Truncates on construction and past max_bytes."""
+    live view. Separate from bot.log. Rolls the file over to console.raw.1..N on
+    construction and past max_bytes, then starts it empty."""
 
-    def __init__(self, path=CONSOLE_RAW_FILE, max_bytes=CONSOLE_RAW_MAX_BYTES):
+    def __init__(self, path=CONSOLE_RAW_FILE, max_bytes=CONSOLE_RAW_MAX_BYTES,
+                 backup_count=CONSOLE_RAW_BACKUPS):
+        self.path = path
         self.max_bytes = max_bytes
+        self.backup_count = backup_count
         self._lock = threading.Lock()
         os.makedirs(os.path.dirname(path), exist_ok=True)
+        error = self._roll_over() if os.path.exists(path) and os.path.getsize(path) else None
         self._fh = open(path, "wb", buffering=0)
         self._size = 0
+        self._note_failure(error)
+
+    def _roll_over(self) -> str | None:
+        """Copies the file to .1, shifting older copies up. Copied rather than renamed:
+        the Console page holds console.raw open, and Windows refuses to rename an open
+        file. Returns the error instead of raising, since a failure here must not stop
+        the console; the file is truncated either way."""
+        if self.backup_count < 1:
+            return None
+        try:
+            for i in range(self.backup_count - 1, 0, -1):
+                older = f"{self.path}.{i}"
+                if os.path.exists(older):
+                    os.replace(older, f"{self.path}.{i + 1}")
+            shutil.copyfile(self.path, f"{self.path}.1")
+        except OSError as e:
+            return str(e)
+        return None
+
+    def _note_failure(self, error: str | None):
+        # Written to the file directly: logging would route back through this sink.
+        if error:
+            line = f"Could not keep the previous console.raw: {error}\n".encode("utf-8", errors="replace")
+            self._fh.write(line)
+            self._size += len(line)
 
     def write(self, data: bytes):
         if not data:
             return
         with self._lock:
             if self._size + len(data) > self.max_bytes:
+                error = self._roll_over()
                 self._fh.seek(0)
                 self._fh.truncate(0)
                 self._size = 0
+                self._note_failure(error)
             self._fh.write(data)
             self._size += len(data)
 

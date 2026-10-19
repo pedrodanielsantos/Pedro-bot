@@ -42,7 +42,7 @@ class _TeeStream:
         return getattr(self._original, name)
 
 
-_console_sink = RawConsoleSink()  # creates/truncates logs/console.raw
+_console_sink = RawConsoleSink()  # Rolls the last run's logs/console.raw over to .1.
 _real_stdout = sys.stdout  # pre-wrap, used by the bot.py output pump
 sys.stdout = _TeeStream(sys.stdout, _console_sink)
 sys.stderr = _TeeStream(sys.stderr, _console_sink)

@@ -9,7 +9,7 @@ Pedro-bot/
 ├── web.py              # FastAPI dashboard: status, guilds, cog manager, command sync, console
 ├── run.py              # Supervisor: hosts the dashboard (:8000), starts/stops bot.py and Lavalink
 ├── docs/               # This documentation
-├── logs/               # Rotating bot.log, plus console.raw, the Console page's source
+├── logs/               # Rotating bot.log and console.raw (the Console page's source)
 ├── cogs/
 │   ├── commands/       # Slash commands
 │   └── core/           # Error handling, dev tools, music node, shared mixins

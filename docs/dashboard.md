@@ -21,9 +21,13 @@ It binds `127.0.0.1:8000`, so it is reachable from the host only. Set
 
 A separate **Console** page (`/console`) is a live, auto-scrolling mirror of every
 supervised process's stdout/stderr (not just logged output), rendered client-side
-from `logs/console.raw` so it stays visible across a crash or restart. Lavalink's
+from `logs/console.raw` so it stays visible across a bot crash or restart. Lavalink's
 own Spring Boot lines are restated in the bot's log format on the way through, so
 both processes read as one log.
+
+Restarting `run.py` itself starts the page empty. The previous run's output is
+kept as `logs/console.raw.1`, with older runs shifted up to `.5`. The file also
+rolls over at 50 MB mid-run. Both limits are set in `utils/log.py`.
 
 ## Internal API
 
