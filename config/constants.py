@@ -59,7 +59,7 @@ MUSIC_SEARCH_SOURCES = ("ytmsearch", "ytsearch", "scsearch")
 # Only the track about to play, so each queued track costs one search and no
 # more. Everything behind it stays unresolved in /queue until its turn comes.
 MUSIC_PREFETCH = 1
-MUSIC_MISS_LIMIT = 5       # unresolvable tracks in a row before the rest are dropped
+MUSIC_MISS_LIMIT = 5       # unresolvable tracks in a row before the rest of a link isn't searched
 MUSIC_SPOTIFY_LIMIT = 100  # tracks Spotify's embed page returns for a playlist
 # Tracks taken from one Tidal album or playlist. Spotify needs no such cap: its
 # embed page stops at MUSIC_SPOTIFY_LIMIT on its own. Tidal pages hold 20 each,

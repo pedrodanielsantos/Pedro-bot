@@ -19,7 +19,7 @@ Lavalink handles encryption, DAVE included.
 | [`LavaSrc`](https://github.com/topi314/LavaSrc) | Installed but all sources off, see [Spotify links](#spotify-links) and [Tidal links](#tidal-links) |
 | [`cogs/core/music_manager.py`](../cogs/core/music_manager.py) | Owns the node connection and playback lifecycle |
 | [`cogs/commands/music.py`](../cogs/commands/music.py) | The slash commands |
-| [`utils/music.py`](../utils/music.py) | Player lookup, DJ gating, announce channel, track formatting, track search and its cache |
+| [`utils/music.py`](../utils/music.py) | Player lookup, DJ gating, announce channel, the queue, track formatting, track search and its cache |
 | [`utils/spotify.py`](../utils/spotify.py) | Spotify link parsing and metadata |
 | [`utils/tidal.py`](../utils/tidal.py) | Tidal link parsing and metadata, via the API or the page |
 
@@ -138,6 +138,41 @@ recommends, self-hosted or via its public instance. Check the script variant
 first: yt-cipher documents that only the `IAS` variants consistently work, and
 the URL above is the embed variant.
 
+## The queue
+
+`TrackQueue` in [`utils/music.py`](../utils/music.py) holds every track of a
+session in play order, played ones included, with a cursor on the current or
+last played track. A track's number is its index + 1, so playback never changes
+it, and only the commands below do. The queue lives on the player, so numbers
+only reset when the bot leaves.
+
+Wavelink's own `Queue` goes unused. `player.queue` stays empty and every track is
+played with `add_history=False`. Its queue and history can't hold a
+`PendingTrack`, which would split one order across several containers.
+
+| Event | Numbers |
+| --- | --- |
+| A track ends or is skipped | Unchanged, it stays listed as played |
+| Queue loop wraps | Unchanged, the cursor returns to the start |
+| `/skip` with a number | Later tracks close up |
+| `/insert` | Later tracks move back |
+| `/move` | Tracks between the two positions shift |
+| `/shuffle` | Reassigned, for tracks after the current one |
+
+`/skip` takes the current track's number or any later one, and skipping the
+current track leaves it listed as played. `/move` only takes tracks after the
+current one, on either side of the move. Its tracks land in order starting at
+`to`, so `/move 5-8 2` makes them 2 to 5. Both refuse a played number.
+
+A track with no source or stand-in stays as a struck-through row, a `PendingTrack`
+with `lost` set, so the numbers after it hold. Playback passes over it, including
+in queue loop mode.
+
+`/queue` opens on what's playing and what's next. Earlier pages list the played
+tracks and count back from the current track, so only the very first page can
+run short. Now playing repeats at the top of every page, carrying its number, so
+the numbers read in sequence across the split.
+
 ## Failed tracks
 
 Not every failure is an extraction problem. A playlist can hold entries whose
@@ -201,11 +236,13 @@ player. The end handler reads it and plays a stand-in straight away, or the next
 queued track when there is none. A `TrackStuckEvent` takes the same path: the
 track is marked stuck and skipped, and its end is treated as a failed load.
 
-Queue loop mode replays `queue.history`, so what goes into it matters. In track
-loop mode `get()` hands back the loaded track, which is already in history, so
-that repeat is played with `add_history=False`. Everything else goes in,
-including the track `get()` pops after a `/skip` unloads the loop, and a
-stand-in, which takes the failed track's place in history.
+A stand-in takes the failed track's place in the queue, so it keeps the number
+and a later queue loop plays it. If a command started another track during the
+search, the failed track stays as a lost row and the stand-in plays next instead.
+
+Track loop mode replays the cursor's track when it ends as `finished`. A `/skip`
+ends it as `stopped`, which moves on. Queue loop mode wraps the cursor once
+nothing playable is left after it.
 
 ## Announcements
 
@@ -258,7 +295,7 @@ depth and requester, so a stand-in for a stand-in still names what was queued.
 ### Command replies
 
 Commands work in any channel. With a music channel set, the ones that change
-playback (`/play`, `/insert`, `/skip`, `/pause`, `/resume`, `/stop`,
+playback (`/play`, `/insert`, `/skip`, `/move`, `/pause`, `/resume`, `/stop`,
 `/shuffle`, `/loop`, `/seek`, and `/volume` with a value) reply privately when
 run elsewhere, and post a public copy in the music channel. Run inside it, or
 with none set, they reply publicly in place. `/queue`, `/nowplaying` and
@@ -273,9 +310,11 @@ None use `success_embed`'s green, so in a channel full of them only errors
 stand out, in red. `/set djrole`, `/set musicvolume` and `/set musicchannel` are
 server configuration, so they keep success green like `/set lobbyregion`.
 
-Whether a reply is ephemeral is fixed by the first response, so `/play`,
-`/insert` and `/shuffle` read the setting before deferring. Errors after that
-defer follow it.
+Whether a reply is ephemeral is fixed by the first response, so `/play` and
+`/insert` read the setting before deferring. Errors after that defer follow it.
+
+`/play` and `/insert` name the number a track was queued at, or the span for a
+playlist or album.
 
 ## Track suggestions
 
@@ -331,33 +370,30 @@ needs the app owner to hold Premium, so it is not used and LavaSrc's sources
 stay off.
 
 Only `MUSIC_PREFETCH` tracks are resolved ahead of playback, topped up as each
-one starts and after `/skip` drops part of the queue, so a long playlist costs a
-search per track played rather than hundreds at once. After `MUSIC_MISS_LIMIT`
-misses in a row the rest is dropped. A single track link is resolved straight
-away instead, like a Tidal one, so the reply names the track found.
+one starts and after `/skip`, `/move` or `/shuffle` change what is next, so a
+long playlist costs a search per track played rather than hundreds at once.
+After `MUSIC_MISS_LIMIT` misses in a row the rest of that link's tracks are marked
+lost without a search. The count is per link, so tracks from other links are
+still searched and playable tracks still play. A single track link is resolved
+straight away instead, like a Tidal one, so the reply names the track found.
 
-The queue plays before the pending tail, so tracks already playable when queued
-(a search, a link or its playlist, a single Spotify or Tidal track) go through
-`enqueue()` in [`utils/music.py`](../utils/music.py), which adds them to the
-tail while one is pending. They then play after it, and `fill_queue` moves them
-across without a search. `/insert` still puts what it queues at the front.
+Pending tracks sit in the queue like any other and resolve in place, so what is
+queued after a playlist plays after it, and an entry being searched for keeps its
+number and can still be moved or skipped.
 
 A track can end while the track start's `fill_queue` is still searching, e.g.
-on a quick `/skip`, and find the queue empty. `_play_next` then waits on that
-search through `fill_queue`'s lock before taking the next track. Otherwise
-playback would stall with the tail still pending, or in queue loop mode wrap
-around to the start before the tail had played.
+on a quick `/skip`, and find the next track still pending. `play_next()` in
+[`utils/music.py`](../utils/music.py) then waits on that search through
+`fill_queue`'s lock before starting it.
 
 The metadata arrives in one request, so `/queue` lists the whole playlist right
-away, with tracks not yet looked up carrying no link. `/skip` and `/shuffle`
-count those positions too.
+away, with tracks not yet looked up carrying no link.
 
 The embed page returns at most `MUSIC_SPOTIFY_LIMIT` tracks for a playlist and
 carries no ISRC, so a match rests on artist, title and length.
 
-`/insert` takes a track link but refuses an album or playlist, which only ever
-resolves onto the back of the queue. Inserting one would mean resolving all of
-it up front.
+`/insert` takes an album or playlist too, ahead of everything queued. It resolves
+the same way, so inserting one costs no more searches than `/play` does.
 
 ## Tidal links
 
@@ -408,9 +444,10 @@ about a second, while a 10,000 track playlist would be 500 requests and run
 straight into the rate limit.
 
 Everything is read up front rather than a page at a time, because `/queue`,
-`/skip` and `/shuffle` all work from [`queued_tracks`](../utils/music.py).
-Paging lazily would leave them acting on whatever happened to be loaded, so a
-shuffle would reorder the first 20 and leave the rest in order. Within the cap,
+`/skip`, `/move` and `/shuffle` all work from the whole
+[queue](../utils/music.py). Paging lazily would leave them acting on whatever
+happened to be loaded, so a shuffle would reorder the first 20 and leave the
+rest in order. Within the cap,
 a Tidal collection behaves exactly like a Spotify one, except that its count is
 exact: where Spotify can only hint that it was cut short, a Tidal collection
 says which 100 of how many were taken.

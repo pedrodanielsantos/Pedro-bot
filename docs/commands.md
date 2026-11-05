@@ -19,6 +19,7 @@
 | --- | --- |
 | `/insert` | Add a track to the front of the queue |
 | `/loop` | Set the loop mode |
+| `/move` | Move queued tracks to another position |
 | `/nowplaying` | Show the track currently playing |
 | `/pause` | Pause playback |
 | `/play` | Play a track, or add it to the queue |

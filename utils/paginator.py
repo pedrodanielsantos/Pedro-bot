@@ -83,13 +83,14 @@ class PaginatorView(discord.ui.LayoutView):
         home_description: str | None = None,
         placeholder: str = "Jump to a section...",
         timeout: float | None = 180,
+        start_page: int = 0,
     ):
         super().__init__(timeout=timeout)
         self.pages = pages
-        self.current_page = 0
+        self.current_page = start_page
         self.message: discord.WebhookMessage | None = None
 
-        self.text_display = discord.ui.TextDisplay(pages[0])
+        self.text_display = discord.ui.TextDisplay(pages[start_page])
 
         # Everything lives in one Container so the select and buttons render
         # attached to the text, inside the same accent-colored box.

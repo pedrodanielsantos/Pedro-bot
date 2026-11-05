@@ -16,13 +16,15 @@ from config.constants import (
 from db.database import get_guild_embed_color
 from utils.embeds import error_embed
 from utils.music import (
+    PendingTrack,
     active_player,
     announce_channel,
     fill_queue,
     find_replacement,
     format_track,
-    pending_tracks,
+    play_next,
     search_author,
+    track_queue,
 )
 
 logger = logging.getLogger("music")
@@ -339,30 +341,8 @@ class MusicManager(commands.Cog):
             # Failed after audio had started, so it was heard and is not replaced.
             logger.warning(f"{track.title!r} ({_track_ref(track)}) stopped partway: {failure[0]}")
 
-        await self._play_next(player)
-
-    async def _play_next(self, player: wavelink.Player):
-        """Starts the next queued track, unless something is already playing."""
-        if not player.connected or player.current is not None:
-            return
-
-        # In track loop mode get() hands back the loaded track, already in
-        # history. Anything it pops instead is new, e.g. after /skip unloads it.
-        repeat = player.queue.mode is wavelink.QueueMode.loop and player.queue.loaded is not None
-
-        # A track that ends while the track start's fill_queue is still
-        # searching finds the queue empty, which would stall playback with the
-        # tail still pending. fill_queue holds a lock, so this waits on that
-        # search rather than starting another.
-        if not repeat and player.queue.is_empty and pending_tracks(player):
-            await fill_queue(player)
-            if not player.connected or player.current is not None:
-                return
-        try:
-            track = player.queue.get()
-        except wavelink.QueueEmpty:
-            return
-        await player.play(track, add_history=not repeat)
+        # A /skip ends a track as stopped, which moves on even in track loop mode.
+        await play_next(player, repeat=payload.reason == "finished")
 
     @commands.Cog.listener()
     async def on_wavelink_track_exception(self, payload: wavelink.TrackExceptionEventPayload):
@@ -416,9 +396,9 @@ class MusicManager(commands.Cog):
 
     async def _recover(self, player: wavelink.Player, track: wavelink.Playable, detail: str):
         """Plays a stand-in in place of a track that failed, or moves on without one."""
-        # Or loop all would bring it back to fail again on every pass.
-        if player.queue.history is not None:
-            player.queue.history.remove(track)
+        # Stays valid through the search, since only what follows the cursor moves.
+        queue = track_queue(player)
+        index = queue.cursor
 
         # Every id that has failed on this player, so a repeated search walks past
         # them to the next candidate. A stand-in is not added until it fails too,
@@ -447,9 +427,9 @@ class MusicManager(commands.Cog):
         else:
             outcome = "no replacement found"
 
-        # A track that recovered is routine. One that didn't is dropped from the
-        # queue outright, so it reads as an error instead of another warning among
-        # the warnings that led up to it.
+        # A track that recovered is routine. One that didn't is lost outright, so
+        # it reads as an error instead of another warning among the warnings that
+        # led up to it.
         log = logger.warning if replacement is not None else logger.error
         log(f"Could not play {track.title!r} ({_track_ref(track)}): {detail}, {outcome}")
 
@@ -457,6 +437,8 @@ class MusicManager(commands.Cog):
             return
 
         title, author = _original(track)
+        # Keeps the number, while passed over so queue loop doesn't retry it.
+        lost = PendingTrack(title, author, track.length, is_stream=track.is_stream, lost=True)
         if replacement is not None:
             # Names the original on the stand-in's "Now playing".
             replacement.extras = {
@@ -465,16 +447,18 @@ class MusicManager(commands.Cog):
                 **_extras_dict(track),
                 "fallback_depth": depth + 1,
             }
-            if player.current is None:
-                # Into history in every mode, in place of the failed track
-                # taken out above, so a later queue loop still plays it.
-                await player.play(replacement)
+            if queue.cursor == index and player.current is None:
+                queue.tracks[index] = replacement
+                await player.play(replacement, add_history=False)
             else:
                 # Something was started during the search, e.g. by /play, so the
                 # stand-in plays next rather than cutting it off.
-                player.queue.put_at(0, replacement)
+                queue.tracks[index] = lost
+                queue.add([replacement], front=True)
+                await play_next(player)
             return
 
+        queue.tracks[index] = lost
         channel = await announce_channel(player)
         if channel is not None:
             name = discord.utils.escape_markdown(title)
@@ -483,9 +467,7 @@ class MusicManager(commands.Cog):
             except discord.HTTPException:
                 pass
 
-        # Or track loop mode hands the failed track straight back.
-        player.queue.loaded = None
-        await self._play_next(player)
+        await play_next(player)
 
     @commands.Cog.listener()
     async def on_wavelink_inactive_player(self, player: wavelink.Player):

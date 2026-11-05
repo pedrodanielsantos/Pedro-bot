@@ -16,6 +16,7 @@ COMMAND_CATEGORIES = {
     "play": "Music",
     "insert": "Music",
     "skip": "Music",
+    "move": "Music",
     "pause": "Music",
     "resume": "Music",
     "stop": "Music",

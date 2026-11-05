@@ -3,7 +3,6 @@ import copy
 import logging
 import re
 import time
-from collections import deque
 from collections.abc import Container
 from dataclasses import dataclass, replace
 from urllib.parse import parse_qs, urlsplit
@@ -155,7 +154,19 @@ def format_track(track: wavelink.Playable, *, with_author: bool = True) -> str:
     line = f"[{title}]({track.uri})" if track.uri else title
     if with_author and track.author:
         line += f" by **{track.author}**"
+    if isinstance(track, PendingTrack) and track.lost:
+        line = f"~~{line}~~"
     return f"{line} `{track_length(track)}`"
+
+
+def format_numbered(number: int, track: wavelink.Playable) -> str:
+    """A track as a /queue row."""
+    return f"`{number}.` {format_track(track)}"
+
+
+def number_span(first: int, count: int) -> str:
+    """The numbers of count consecutive tracks, like 7 or 7-26."""
+    return str(first) if count == 1 else f"{first}-{first + count - 1}"
 
 
 def parse_position(value: str) -> int:
@@ -187,17 +198,22 @@ class PendingTrack:
     Spotify and Tidal links produce these, since such a link carries no audio
     and every track has to be searched for elsewhere. Nothing here is specific
     to either, so another metadata-only source can queue them the same way.
+
+    lost marks a track with no source or stand-in. It keeps its number in the
+    queue and playback passes over it.
     """
 
     title: str
     artists: str
     duration: int  # milliseconds, matching Playable.length
     requester_id: int | None = None  # carried onto the resolved track's extras
+    is_stream: bool = False
+    lost: bool = False
+    batch: int | None = None  # which link queued it, for fill_queue's miss limit
 
     # Named after the Playable attributes format_track reads, so a pending track
     # renders through it unchanged. No uri, so it shows as plain text.
     uri = None
-    is_stream = False
 
     @property
     def author(self) -> str:
@@ -587,87 +603,166 @@ async def resolve_pending(track: PendingTrack) -> wavelink.Playable | None:
     )
 
 
-def pending_tracks(player: wavelink.Player) -> deque:
-    """The player's queued tail, created on first use.
+class TrackQueue:
+    """Every track of a session in play order, played ones included.
 
-    Holds PendingTrack, plus any already playable track pushed back out of the
-    queue by a reorder or queued behind it by enqueue. fill_queue passes those
-    through without searching again.
+    A track's number is its index + 1, so playback never changes it. Holds
+    Playable and PendingTrack, resolved in place by fill_queue. cursor is the
+    index of the current or last played track, -1 before the first.
+
+    Wavelink's own Queue goes unused, as it splits this across a queue and a
+    history that can't hold a PendingTrack.
     """
-    pending = getattr(player, "pending_tracks", None)
-    if pending is None:
-        pending = player.pending_tracks = deque()
-    return pending
+
+    def __init__(self):
+        self.tracks: list = []
+        self.cursor = -1
+        self.mode = wavelink.QueueMode.normal
+        self.batches = 0
+
+    @property
+    def upcoming(self) -> list:
+        return self.tracks[self.cursor + 1:]
+
+    def set_upcoming(self, tracks: list):
+        self.tracks[self.cursor + 1:] = tracks
+
+    def add(self, tracks: list, *, front: bool = False) -> int:
+        """Adds tracks after everything queued, or before it with front. Returns
+        the number of the first."""
+        index = self.cursor + 1 if front else len(self.tracks)
+        self.tracks[index:index] = tracks
+        return index + 1
+
+    def add_batch(self, tracks: list[PendingTrack], *, front: bool = False) -> int:
+        """Adds one link's pending tracks, which fill_queue gives up on together."""
+        self.batches += 1
+        return self.add([replace(track, batch=self.batches) for track in tracks], front=front)
+
+    def replace(self, old, new):
+        """Swaps an entry in place, wherever it now sits. By identity, since the
+        same track can be queued twice. Does nothing if old has since been dropped."""
+        for index, track in enumerate(self.tracks):
+            if track is old:
+                self.tracks[index] = new
+                return
+
+    def next_index(self) -> int | None:
+        """The index playback moves to, past lost tracks, wrapping in queue loop mode."""
+        indices = list(range(self.cursor + 1, len(self.tracks)))
+        if self.mode is wavelink.QueueMode.loop_all:
+            indices += range(self.cursor + 1)
+        for index in indices:
+            track = self.tracks[index]
+            if not (isinstance(track, PendingTrack) and track.lost):
+                return index
+        return None
+
+    def clear(self):
+        self.tracks.clear()
+        self.cursor = -1
 
 
-def queued_tracks(player: wavelink.Player) -> list:
-    """Everything queued, resolved first, then what is still to be looked up.
-
-    What /queue numbers and every command addressing a position counts, so the
-    tail of a Spotify playlist isn't treated as though it weren't queued yet.
-    """
-    return list(player.queue) + list(pending_tracks(player))
-
-
-def enqueue(player: wavelink.Player, tracks: list[wavelink.Playable]):
-    """Adds playable tracks after everything queued. Behind a pending tail they
-    join it, since the queue plays first and would put them ahead of it."""
-    pending = pending_tracks(player)
-    if pending:
-        pending.extend(tracks)
-    else:
-        player.queue.put(tracks)
+def track_queue(player: wavelink.Player) -> TrackQueue:
+    """The player's queue, created on first use and gone with the player."""
+    queue = getattr(player, "track_queue", None)
+    if queue is None:
+        queue = player.track_queue = TrackQueue()
+    return queue
 
 
-async def fill_queue(player: wavelink.Player) -> list[wavelink.Playable]:
-    """Resolves pending tracks until MUSIC_PREFETCH of them sit in the queue.
+def _next_to_resolve(queue: TrackQueue) -> PendingTrack | None:
+    """The first pending track short of MUSIC_PREFETCH playable ones past the cursor."""
+    ready = 0
+    for track in queue.upcoming:
+        if not isinstance(track, PendingTrack):
+            ready += 1
+            if ready >= MUSIC_PREFETCH:
+                return None
+        elif not track.lost:
+            return track
+    return None
+
+
+async def fill_queue(player: wavelink.Player):
+    """Resolves pending tracks until MUSIC_PREFETCH playable ones are next up.
 
     Called once when a link is queued and again as each track starts, so a long
-    playlist costs a search or two per track played rather than hundreds up
-    front. Returns what it added, in order.
+    playlist costs a search per track played rather than hundreds up front.
     """
-    pending = pending_tracks(player)
-    if not pending:
-        return []
+    queue = track_queue(player)
+    if _next_to_resolve(queue) is None:
+        return
 
     # Two track starts, or a start racing a /play, would otherwise resolve the
-    # same entries twice and queue them out of order.
+    # same entries twice.
     lock = getattr(player, "pending_lock", None)
     if lock is None:
         lock = player.pending_lock = asyncio.Lock()
 
-    added = []
     misses = 0
+    batch = None
     async with lock:
-        while pending and player.connected and player.queue.count < MUSIC_PREFETCH:
-            track = pending.popleft()
-            # Already playable, so it only has to move across: a reorder puts
-            # resolved tracks back here to keep one order across both.
-            if not isinstance(track, PendingTrack):
-                player.queue.put(track)
-                added.append(track)
-                continue
+        while player.connected:
+            track = _next_to_resolve(queue)
+            if track is None:
+                break
 
+            # Stays in the list while searching, so its number holds and a /skip
+            # or /move can still reach it.
             resolved = await resolve_pending(track)
 
             if resolved is None:
                 logger.warning(f"No source had {track.query!r}, skipping it")
-                misses += 1
+                queue.replace(track, replace(track, lost=True))
+                misses = misses + 1 if track.batch == batch else 1
+                batch = track.batch
                 # A run this long means every search is failing, not that the
-                # tracks are obscure. The rest is dropped rather than left
-                # pending, which would strand it once playback runs out.
+                # tracks are obscure, so the rest of the link isn't searched.
+                # Counted per link, so one can't cost the tracks of another.
                 if misses >= MUSIC_MISS_LIMIT:
-                    logger.warning(f"Dropping {len(pending)} unresolved tracks after {misses} misses")
-                    pending.clear()
+                    upcoming = queue.upcoming
+                    abandoned = sum(
+                        isinstance(t, PendingTrack) and t.batch == batch and not t.lost
+                        for t in upcoming
+                    )
+                    logger.warning(f"Giving up on {abandoned} unresolved tracks after {misses} misses")
+                    queue.set_upcoming([
+                        replace(t, lost=True) if isinstance(t, PendingTrack) and t.batch == batch else t
+                        for t in upcoming
+                    ])
                 continue
 
             misses = 0
             if track.requester_id is not None:
                 resolved = with_requester(resolved, track.requester_id)
-            player.queue.put(resolved)
-            added.append(resolved)
+            queue.replace(track, resolved)
 
-    return added
+
+async def play_next(player: wavelink.Player, *, repeat: bool = False):
+    """Starts the next track, unless something is already playing.
+
+    repeat is for a track that played through, which track loop mode plays again.
+    """
+    if not player.connected or player.current is not None:
+        return
+
+    queue = track_queue(player)
+    if repeat and queue.mode is wavelink.QueueMode.loop:
+        await player.play(queue.tracks[queue.cursor], add_history=False)
+        return
+
+    # The next track may still be pending, or being searched for by the track
+    # start's fill_queue, in which case this waits on that search through its lock.
+    await fill_queue(player)
+    if not player.connected or player.current is not None:
+        return
+
+    index = queue.next_index()
+    if index is None:
+        return
+    queue.cursor = index
+    await player.play(queue.tracks[index], add_history=False)
 
 
 def progress_bar(position: int, length: int, width: int = 20) -> str:

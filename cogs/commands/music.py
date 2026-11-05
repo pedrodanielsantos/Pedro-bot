@@ -23,26 +23,28 @@ from utils.embeds import guild_embed
 from utils.errors import UserError
 from utils.mixins import SessionMixin
 from utils.music import (
+    TrackQueue,
     active_player,
     backspaced_search,
     cached_or_search,
     cached_search,
-    enqueue,
     fill_queue,
+    format_numbered,
     format_track,
     format_track_length,
     music_channel,
     nearest_search,
+    number_span,
     parse_position,
-    pending_tracks,
+    play_next,
     progress_bar,
-    queued_tracks,
     require_dj,
     require_node,
     require_player,
     require_voice,
     resolve_pending,
     track_length,
+    track_queue,
     with_requester,
 )
 from utils.paginator import PaginatorView
@@ -161,15 +163,9 @@ class Music(SessionMixin, commands.Cog):
         color = await get_guild_embed_color(interaction.guild_id)
         embed = await self._queue_query(player, query, color, requester=interaction.user.id)
 
-        # Idle with an empty queue, enqueue put the track behind a pending tail,
-        # so its head is resolved to have something to start.
-        if not player.playing and player.queue.is_empty:
-            await fill_queue(player)
-
         # The manager cog announces the track itself once playback starts, so
         # nothing is echoed here beyond the queue confirmation.
-        if not player.playing:
-            await player.play(player.queue.get())
+        await play_next(player)
 
         await self._reply(interaction, embed, elsewhere)
 
@@ -186,7 +182,7 @@ class Music(SessionMixin, commands.Cog):
         # With nothing queued this is exactly what /play does, so gating it would
         # be stricter than /play for the same result. Cutting ahead of tracks
         # other people queued is the part that needs the role.
-        if player.playing or queued_tracks(player):
+        if player.playing or track_queue(player).upcoming:
             await require_dj(interaction, player)
 
         player.home = interaction.channel
@@ -196,8 +192,7 @@ class Music(SessionMixin, commands.Cog):
             player, query, color, requester=interaction.user.id, front=True
         )
 
-        if not player.playing:
-            await player.play(player.queue.get())
+        await play_next(player)
 
         await self._reply(interaction, embed, elsewhere)
 
@@ -239,28 +234,22 @@ class Music(SessionMixin, commands.Cog):
 
         if isinstance(results, wavelink.Playlist):
             tracks = [with_requester(track, requester) for track in results.tracks]
-            if front:
-                # Ascending indices, so the playlist keeps its own order while
-                # sitting ahead of everything already queued.
-                for offset, track in enumerate(tracks):
-                    player.queue.put_at(offset, track)
-            else:
-                enqueue(player, tracks)
+            first = track_queue(player).add(tracks, front=front)
             added = len(tracks)
             return discord.Embed(
                 title="Playlist up next" if front else "Playlist queued",
-                description=f"**{results.name}**\n{added} track{'s' if added != 1 else ''} added.",
+                description=(
+                    f"`{number_span(first, added)}.` **{results.name}**\n"
+                    f"{added} track{'s' if added != 1 else ''} added."
+                ),
                 color=color,
             )
 
         track = with_requester(results[0], requester)
-        if front:
-            player.queue.put_at(0, track)
-        else:
-            enqueue(player, [track])
+        first = track_queue(player).add([track], front=front)
         embed = discord.Embed(
             title="Playing next" if front else "Queued",
-            description=format_track(track),
+            description=format_numbered(first, track),
             color=color,
         )
         if track.artwork:
@@ -278,20 +267,13 @@ class Music(SessionMixin, commands.Cog):
         front: bool = False,
     ) -> discord.Embed:
         """Queues a Spotify link, which carries metadata the node can't stream."""
-        # An album or playlist is resolved a few tracks at a time as the queue
-        # drains, which only ever appends. Inserting one would mean resolving all
-        # of it up front, so the link is refused rather than played out of order.
-        # Checked before the fetch, since the URL already says which kind it is.
-        if front and kind != "track":
-            raise UserError(f"I can only insert a single track. Use `/play` for a Spotify {kind}.")
-
         entity = await fetch_entity(self.session, kind, identifier)
         if entity is None:
             raise UserError("Couldn't read that Spotify link. Searching by name still works.")
         if not entity.tracks:
             raise UserError("That Spotify link has no tracks.")
 
-        if front or entity.kind == "track":
+        if entity.kind == "track":
             # One track, so it is resolved here like a Tidal one rather than
             # through the pending queue, which exists to spread a long playlist
             # out. The reply then names the track that was actually found.
@@ -300,33 +282,36 @@ class Music(SessionMixin, commands.Cog):
                 raise UserError(f"Couldn't find a playable version of **{entity.name}**.")
 
             resolved = with_requester(resolved, requester)
-            if front:
-                player.queue.put_at(0, resolved)
-            else:
-                enqueue(player, [resolved])
+            first = track_queue(player).add([resolved], front=front)
             embed = discord.Embed(
                 title="Playing next" if front else "Queued",
-                description=format_track(resolved),
+                description=format_numbered(first, resolved),
                 color=color,
             )
             if resolved.artwork:
                 embed.set_thumbnail(url=resolved.artwork)
             return embed
 
-        pending_tracks(player).extend(with_requester(track, requester) for track in entity.tracks)
+        queue = track_queue(player)
+        first = queue.add_batch([with_requester(track, requester) for track in entity.tracks], front=front)
 
         # Only enough to start playing is resolved here. The rest follows as the
         # queue drains, from the manager cog's track start handler.
-        added = await fill_queue(player)
-        if not added and not player.playing and player.queue.is_empty:
+        await fill_queue(player)
+        if not player.playing and queue.next_index() is None:
             raise UserError(f"Couldn't find a playable version of anything in **{entity.name}**.")
 
         count = len(entity.tracks)
-        description = f"**{entity.name}**\n{count} track{'s' if count != 1 else ''} added."
+        description = (
+            f"`{number_span(first, count)}.` **{entity.name}**\n"
+            f"{count} track{'s' if count != 1 else ''} added."
+        )
         if count == MUSIC_SPOTIFY_LIMIT:
             description += f"\nSpotify lists at most {MUSIC_SPOTIFY_LIMIT}, so a longer one is cut short."
         embed = discord.Embed(
-            title=f"{entity.kind.capitalize()} queued", description=description, color=color
+            title=f"{entity.kind.capitalize()} {'up next' if front else 'queued'}",
+            description=description,
+            color=color,
         )
         if entity.artwork:
             embed.set_thumbnail(url=entity.artwork)
@@ -369,14 +354,11 @@ class Music(SessionMixin, commands.Cog):
             raise UserError(f"Couldn't find a playable version of **{pending.title}**.")
 
         resolved = with_requester(resolved, requester)
-        if front:
-            player.queue.put_at(0, resolved)
-        else:
-            enqueue(player, [resolved])
+        first = track_queue(player).add([resolved], front=front)
 
         embed = discord.Embed(
             title="Playing next" if front else "Queued",
-            description=format_track(resolved),
+            description=format_numbered(first, resolved),
             color=color,
         )
         if resolved.artwork:
@@ -394,11 +376,6 @@ class Music(SessionMixin, commands.Cog):
         front: bool = False,
     ) -> discord.Embed:
         """Queues a Tidal album or playlist, which only the API can list."""
-        # Same as a Spotify collection: inserting one would mean playing it out
-        # of order, so it is refused first, since credentials wouldn't help.
-        if front:
-            raise UserError(f"I can only insert a single track. Use `/play` for a Tidal {kind}.")
-
         if not api_configured():
             raise UserError(
                 f"I need Tidal API credentials to read a {kind}. Single tracks and "
@@ -411,22 +388,28 @@ class Music(SessionMixin, commands.Cog):
         if not collection.tracks:
             raise UserError(f"That Tidal {kind} has no tracks.")
 
-        pending_tracks(player).extend(with_requester(track, requester) for track in collection.tracks)
+        queue = track_queue(player)
+        first = queue.add_batch([with_requester(track, requester) for track in collection.tracks], front=front)
 
-        added = await fill_queue(player)
-        if not added and not player.playing and player.queue.is_empty:
+        await fill_queue(player)
+        if not player.playing and queue.next_index() is None:
             raise UserError(
                 f"Couldn't find a playable version of anything in **{collection.name}**."
             )
 
         count = len(collection.tracks)
-        description = f"**{collection.name}**\n{count} track{'s' if count != 1 else ''} added."
+        description = (
+            f"`{number_span(first, count)}.` **{collection.name}**\n"
+            f"{count} track{'s' if count != 1 else ''} added."
+        )
         if collection.total > count:
             # Unlike Spotify, the real length is known, so it is named rather
             # than hinted at.
             description += f"\nThe first {count} of {collection.total}, which is as many as I take."
         embed = discord.Embed(
-            title=f"{kind.capitalize()} queued", description=description, color=color
+            title=f"{kind.capitalize()} {'up next' if front else 'queued'}",
+            description=description,
+            color=color,
         )
         if collection.artwork:
             embed.set_thumbnail(url=collection.artwork)
@@ -513,44 +496,35 @@ class Music(SessionMixin, commands.Cog):
             )
             return
 
-        # Positions count everything queued, numbered as /queue prints them, so
-        # the track playing is skipped by leaving this empty rather than by
-        # asking for position 0.
-        resolved = list(player.queue)
-        pending = pending_tracks(player)
-        tail = list(pending)
-        tracks = resolved + tail
-        if not tracks:
+        # Numbers as /queue prints them. The track playing can be named too, but
+        # nothing before it, which has already played.
+        queue = track_queue(player)
+        number = queue.cursor + 1 if player.current else queue.cursor + 2
+        if number > len(queue.tracks):
             raise UserError("The queue is empty, so there's nothing in it to skip.")
 
         try:
             positions = parse_number_spec(
-                position, noun="queue position", maximum=len(tracks)
+                position, noun="queue position", maximum=len(queue.tracks)
             )
         except ValueError as e:
             raise UserError(str(e))
 
-        removed = [tracks[index - 1] for index in positions]
+        if positions[0] < number:
+            raise UserError(f"Track {positions[0]} has already played.")
 
-        # Both rebuilt rather than deleted in place, where every removal would
-        # shift the positions after it. Nothing is awaited, so neither is
-        # observed half rebuilt. A track fill_queue is resolving right now has
-        # already left the deque, so skipping it does nothing.
+        removed = [queue.tracks[index - 1] for index in positions]
+
+        # Rebuilt rather than deleted in place, where every removal would shift
+        # the positions after it.
         dropping = set(positions)
-        # Left alone when only the tail is affected, so dropping a track nowhere
-        # near the queue doesn't disturb what loop mode is tracking.
-        if positions[0] <= len(resolved):
-            player.queue.clear()
-            for index, track in enumerate(resolved, 1):
-                if index not in dropping:
-                    player.queue.put(track)
-
-        keeping = [
-            track for offset, track in enumerate(tail)
-            if len(resolved) + offset + 1 not in dropping
-        ]
-        pending.clear()
-        pending.extend(keeping)
+        queue.set_upcoming([
+            track for index, track in enumerate(queue.upcoming, queue.cursor + 2)
+            if index not in dropping
+        ])
+        # Only stopped, so it keeps its number like any other played track.
+        if player.current and queue.cursor + 1 in dropping:
+            await player.skip(force=True)
 
         if len(removed) == 1:
             description = f"Skipped {format_track(removed[0], with_author=False)}"
@@ -558,24 +532,18 @@ class Music(SessionMixin, commands.Cog):
             # Capped at a page's worth, or a long range would overflow the embed.
             listed = removed[:MUSIC_QUEUE_PAGE_SIZE]
             lines = "\n".join(f"- {format_track(track, with_author=False)}" for track in listed)
-            description = f"Skipped **{len(removed)}** queued tracks.\n{lines}"
+            description = f"Skipped **{len(removed)}** tracks.\n{lines}"
             if len(removed) > len(listed):
                 description += f"\n- and {len(removed) - len(listed)} more"
 
         await self._reply(interaction, await guild_embed(interaction.guild_id, description), await self._elsewhere(interaction))
 
-        # Skipping the resolved stretch leaves the queue short, or empty. Nothing
-        # else refills it: an empty queue never starts a track, so no track
-        # start arrives to do it and the tail is stranded.
+        # Dropping the next track can leave a pending one next instead.
         # Last, since it searches, and the reply shouldn't wait on it.
         await fill_queue(player)
 
-    @skip.autocomplete("position")
-    async def skip_autocomplete(self, interaction: discord.Interaction, current: str):
-        player = active_player(interaction.guild)
-        if player is None:
-            return []
-
+    def _position_choices(self, queue: TrackQueue, start: int, current: str) -> list:
+        """Autocomplete for a queue position, listing tracks from index start."""
         current = current.strip()
         # A range or list is typed by hand, and there is no single position to
         # suggest for one.
@@ -583,7 +551,7 @@ class Music(SessionMixin, commands.Cog):
             return []
 
         choices = []
-        for index, track in enumerate(queued_tracks(player), 1):
+        for index, track in enumerate(queue.tracks[start:], start + 1):
             if current and not str(index).startswith(current):
                 continue
 
@@ -596,6 +564,79 @@ class Music(SessionMixin, commands.Cog):
             if len(choices) >= MUSIC_AUTOCOMPLETE_LIMIT:
                 break
         return choices
+
+    @skip.autocomplete("position")
+    async def skip_autocomplete(self, interaction: discord.Interaction, current: str):
+        player = active_player(interaction.guild)
+        if player is None:
+            return []
+
+        queue = track_queue(player)
+        start = queue.cursor if player.current else queue.cursor + 1
+        return self._position_choices(queue, start, current)
+
+    @app_commands.command(name="move", description="Move queued tracks to another position")
+    @app_commands.describe(
+        position="A queue position, range or list like 3, 2-5 or 1,4,7-9",
+        to="The position they move to, in order from there",
+    )
+    async def move(self, interaction: discord.Interaction, position: str, to: int):
+        player = require_player(interaction)
+        await require_dj(interaction, player)
+
+        queue = track_queue(player)
+        upcoming = queue.upcoming
+        if not upcoming:
+            raise UserError("The queue is empty, so there's nothing in it to move.")
+
+        try:
+            positions = parse_number_spec(
+                position, noun="queue position", maximum=len(queue.tracks)
+            )
+        except ValueError as e:
+            raise UserError(str(e))
+
+        # Only what hasn't started can move, on either side of the move.
+        lowest = queue.cursor + 2
+        if positions[0] < lowest:
+            raise UserError(f"Track {positions[0]} has already started, so it can't be moved.")
+
+        highest = len(queue.tracks) - len(positions) + 1
+        if not lowest <= to <= highest:
+            raise UserError(f"That can only go from position {lowest} to {highest}.")
+
+        span = number_span(to, len(positions))
+        if positions == list(range(to, to + len(positions))):
+            raise UserError(f"That's already at position {span}.")
+
+        moving = [queue.tracks[index - 1] for index in positions]
+        dropping = set(positions)
+        order = [
+            track for index, track in enumerate(upcoming, lowest)
+            if index not in dropping
+        ]
+        order[to - lowest:to - lowest] = moving
+        queue.set_upcoming(order)
+
+        if len(moving) == 1:
+            description = f"Moved {format_track(moving[0], with_author=False)} to position **{span}**."
+        else:
+            description = f"Moved **{len(moving)}** tracks to positions **{span}**."
+
+        await self._reply(interaction, await guild_embed(interaction.guild_id, description), await self._elsewhere(interaction))
+
+        # A pending track can now be next.
+        # Last, since it searches, and the reply shouldn't wait on it.
+        await fill_queue(player)
+
+    @move.autocomplete("position")
+    async def move_autocomplete(self, interaction: discord.Interaction, current: str):
+        player = active_player(interaction.guild)
+        if player is None:
+            return []
+
+        queue = track_queue(player)
+        return self._position_choices(queue, queue.cursor + 1, current)
 
     @app_commands.command(name="pause", description="Pause playback")
     async def pause(self, interaction: discord.Interaction):
@@ -626,8 +667,7 @@ class Music(SessionMixin, commands.Cog):
         player = require_player(interaction)
         await require_dj(interaction, player)
 
-        player.queue.clear()
-        pending_tracks(player).clear()
+        track_queue(player).clear()
         channel = player.channel
         await player.disconnect()
         await self._reply(
@@ -686,33 +726,23 @@ class Music(SessionMixin, commands.Cog):
         player = require_player(interaction)
         await require_dj(interaction, player)
 
-        tracks = queued_tracks(player)
+        queue = track_queue(player)
+        tracks = queue.upcoming
         if len(tracks) < 2:
             raise UserError("There aren't enough tracks queued to shuffle.")
 
-        elsewhere = await self._elsewhere(interaction)
-        embed = await guild_embed(interaction.guild_id, f"Shuffled **{len(tracks)}** tracks.")
-
-        pending = pending_tracks(player)
-        if not pending:
-            player.queue.shuffle()
-            await self._reply(interaction, embed, elsewhere)
-            return
-
-        # fill_queue searches, so this can outlast the three seconds Discord
-        # allows for a first response.
-        await interaction.response.defer(ephemeral=elsewhere is not None)
-
-        # Everything goes to the tail so a resolved track can land anywhere in
-        # the new order, not just in the stretch already resolved. fill_queue
-        # pulls the head back, and only searches for what is still pending.
         random.shuffle(tracks)
-        player.queue.clear()
-        pending.clear()
-        pending.extend(tracks)
-        await fill_queue(player)
+        queue.set_upcoming(tracks)
 
-        await self._reply(interaction, embed, elsewhere)
+        await self._reply(
+            interaction,
+            await guild_embed(interaction.guild_id, f"Shuffled **{len(tracks)}** tracks."),
+            await self._elsewhere(interaction),
+        )
+
+        # A pending track can now be next.
+        # Last, since it searches, and the reply shouldn't wait on it.
+        await fill_queue(player)
 
     @app_commands.command(name="loop", description="Set the loop mode")
     @app_commands.describe(mode="What to repeat")
@@ -725,7 +755,7 @@ class Music(SessionMixin, commands.Cog):
         player = require_player(interaction)
         await require_dj(interaction, player)
 
-        player.queue.mode = LOOP_MODES[mode.value]
+        track_queue(player).mode = LOOP_MODES[mode.value]
         await self._reply(
             interaction,
             await guild_embed(interaction.guild_id, f"Loop mode set to **{mode.name}**."),
@@ -757,12 +787,10 @@ class Music(SessionMixin, commands.Cog):
         if track.artwork:
             embed.set_thumbnail(url=track.artwork)
 
-        footer = f"Volume {player.volume}%"
+        queue = track_queue(player)
+        footer = f"Track {queue.cursor + 1} of {len(queue.tracks)} - Volume {player.volume}%"
         if player.paused:
             footer += " - paused"
-        queued = len(queued_tracks(player))
-        if queued:
-            footer += f" - {queued} track{'s' if queued != 1 else ''} queued"
         embed.set_footer(text=footer)
 
         await interaction.followup.send(embed=embed)
@@ -775,27 +803,39 @@ class Music(SessionMixin, commands.Cog):
 
         await interaction.response.defer()
 
+        queue = track_queue(player)
         header = ""
         if player.current:
-            header = f"**Now playing**\n{format_track(player.current)}\n\n"
+            header = f"**Now playing**\n{format_numbered(queue.cursor + 1, player.current)}\n\n"
 
-        tracks = queued_tracks(player)
+        def page(title: str, start: int, end: int) -> str:
+            lines = [
+                format_numbered(index + 1, queue.tracks[index])
+                for index in range(start, end)
+            ]
+            # The header repeats on every page so a page reads on its own.
+            return f"{header}{title}\n" + "\n".join(lines)
 
-        if not tracks:
-            pages = [f"{header}**Up next**\nThe queue is empty."]
-        else:
-            pages = []
-            for start in range(0, len(tracks), MUSIC_QUEUE_PAGE_SIZE):
-                chunk = tracks[start:start + MUSIC_QUEUE_PAGE_SIZE]
-                lines = [
-                    f"`{start + offset + 1}.` {format_track(track)}"
-                    for offset, track in enumerate(chunk)
-                ]
-                # The header repeats on every page so a page reads on its own.
-                pages.append(f"{header}**Up next** ({len(tracks)} total)\n" + "\n".join(lines))
+        # Split at the current track, so the page opened on is what's playing and
+        # what follows it. Played pages count back from it, so the one before
+        # holds the most recent and only the very first can run short.
+        played = queue.cursor if player.current else queue.cursor + 1
+        pages = [
+            page(f"**Played** ({played})", max(0, end - MUSIC_QUEUE_PAGE_SIZE), end)
+            for end in range(played, 0, -MUSIC_QUEUE_PAGE_SIZE)
+        ][::-1]
+        start_page = len(pages)
+
+        first = queue.cursor + 1
+        left = len(queue.tracks) - first
+        if not left:
+            pages.append(f"{header}**Up next**\nThe queue is empty.")
+        for start in range(first, len(queue.tracks), MUSIC_QUEUE_PAGE_SIZE):
+            end = min(start + MUSIC_QUEUE_PAGE_SIZE, len(queue.tracks))
+            pages.append(page(f"**Up next** ({left} left)", start, end))
 
         color = await get_guild_embed_color(interaction.guild_id)
-        view = PaginatorView(pages, color)
+        view = PaginatorView(pages, color, start_page=start_page)
         view.message = await interaction.followup.send(view=view)
 
 
