@@ -33,9 +33,8 @@ _NEXT_DATA_RE = re.compile(
 )
 _TIMEOUT = aiohttp.ClientTimeout(total=10)
 
-# Spotify's chain roots at Certainly, a CA young enough to be missing from a
-# Windows store that isn't updating its roots, where older ones are cached and
-# work. Verifying against certifi's bundle instead doesn't depend on the host.
+# Python only sees roots already in the Windows store, and the host's store has
+# lacked the root of Spotify's chain. certifi's bundle doesn't depend on the host.
 _SSL = ssl.create_default_context(cafile=certifi.where())
 
 

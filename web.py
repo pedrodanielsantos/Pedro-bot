@@ -529,7 +529,7 @@ async def start(supervisor, web_state):
         logger.info(f"Web server (epoch {epoch}) stopped.")
     except SystemExit:
         # uvicorn reacts to a failed bind (e.g. the old server hasn't released the port
-        # yet) with sys.exit(1). SystemExit is a BaseException, so asyncio won't swallow
+        # yet) with sys.exit(3). SystemExit is a BaseException, so asyncio won't swallow
         # it like a normal task error. Left unguarded, it would escape this background
         # task and take the whole run.py process down with it.
         logger.error("Web server failed to start: port 8000 still in use.")
