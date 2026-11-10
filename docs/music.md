@@ -89,7 +89,14 @@ This is the part that breaks, not the infrastructure. Three settings in
   `Loaded playlist Search results for` line after it.
 
 SoundCloud and Bandcamp are native Lavalink sources that never touch this path,
-so they make a good control test.
+so a direct link to a track on either makes a good control test. Use a link
+rather than a search, since neither search is dependable:
+
+- `scsearch` throws `Did not detect any supported formats` whenever one of its
+  results is a track SoundCloud has moved to AAC (see [Retrying](#retrying)). A
+  link to such a track fails too, so try a second one before blaming the node.
+- `bcsearch` comes back empty, since Bandcamp serves its search page behind a
+  bot check.
 
 ### Diagnosing failures
 
