@@ -22,7 +22,7 @@ plugins:
     #
     # MUSIC only serves ytmsearch: it loads no links, music.youtube.com ones
     # included, and does not stream, so it cannot be the only entry.
-    # ANDROID_MUSIC and the TV clients return Opus, which passes through to
+    # ANDROID_MUSIC and TVHTML5_SIMPLY return Opus, which passes through to
     # Discord without transcoding.
     #
     # Known failure modes seen here: WEB returns SABR-only responses with no
@@ -30,18 +30,41 @@ plugins:
     # WEBEMBEDDED reports "Video player configuration error". They are kept as
     # last resorts since they cost nothing once an earlier client succeeds.
     #
-    # ANDROID is the one left out: broken upstream with no known fix, which the
-    # plugin warns about on every start.
+    # Two are left out. ANDROID is broken upstream with no known fix, which the
+    # plugin warns about on every start. TV only plays when signed in, which
+    # needs the plugin's OAuth flow and an account.
     clients:
       - MUSIC
       - ANDROID_MUSIC
       - TVHTML5_SIMPLY
-      - TV
       - IOS
       - MWEB
       - WEB
       - WEBEMBEDDED
       - ANDROID_VR
+    # A ytsearch stops at the first client that answers, even with no tracks,
+    # and with search on for every client each ytsearch came back empty. With
+    # it off on the clients that take a ytsearch ahead of WEB, results come
+    # back, and the order above can stay as playback needs it. See
+    # https://github.com/lavalink-devs/youtube-source/issues/250
+    clientOptions:
+      ANDROID_MUSIC:
+        searching: false
+      TVHTML5_SIMPLY:
+        searching: false
+      IOS:
+        searching: false
+      MWEB:
+        searching: false
+    # Deciphers stream URLs on a yt-cipher server instead of in the plugin,
+    # whose own pattern matching fails on the current player script with
+    # "must find sig function". Stream URLs are sent to this server.
+    #
+    # This is yt-cipher's public instance: no password, 10 requests/s, no
+    # uptime guarantee. To self-host, see https://github.com/kikkia/yt-cipher,
+    # point url at it and add its password here if one is set.
+    remoteCipher:
+      url: "https://cipher.kikkia.dev/"
 
   lavasrc:
     # Where a track is actually streamed from once LavaSrc has resolved its

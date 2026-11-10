@@ -60,7 +60,7 @@ password and stays on the host.
 
 ## YouTube extraction
 
-This is the part that breaks, not the infrastructure. Two settings in
+This is the part that breaks, not the infrastructure. Three settings in
 `application.yml` matter:
 
 - **`youtube-plugin` is a snapshot dependency**, not a shipped jar, because
@@ -69,13 +69,24 @@ This is the part that breaks, not the infrastructure. Two settings in
   [here](https://maven.lavalink.dev/snapshots/dev/lavalink/youtube/youtube-plugin/).
   Only one copy may be installed: delete any `plugins/youtube-plugin-*.jar`
   before starting.
-- **Every client but `ANDROID` is listed**, ordered by how likely each is to
-  return a plain HTTPS URL. Which ones work varies by IP and region, and a
+- **Every client but `ANDROID` and `TV` is listed**, ordered by how likely each
+  is to return a plain HTTPS URL. Which ones work varies by IP and region, and a
   failing client costs one request, so a short list risks losing playback
   entirely. `ANDROID` is left out because the plugin reports it broken, with no
-  known fix, on every start. `MUSIC` only serves `ytmsearch`: it loads no links,
-  `music.youtube.com` ones included, and doesn't stream, so it can never be the
-  only client.
+  known fix, on every start. `TV` only plays when signed in, which needs the
+  plugin's OAuth flow and an account. `MUSIC` only serves `ytmsearch`: it loads
+  no links, `music.youtube.com` ones included, and doesn't stream, so it can
+  never be the only client.
+- **Search is turned off on `ANDROID_MUSIC`, `TVHTML5_SIMPLY`, `IOS` and
+  `MWEB`** under `clientOptions`, the clients that take a `ytsearch` ahead of
+  `WEB`. A `ytsearch` stops at the first client that answers, even with no
+  tracks, instead of trying the next
+  ([youtube-source#250](https://github.com/lavalink-devs/youtube-source/issues/250)),
+  and with search on for every client each `ytsearch` came back empty. A client
+  with search off is skipped, and with these four off results come back.
+  Lavalink logs nothing for an empty result, so the only sign is a
+  `Got request to load for identifier "ytsearch:..."` line with no
+  `Loaded playlist Search results for` line after it.
 
 SoundCloud and Bandcamp are native Lavalink sources that never touch this path,
 so they make a good control test.
@@ -128,15 +139,19 @@ lavalink.LocalSignatureCipherManager: Problematic YouTube player script
   plays normally. The line returns whenever the cached script is refreshed and
   still doesn't match.
 
-If deciphering becomes load-bearing, because the clients that need no signature
-stop returning direct URLs, the fix is a remote cipher server. Setting
+The template avoids it with a remote cipher server. Setting
 `plugins.youtube.remoteCipher` (`url`, `password`, `userAgent`) swaps
-`LocalSignatureCipherManager` for `RemoteCipherManager`, which posts the
-signature to a service that executes the player script instead of pattern
-matching it. [yt-cipher](https://github.com/kikkia/yt-cipher) is the one upstream
-recommends, self-hosted or via its public instance. Check the script variant
-first: yt-cipher documents that only the `IAS` variants consistently work, and
-the URL above is the embed variant.
+`LocalSignatureCipherManager` for `RemoteCipherManager`, which posts each stream
+URL and the player script's address to a service that resolves it, instead of
+pattern matching the script itself. No account is involved.
+
+The template points at the public instance of
+[yt-cipher](https://github.com/kikkia/yt-cipher), a wrapper around yt-dlp's
+JavaScript solver. That instance takes no password, is limited to 10 requests a
+second and does not guarantee uptime. To self-host it, run it with Docker or
+Deno, set `url` to it, and add its `password` if one is set. yt-cipher documents
+that only the `IAS` script variants consistently work and has a setting to force
+one, where the script the plugin fetches is the embed variant.
 
 ## The queue
 
