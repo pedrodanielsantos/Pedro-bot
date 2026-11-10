@@ -234,6 +234,13 @@ _QUIET_NODE_LOGGERS = frozenset({
     "lavalink.LocalAudioTrackExecutor",
 })
 
+# A stack frame in a Java trace: "\tat pkg.Class.method(File.java:1)" or
+# "\t... 65 common frames omitted". Dropped under a WARNING or ERROR from any
+# other node logger, which keeps the exception and "Caused by:" lines. A failed
+# load prints about 80 of these, most from the HTTP server libraries the node
+# is built on (Undertow, Spring) rather than its audio code.
+_TRACE_FRAME_RE = re.compile(r"^\s+(?:at |\.\.\. \d+ )")
+
 # Rewrites applied to a node line's message before it reaches the console. The
 # line is kept, only the matched value is replaced; the node's own logs/ files
 # are untouched.
@@ -270,6 +277,9 @@ class LavalinkSupervisor(ProcessSupervisor):
         # Whether the last prefixed line was dropped, so its unprefixed
         # continuation lines can be dropped with it. See format_line().
         self._dropping = False
+        # Whether the last prefixed line was a WARNING or ERROR, so the stack
+        # frames under it can be dropped.
+        self._trimming = False
 
         # The readiness probe targets whatever LAVALINK_URI points at, so changing
         # the port in application.yml and .env doesn't leave it polling the old one.
@@ -305,15 +315,20 @@ class LavalinkSupervisor(ProcessSupervisor):
     def format_line(self, line):
         """Restates a Spring Boot log line in the bot's own console format, so the
         node's output reads as part of the same log instead of a second one pasted
-        in. Anything that doesn't match (the startup banner, stack traces) is left
-        exactly as printed, and _REDACTIONS is applied to whatever does match.
-        Returns None for a line dropped as noise."""
+        in. Anything that doesn't match (the startup banner, a trace's exception
+        lines) is left exactly as printed, and _REDACTIONS is applied to whatever
+        does match. Returns None for a line dropped as noise."""
         match = _SPRING_LINE_RE.match(line)
         if not match:
-            # A stack trace frame or a blank line inside one. These carry no
+            # A stack trace line or a blank line inside one. These carry no
             # prefix of their own, so they belong to whichever prefixed line came
             # last and are kept or dropped with it.
-            return None if self._dropping else line
+            if self._dropping:
+                return None
+            # Under a kept WARNING or ERROR, only the frames and blanks go.
+            if self._trimming and (not line.strip() or _TRACE_FRAME_RE.match(line)):
+                return None
+            return line
 
         # WARN -> WARNING keeps the level names, and so the colors, in step with
         # logging's own. The logger is cut to its last segment and namespaced, so
@@ -323,7 +338,9 @@ class LavalinkSupervisor(ProcessSupervisor):
         name = f"lavalink.{match['logger'].rsplit('.', 1)[-1]}"
 
         # At DEBUG the whole cause chain is the point, so nothing is dropped.
-        self._dropping = name in _QUIET_NODE_LOGGERS and not logger.isEnabledFor(logging.DEBUG)
+        debug = logger.isEnabledFor(logging.DEBUG)
+        self._dropping = name in _QUIET_NODE_LOGGERS and not debug
+        self._trimming = level in ("WARNING", "ERROR") and not debug
         if self._dropping:
             return None
         return color_log_line(timestamp, level, name, _redact(match["msg"]))

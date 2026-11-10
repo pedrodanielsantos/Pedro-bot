@@ -537,6 +537,12 @@ async def search_matching(
     for source in sources:
         try:
             results = await wavelink.Playable.search(query, source=source)
+        except wavelink.LavalinkLoadException as e:
+            # The node reported the failure and logs the cause itself, so the
+            # traceback only shows the call that asked.
+            logger.warning(f"Search on {source} failed for {query!r}: {e.error}")
+            logger.debug(f"Traceback for the {source} search:", exc_info=True)
+            continue
         except Exception:
             logger.warning(f"Search on {source} failed for {query!r}", exc_info=True)
             continue

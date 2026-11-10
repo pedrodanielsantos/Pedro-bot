@@ -442,10 +442,14 @@ class Music(SessionMixin, commands.Cog):
                     # so it's only worth a line when chasing latency.
                     logger.debug(f"Autocomplete for {current!r} outran its {budget:.1f}s budget")
                     results = None
-                except Exception:
+                except wavelink.LavalinkLoadException as e:
                     # No error surface here, so a node failure shows as no
                     # suggestions rather than a failed interaction. Logged, or
                     # it's invisible.
+                    logger.warning(f"Autocomplete search failed for {current!r}: {e.error}")
+                    logger.debug("Traceback for the autocomplete search:", exc_info=True)
+                    results = None
+                except Exception:
                     logger.warning(f"Autocomplete search failed for {current!r}", exc_info=True)
                     results = None
             # Beats an empty list while the real search is still on its way.

@@ -108,6 +108,12 @@ console: the other two are filtered by `_QUIET_NODE_LOGGERS` in
 [`utils/log.py`](../utils/log.py). Set `LOG_LEVEL=DEBUG` in `.env` to get the
 per-client reasons back. The node's own `logs/` keep the full trace either way.
 
+Any other warning or error from the node keeps its line and loses only its
+stack frames, which leaves the exception and each `Caused by:` under it. For a
+failed search that is the node's error, then one line from the bot carrying the
+node's message. `LOG_LEVEL=DEBUG` restores the frames and adds the bot's own
+traceback.
+
 At `INFO`, each failed track gets one line:
 
 | Level | Meaning |
