@@ -17,6 +17,7 @@
 
 | Command | Description |
 | --- | --- |
+| `/clear` | Stop playback and clear the queue, without leaving |
 | `/insert` | Add a track to the front of the queue |
 | `/loop` | Set the loop mode |
 | `/move` | Move queued tracks to another position |

@@ -399,6 +399,7 @@ class MusicManager(commands.Cog):
         # Stays valid through the search, since only what follows the cursor moves.
         queue = track_queue(player)
         index = queue.cursor
+        clears = queue.clears
 
         # Every id that has failed on this player, so a repeated search walks past
         # them to the next candidate. A stand-in is not added until it fails too,
@@ -434,6 +435,11 @@ class MusicManager(commands.Cog):
         log(f"Could not play {track.title!r} ({_track_ref(track)}): {detail}, {outcome}")
 
         if not player.connected:
+            return
+
+        # A /clear dropped the track, before or during the search, so its index
+        # is gone and nothing stands in for it.
+        if index < 0 or queue.clears != clears:
             return
 
         title, author = _original(track)

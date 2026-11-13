@@ -666,6 +666,30 @@ class Music(SessionMixin, commands.Cog):
         await player.pause(False)
         await self._reply(interaction, await guild_embed(interaction.guild_id, "Resumed."), await self._elsewhere(interaction))
 
+    @app_commands.command(name="clear", description="Stop playback and clear the queue, without leaving")
+    async def clear(self, interaction: discord.Interaction):
+        player = require_player(interaction)
+        await require_dj(interaction, player)
+
+        queue = track_queue(player)
+        if not queue.tracks and not player.current:
+            raise UserError("The queue is already empty.")
+
+        # Emptied first, so the track end the skip causes finds nothing to play.
+        queue.clear()
+        if player.current:
+            await player.skip(force=True)
+        # After the skip, so nothing is heard in between. A pause left on would
+        # carry over to the next /play.
+        if player.paused:
+            await player.pause(False)
+
+        await self._reply(
+            interaction,
+            await guild_embed(interaction.guild_id, "Stopped playback and cleared the queue."),
+            await self._elsewhere(interaction),
+        )
+
     @app_commands.command(name="stop", description="Stop playback, clear the queue and leave")
     async def stop(self, interaction: discord.Interaction):
         player = require_player(interaction)
@@ -676,7 +700,7 @@ class Music(SessionMixin, commands.Cog):
         await player.disconnect()
         await self._reply(
             interaction,
-            await guild_embed(interaction.guild_id, "Stopped and cleared the queue."),
+            await guild_embed(interaction.guild_id, f"Stopped playback and left {channel.mention}."),
             await self._elsewhere(interaction),
         )
         logger.info(f"Left voice channel {channel.id} in guild {interaction.guild_id}.")

@@ -172,7 +172,7 @@ one, where the script the plugin fetches is the embed variant.
 session in play order, played ones included, with a cursor on the current or
 last played track. A track's number is its index + 1, so playback never changes
 it, and only the commands below do. The queue lives on the player, so numbers
-only reset when the bot leaves.
+only reset on `/clear` or when the bot leaves.
 
 Wavelink's own `Queue` goes unused. `player.queue` stays empty and every track is
 played with `add_history=False`. Its queue and history can't hold a
@@ -186,6 +186,12 @@ played with `add_history=False`. Its queue and history can't hold a
 | `/insert` | Later tracks move back |
 | `/move` | Tracks between the two positions shift |
 | `/shuffle` | Reassigned, for tracks after the current one |
+| `/clear` | Reset, the next track queued is 1 |
+
+`/clear` stops the current track and empties the queue, played rows included,
+but stays in the channel with the volume and loop mode as they were, and lifts a
+pause. `/stop` also leaves, which discards the player. A cleared player still
+leaves by itself after `MUSIC_IDLE_TIMEOUT` seconds with nothing playing.
 
 `/skip` takes the current track's number or any later one, and skipping the
 current track leaves it listed as played. `/move` only takes tracks after the
@@ -323,11 +329,12 @@ depth and requester, so a stand-in for a stand-in still names what was queued.
 ### Command replies
 
 Commands work in any channel. With a music channel set, the ones that change
-playback (`/play`, `/insert`, `/skip`, `/move`, `/pause`, `/resume`, `/stop`,
-`/shuffle`, `/loop`, `/seek`, and `/volume` with a value) reply privately when
-run elsewhere, and post a public copy in the music channel. Run inside it, or
-with none set, they reply publicly in place. `/queue`, `/nowplaying` and
-`/volume` without a value only report, so they always reply in place.
+playback (`/play`, `/insert`, `/skip`, `/move`, `/pause`, `/resume`, `/clear`,
+`/stop`, `/shuffle`, `/loop`, `/seek`, and `/volume` with a value) reply
+privately when run elsewhere, and post a public copy in the music channel. Run
+inside it, or with none set, they reply publicly in place. `/queue`,
+`/nowplaying` and `/volume` without a value only report, so they always reply in
+place.
 
 The copy names the caller in a "Requested by" footer, since a message the bot
 sends itself has none of the "used /command" header Discord puts on a reply.

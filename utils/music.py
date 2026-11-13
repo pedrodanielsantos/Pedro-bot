@@ -625,6 +625,7 @@ class TrackQueue:
         self.cursor = -1
         self.mode = wavelink.QueueMode.normal
         self.batches = 0
+        self.clears = 0
 
     @property
     def upcoming(self) -> list:
@@ -665,8 +666,11 @@ class TrackQueue:
         return None
 
     def clear(self):
+        """Empties the queue and restarts its numbering. The loop mode stays."""
         self.tracks.clear()
         self.cursor = -1
+        # Lets a search that began before the clear see its index is stale.
+        self.clears += 1
 
 
 def track_queue(player: wavelink.Player) -> TrackQueue:
@@ -754,7 +758,8 @@ async def play_next(player: wavelink.Player, *, repeat: bool = False):
         return
 
     queue = track_queue(player)
-    if repeat and queue.mode is wavelink.QueueMode.loop:
+    # No cursor after a /clear, so there is no track to repeat.
+    if repeat and queue.mode is wavelink.QueueMode.loop and queue.cursor >= 0:
         await player.play(queue.tracks[queue.cursor], add_history=False)
         return
 
