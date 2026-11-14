@@ -1,7 +1,6 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-import asyncio
 import io
 import logging
 from typing import Optional
@@ -16,8 +15,6 @@ logger = logging.getLogger("image")
 
 JEYY_API_KEY = os.getenv("JEYY_API_KEY")
 JEYY_BASE_URL = "https://api.jeyy.xyz/v2/image"
-JEYY_MAX_ATTEMPTS = 3
-JEYY_RETRY_BACKOFF = 2.0  # seconds, doubles each retry: 2s, 4s
 
 COMMON_IMAGE_DESCRIBE = {
     "user": "User whose avatar to use as image",
@@ -103,19 +100,11 @@ class image(SessionMixin, commands.GroupCog, group_name="image"):
         headers = {"Authorization": f"Bearer {JEYY_API_KEY}"}
         url = f"{JEYY_BASE_URL}/{endpoint}"
 
-        for attempt in range(JEYY_MAX_ATTEMPTS):
-            async with self.session.get(url, params=params, headers=headers) as response:
-                if response.status >= 500 and attempt < JEYY_MAX_ATTEMPTS - 1:
-                    delay = JEYY_RETRY_BACKOFF * (2 ** attempt)
-                    logger.warning(
-                        f"JeyyAPI {endpoint} returned {response.status}, "
-                        f"retrying in {delay:.0f}s (attempt {attempt + 1}/{JEYY_MAX_ATTEMPTS})"
-                    )
-                    await asyncio.sleep(delay)
-                    continue
-                response.raise_for_status()
-                data = await response.read()
-                break
+        async with self.session.get(url, params=params, headers=headers) as response:
+            if not response.ok:
+                logger.warning(f"JeyyAPI {endpoint} returned {response.status}")
+            response.raise_for_status()
+            data = await response.read()
 
         await interaction.followup.send(file=discord.File(io.BytesIO(data), filename=filename))
 
