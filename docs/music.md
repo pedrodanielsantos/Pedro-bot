@@ -207,6 +207,70 @@ tracks and count back from the current track, so only the very first page can
 run short. Now playing repeats at the top of every page, carrying its number, so
 the numbers read in sequence across the split.
 
+## Second player
+
+Discord gives a bot account one voice connection per server, so one bot plays in
+one channel per server. Setting `MUSIC_HELPER_TOKEN` in `.env` logs in a second
+account, the helper, that takes a second channel. Different servers never needed
+it: each already has its own player and queue.
+
+The helper is a bare `discord.Client` started by `music_manager` inside the bot's
+process. It registers no commands and loads no cogs. Every command still goes to
+the bot, which picks the player by the caller's voice channel:
+
+1. A player already in that channel is used, whichever account holds it.
+2. Otherwise the first free account joins, the bot before the helper.
+3. With both busy, `/play` is refused and names the channels in use.
+
+Every other command acts on the player in the caller's channel, `/queue` and
+`/nowplaying` included, so nobody outside a channel reads or changes its queue.
+
+### Setting it up
+
+1. Create a second application in the
+   [Developer Portal](https://discord.com/developers/applications) and copy its
+   bot token into `MUSIC_HELPER_TOKEN`. It needs no privileged intents.
+2. Invite it to each server that should have a second player, replacing
+   `CLIENT_ID` with the helper's:
+
+   ```
+   https://discord.com/oauth2/authorize?client_id=CLIENT_ID&scope=bot&permissions=3146752
+   ```
+
+   That grants View Channels, Connect and Speak.
+3. Restart the bot.
+
+A server the helper was not invited to keeps a single player. A rejected token
+is logged and leaves the bot running without the helper.
+
+### How the two share a node
+
+Lavalink ties a voice connection to the account whose session opened it, so each
+account opens its own `wavelink.Node` against the same Lavalink, and a player is
+created pinned to its account's node. Left to choose, Wavelink takes the node
+with the fewest players, which may belong to the other account.
+
+Wavelink dispatches a node's events on the client the node was opened as. The
+helper has no cogs, so `music_manager` attaches its own handlers to it
+(`HELPER_EVENTS`), and one set of handlers serves both accounts.
+
+Each account holds its own copy of a server. The lookups in
+[`utils/music.py`](../utils/music.py) take the bot and ask each account for its
+voice client, and anything about members (who is listening, who queued a track)
+is read from the bot's copy, since the helper is given no member list.
+
+### Who posts
+
+The bot posts everything, for the helper's player too. Discord answers a command
+as the application it was sent to, so replies can only come from the bot, and
+announcements follow them rather than switch author partway.
+
+While a server has two players, `voice_label()` adds a line linking the voice
+channel to what would otherwise not say which one it is about: "Now playing",
+a skipped track's notice, and a reply's copy in the music channel. It goes in
+the embed's description, since a title or footer shows a mention as plain text.
+With one player nothing is labelled.
+
 ## Failed tracks
 
 Not every failure is an extraction problem. A playlist can hold entries whose
@@ -334,7 +398,7 @@ playback (`/play`, `/insert`, `/skip`, `/move`, `/pause`, `/resume`, `/clear`,
 privately when run elsewhere, and post a public copy in the music channel. Run
 inside it, or with none set, they reply publicly in place. `/queue`,
 `/nowplaying` and `/volume` without a value only report, so they always reply in
-place.
+place. All of them need the caller in the player's voice channel.
 
 The copy names the caller in a "Requested by" footer, since a message the bot
 sends itself has none of the "used /command" header Discord puts on a reply.

@@ -42,6 +42,7 @@ LAVALINK_DIR=C:\lavalink             # music; where setup_lavalink.py installed 
 LAVALINK_URI=http://127.0.0.1:2333   # music; the node's address
 LAVALINK_PASSWORD=your_node_password # music; must match application.yml
 MUSIC_AUTOCOMPLETE=true              # music; optional, defaults to false, see Track suggestions
+MUSIC_HELPER_TOKEN=your_helper_token # music; optional, a second account for a second channel
 
 TIDAL_CLIENT_ID=your_tidal_client_id         # music; optional, Tidal albums and playlists
 TIDAL_CLIENT_SECRET=your_tidal_client_secret # music; optional, pairs with the id
@@ -72,6 +73,10 @@ authentication in front of it. See [Dashboard](dashboard.md).
 whether `/play` and `/insert` are synced with track suggestions at all, so
 changing it needs a restart and a sync to reach Discord. See
 [Track suggestions](music.md#track-suggestions).
+
+`MUSIC_HELPER_TOKEN` is the token of a second Discord application, which lets
+music play in two voice channels of one server. See
+[Second player](music.md#second-player).
 
 ## Bot permissions
 

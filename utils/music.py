@@ -51,17 +51,62 @@ def require_node():
         raise UserError("Music is temporarily unavailable, the audio node is offline.")
 
 
-def active_player(guild: discord.Guild | None) -> wavelink.Player | None:
-    """The guild's connected music player, if it has one.
+def music_clients(bot: discord.Client) -> list[discord.Client]:
+    """The accounts that can hold a voice connection: the bot, then its helper
+    once that one is logged in. Discord allows each one connection per guild."""
+    helper = getattr(bot, "music_helper", None)
+    if helper is None or not helper.is_ready():
+        return [bot]
+    return [bot, helper]
 
-    A guild has a single voice client, and the owner-only ç!join test connection
-    occupies the same slot without being a player. Anything that isn't one reads
-    here as nothing playing, so the music commands leave it alone.
+
+def client_node(client: discord.Client) -> wavelink.Node | None:
+    """The connected node opened as client. Lavalink ties a voice connection to
+    the account its session belongs to, so a player must use its own."""
+    for node in wavelink.Pool.nodes.values():
+        if node.client is client and node.status is wavelink.NodeStatus.CONNECTED:
+            return node
+    return None
+
+
+def guild_players(bot: discord.Client, guild: discord.Guild | None) -> list[wavelink.Player]:
+    """The guild's connected music players, at most one per account.
+
+    The owner-only ç!join test connection occupies the bot's voice slot without
+    being a player. Anything that isn't one reads here as nothing playing, so
+    the music commands leave it alone.
     """
-    player = guild.voice_client if guild else None
-    if not isinstance(player, wavelink.Player) or not player.connected:
+    players = []
+    for client in music_clients(bot):
+        # Each account holds its own copy of the guild, voice client included.
+        own = client.get_guild(guild.id) if guild else None
+        player = own.voice_client if own else None
+        if isinstance(player, wavelink.Player) and player.connected:
+            players.append(player)
+    return players
+
+
+def channel_player(bot: discord.Client, channel) -> wavelink.Player | None:
+    """The player connected to a voice channel, if there is one."""
+    for player in guild_players(bot, channel.guild):
+        if player.channel.id == channel.id:
+            return player
+    return None
+
+
+def caller_player(interaction: discord.Interaction) -> wavelink.Player | None:
+    """The player in the caller's voice channel, if there is one."""
+    voice = getattr(interaction.user, "voice", None)
+    if not voice or not voice.channel:
         return None
-    return player
+    return channel_player(interaction.client, voice.channel)
+
+
+def listeners(bot: discord.Client, player: wavelink.Player) -> list[discord.Member]:
+    """The humans in the player's channel. Read from the bot's own cache, since
+    the helper is given no member list."""
+    channel = bot.get_channel(player.channel.id)
+    return [m for m in channel.members if not m.bot] if channel else []
 
 
 def require_voice(interaction: discord.Interaction) -> discord.VoiceChannel:
@@ -73,18 +118,20 @@ def require_voice(interaction: discord.Interaction) -> discord.VoiceChannel:
 
 
 def require_player(interaction: discord.Interaction) -> wavelink.Player:
-    """The guild's active player, if the caller is allowed to command it.
+    """The player in the caller's voice channel.
 
     Being in the same channel is required so someone in another channel can't
-    skip or stop what a different group is listening to.
+    skip or stop what a different group is listening to, and with two players
+    it is also what says which one is meant.
     """
-    player = active_player(interaction.guild)
-    if player is None:
+    players = guild_players(interaction.client, interaction.guild)
+    if not players:
         raise UserError("I'm not playing anything right now.")
 
-    voice = getattr(interaction.user, "voice", None)
-    if not voice or not voice.channel or voice.channel.id != player.channel.id:
-        raise UserError(f"You must be in {player.channel.mention} to use that.")
+    player = caller_player(interaction)
+    if player is None:
+        channels = " or ".join(player.channel.mention for player in players)
+        raise UserError(f"You must be in {channels} to use that.")
 
     return player
 
@@ -95,10 +142,24 @@ async def music_channel(guild: discord.Guild) -> discord.abc.GuildChannel | None
     return guild.get_channel(channel_id) if channel_id else None
 
 
-async def announce_channel(player: wavelink.Player) -> discord.abc.Messageable | None:
+def voice_label(bot: discord.Client, player: wavelink.Player) -> str | None:
+    """A line linking the player's voice channel while the guild has two
+    players, to tell their messages apart. None with one, where there is nothing
+    to confuse. For an embed's description: a title or footer shows a mention as
+    plain text."""
+    if len(guild_players(bot, player.guild)) < 2:
+        return None
+    return f"In {player.channel.mention}"
+
+
+async def announce_channel(bot: discord.Client, player: wavelink.Player) -> discord.abc.Messageable | None:
     """Where the player's announcements go: the music channel, else wherever
-    /play or /insert last ran. Read per message, so a change applies mid-session."""
-    return await music_channel(player.guild) or getattr(player, "home", None)
+    /play or /insert last ran. Read per message, so a change applies mid-session.
+
+    Always the bot's copy of the channel, so the bot posts for the helper's
+    player too."""
+    guild = bot.get_guild(player.guild.id)
+    return (await music_channel(guild) if guild else None) or getattr(player, "home", None)
 
 
 async def require_dj(interaction: discord.Interaction, player: wavelink.Player):
@@ -115,8 +176,7 @@ async def require_dj(interaction: discord.Interaction, player: wavelink.Player):
     if permissions and permissions.manage_guild:
         return
 
-    listeners = [m for m in player.channel.members if not m.bot]
-    if listeners == [interaction.user]:
+    if listeners(interaction.client, player) == [interaction.user]:
         return
 
     if any(role.id == role_id for role in getattr(interaction.user, "roles", [])):

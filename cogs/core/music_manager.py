@@ -17,14 +17,16 @@ from db.database import get_guild_embed_color
 from utils.embeds import error_embed
 from utils.music import (
     PendingTrack,
-    active_player,
     announce_channel,
+    channel_player,
     fill_queue,
     find_replacement,
     format_track,
+    listeners,
     play_next,
     search_author,
     track_queue,
+    voice_label,
 )
 
 logger = logging.getLogger("music")
@@ -38,6 +40,18 @@ RECOVERABLE_VOICE_CLOSES = frozenset({
     wavelink.DiscordVoiceCloseType.SESSION_TIMEOUT,
     wavelink.DiscordVoiceCloseType.VOICE_SERVER_CRASHED,
 })
+
+# Wavelink dispatches a node's events on the client the node was opened as, so
+# the helper needs these handlers too. It has no cogs to carry them.
+HELPER_EVENTS = (
+    "on_wavelink_node_ready",
+    "on_wavelink_websocket_closed",
+    "on_wavelink_track_start",
+    "on_wavelink_track_end",
+    "on_wavelink_track_exception",
+    "on_wavelink_track_stuck",
+    "on_wavelink_inactive_player",
+)
 
 
 def _extras_dict(track: wavelink.Playable) -> dict:
@@ -147,6 +161,7 @@ class MusicManager(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self._helper_task = None
 
     async def cog_load(self):
         # bot.py loads cogs before bot.start(), so on first startup the bot has
@@ -154,15 +169,60 @@ class MusicManager(commands.Cog):
         # Connecting is deferred to on_ready in that case. A reload after startup
         # takes this branch instead, since on_ready won't fire again for it.
         if self.bot.is_ready():
-            await self._connect_node()
+            await self._connect_node(self.bot)
+
+        token = os.getenv("MUSIC_HELPER_TOKEN")
+        if token:
+            self._start_helper(token)
 
     @commands.Cog.listener()
     async def on_ready(self):
-        await self._connect_node()
+        await self._connect_node(self.bot)
 
-    async def _connect_node(self):
-        """Connects the pool, at most once. on_ready fires again on reconnects."""
-        if wavelink.Pool.nodes:
+    def _start_helper(self, token: str):
+        """Logs in the helper account, a second voice connection per guild.
+
+        A bare client in this process: it only holds a player. Every command
+        arrives through the bot, which also posts for it.
+        """
+        # Enough to hold a voice connection. Members are read through the bot
+        # instead, which keeps the helper off the privileged intents.
+        intents = discord.Intents.none()
+        intents.guilds = True
+        intents.voice_states = True
+        helper = discord.Client(intents=intents)
+
+        for name in HELPER_EVENTS:
+            setattr(helper, name, getattr(self, name))
+
+        async def on_ready():
+            logger.info(f"Music helper {helper.user} ready in {len(helper.guilds)} guilds")
+            await self._connect_node(helper)
+
+        helper.on_ready = on_ready
+
+        self.bot.music_helper = helper
+        self._helper_task = asyncio.create_task(self._run_helper(helper, token))
+
+    async def _run_helper(self, helper: discord.Client, token: str):
+        """Runs the helper until it is closed. Never fatal: without it the bot
+        plays in one channel per guild, as it does with no token set."""
+        try:
+            await helper.start(token)
+        except discord.LoginFailure:
+            logger.error("MUSIC_HELPER_TOKEN was rejected, the music helper is disabled")
+        except Exception:
+            logger.exception("The music helper stopped unexpectedly")
+        finally:
+            if getattr(self.bot, "music_helper", None) is helper:
+                self.bot.music_helper = None
+            if not helper.is_closed():
+                await helper.close()
+
+    async def _connect_node(self, client: discord.Client):
+        """Connects a node as client, at most once. on_ready fires again on
+        reconnects. Each account gets its own session on the same Lavalink."""
+        if any(node.client is client for node in wavelink.Pool.nodes.values()):
             return
 
         uri = os.getenv("LAVALINK_URI")
@@ -171,12 +231,14 @@ class MusicManager(commands.Cog):
         if not uri or not password:
             # Expected on a host where Lavalink was never installed. The music
             # commands report themselves as unavailable rather than erroring.
-            logger.warning("LAVALINK_URI or LAVALINK_PASSWORD is not set, music is disabled")
+            if client is self.bot:
+                logger.warning("LAVALINK_URI or LAVALINK_PASSWORD is not set, music is disabled")
             return
 
         node = wavelink.Node(
             uri=uri,
             password=password,
+            client=client,
             # Lavalink keeps the session alive across a bot restart, so a crash
             # and respawn resumes playback instead of dropping the voice call.
             resume_timeout=60,
@@ -190,7 +252,7 @@ class MusicManager(commands.Cog):
             # harmless: the node stays registered and wavelink keeps retrying in
             # the background, it just stops blocking whoever called us.
             await asyncio.wait_for(
-                wavelink.Pool.connect(nodes=[node], client=self.bot), timeout=30
+                wavelink.Pool.connect(nodes=[node]), timeout=30
             )
         except asyncio.TimeoutError:
             logger.error(
@@ -203,7 +265,16 @@ class MusicManager(commands.Cog):
             logger.error(f"Could not connect to the Lavalink node at {uri}: {e}")
 
     async def cog_unload(self):
+        # Closing the pool disconnects the players, which the helper's has to
+        # still be logged in for.
         await wavelink.Pool.close()
+
+        helper = getattr(self.bot, "music_helper", None)
+        if helper is not None:
+            self.bot.music_helper = None
+            await helper.close()
+        if self._helper_task is not None:
+            await self._helper_task
 
     @commands.Cog.listener()
     async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload):
@@ -281,7 +352,7 @@ class MusicManager(commands.Cog):
         if not await _wait_for_audio(player, track):
             return
 
-        channel = await announce_channel(player)
+        channel = await announce_channel(self.bot, player)
         if channel is None:
             return
 
@@ -291,6 +362,10 @@ class MusicManager(commands.Cog):
             title, author = _original(track)
             original = f"{title} by {author}" if author else title
             description += f"\nOriginal unavailable: {discord.utils.escape_markdown(original)}"
+
+        label = voice_label(self.bot, player)
+        if label is not None:
+            description += f"\n{label}"
 
         embed = discord.Embed(
             title="Now playing",
@@ -465,11 +540,16 @@ class MusicManager(commands.Cog):
             return
 
         queue.tracks[index] = lost
-        channel = await announce_channel(player)
+        channel = await announce_channel(self.bot, player)
         if channel is not None:
             name = discord.utils.escape_markdown(title)
+            notice = f"Couldn't find a playable version of **{name}**, skipping."
+            label = voice_label(self.bot, player)
+            if label is not None:
+                notice += f"\n{label}"
+            embed = error_embed(notice)
             try:
-                await channel.send(embed=error_embed(f"Couldn't find a playable version of **{name}**, skipping."))
+                await channel.send(embed=embed)
             except discord.HTTPException:
                 pass
 
@@ -478,7 +558,7 @@ class MusicManager(commands.Cog):
     @commands.Cog.listener()
     async def on_wavelink_inactive_player(self, player: wavelink.Player):
         """Fired once nothing has played for MUSIC_IDLE_TIMEOUT seconds."""
-        channel = await announce_channel(player)
+        channel = await announce_channel(self.bot, player)
         if channel is not None:
             try:
                 await channel.send(embed=discord.Embed(
@@ -499,17 +579,18 @@ class MusicManager(commands.Cog):
         Also matters for lobbies: lobby_manager only deletes a lobby that has no
         human left in it, so a player sitting in one would keep it alive forever.
         """
-        player = active_player(member.guild)
+        # Only react to someone leaving a channel a player is actually in. Seen
+        # by the bot for either account's player, as both are in the guild.
+        if not before.channel:
+            return
+        if after.channel and after.channel.id == before.channel.id:
+            return
+
+        player = channel_player(self.bot, before.channel)
         if player is None:
             return
 
-        # Only react to someone leaving the channel the player is actually in.
-        if not before.channel or before.channel.id != player.channel.id:
-            return
-        if after.channel and after.channel.id == player.channel.id:
-            return
-
-        if any(not m.bot for m in player.channel.members):
+        if listeners(self.bot, player):
             return
 
         voice_channel = player.channel

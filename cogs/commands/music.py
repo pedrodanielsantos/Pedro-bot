@@ -2,6 +2,7 @@ import asyncio
 import discord
 from discord import app_commands
 from discord.ext import commands
+import functools
 import logging
 import os
 import random
@@ -24,15 +25,18 @@ from utils.errors import UserError
 from utils.mixins import SessionMixin
 from utils.music import (
     TrackQueue,
-    active_player,
     backspaced_search,
     cached_or_search,
     cached_search,
+    caller_player,
+    channel_player,
+    client_node,
     fill_queue,
     format_numbered,
     format_track,
     format_track_length,
     music_channel,
+    music_clients,
     nearest_search,
     number_span,
     parse_position,
@@ -45,6 +49,7 @@ from utils.music import (
     resolve_pending,
     track_length,
     track_queue,
+    voice_label,
     with_requester,
 )
 from utils.paginator import PaginatorView
@@ -80,26 +85,60 @@ class Music(SessionMixin, commands.Cog):
         self.bot = bot
 
     async def _ensure_player(self, interaction: discord.Interaction) -> wavelink.Player:
-        """The guild's player, connecting to the caller's channel if needed."""
+        """The player in the caller's channel, joining it with whichever account
+        is free if there is none."""
         channel = require_voice(interaction)
-        player = active_player(interaction.guild)
+        bot = interaction.client
 
+        player = channel_player(bot, channel)
         if player is not None:
-            if player.channel.id != channel.id:
-                raise UserError(f"I'm already playing in {player.channel.mention}.")
             return player
 
-        permissions = channel.permissions_for(interaction.guild.me)
-        if not permissions.connect or not permissions.speak:
-            raise UserError(f"I need permission to connect and speak in {channel.mention}.")
+        busy = []
+        refused = None
+        for client in music_clients(bot):
+            # None for a helper that was never invited to this server.
+            guild = client.get_guild(interaction.guild_id)
+            if guild is None:
+                continue
 
-        try:
-            player = await channel.connect(cls=wavelink.Player, self_deaf=True)
-        except discord.ClientException as e:
-            logger.error(f"Failed to join voice channel {channel.id}: {e}")
-            raise UserError(f"Could not join {channel.mention}: {e}")
+            if guild.voice_client is not None:
+                busy.append(guild.voice_client.channel)
+                continue
 
-        logger.info(f"Joined voice channel {channel.id} in guild {interaction.guild_id}.")
+            node = client_node(client)
+            target = guild.get_channel(channel.id)
+            if node is None or target is None:
+                continue
+
+            permissions = target.permissions_for(guild.me)
+            if not permissions.connect or not permissions.speak:
+                refused = refused or guild.me
+                continue
+
+            try:
+                # Pinned to the account's own node, where wavelink would
+                # otherwise pick whichever node has the fewest players.
+                player = await target.connect(
+                    cls=functools.partial(wavelink.Player, nodes=[node]), self_deaf=True
+                )
+            except discord.ClientException as e:
+                logger.error(f"Failed to join voice channel {channel.id}: {e}")
+                raise UserError(f"Could not join {channel.mention}: {e}")
+            break
+
+        if player is None:
+            if refused is not None:
+                who = "I need" if refused.id == bot.user.id else f"{refused.mention} needs"
+                raise UserError(f"{who} permission to connect and speak in {channel.mention}.")
+            if busy:
+                channels = " and ".join(channel.mention for channel in busy)
+                raise UserError(f"I'm already playing in {channels}.")
+            raise UserError("Music is temporarily unavailable, the audio node is offline.")
+
+        logger.info(
+            f"Joined voice channel {channel.id} in guild {interaction.guild_id} as {player.client.user}."
+        )
 
         # music_manager advances the queue itself, so a failed track's stand-in
         # plays in its place. Any other mode would also start the next track.
@@ -123,9 +162,11 @@ class Music(SessionMixin, commands.Cog):
         interaction: discord.Interaction,
         embed: discord.Embed,
         channel: discord.abc.Messageable | None,
+        player: wavelink.Player,
     ):
         """Replies in place, or privately with a public copy in the music channel,
-        so a change made from elsewhere is still seen by everyone listening."""
+        so a change made from elsewhere is still seen by everyone listening. The
+        copy names the player's voice channel while the guild has two players."""
         private = channel is not None
         if interaction.response.is_done():
             await interaction.followup.send(embed=embed, ephemeral=private)
@@ -140,6 +181,9 @@ class Music(SessionMixin, commands.Cog):
             text=f"Requested by {interaction.user.display_name}",
             icon_url=interaction.user.display_avatar.url,
         )
+        label = voice_label(interaction.client, player)
+        if label is not None:
+            public.description = f"{public.description}\n{label}" if public.description else label
         try:
             await channel.send(embed=public)
         except discord.HTTPException as e:
@@ -167,7 +211,7 @@ class Music(SessionMixin, commands.Cog):
         # nothing is echoed here beyond the queue confirmation.
         await play_next(player)
 
-        await self._reply(interaction, embed, elsewhere)
+        await self._reply(interaction, embed, elsewhere, player)
 
     @app_commands.command(name="insert", description="Add a track to the front of the queue")
     @app_commands.describe(
@@ -194,7 +238,7 @@ class Music(SessionMixin, commands.Cog):
 
         await play_next(player)
 
-        await self._reply(interaction, embed, elsewhere)
+        await self._reply(interaction, embed, elsewhere, player)
 
     async def _queue_query(
         self, player: wavelink.Player, query: str, color: int, *, requester: int, front: bool = False
@@ -496,7 +540,7 @@ class Music(SessionMixin, commands.Cog):
             await self._reply(
                 interaction,
                 await guild_embed(interaction.guild_id, f"Skipped {format_track(skipped, with_author=False)}"),
-                await self._elsewhere(interaction),
+                await self._elsewhere(interaction), player,
             )
             return
 
@@ -540,7 +584,7 @@ class Music(SessionMixin, commands.Cog):
             if len(removed) > len(listed):
                 description += f"\n- and {len(removed) - len(listed)} more"
 
-        await self._reply(interaction, await guild_embed(interaction.guild_id, description), await self._elsewhere(interaction))
+        await self._reply(interaction, await guild_embed(interaction.guild_id, description), await self._elsewhere(interaction), player)
 
         # Dropping the next track can leave a pending one next instead.
         # Last, since it searches, and the reply shouldn't wait on it.
@@ -571,7 +615,7 @@ class Music(SessionMixin, commands.Cog):
 
     @skip.autocomplete("position")
     async def skip_autocomplete(self, interaction: discord.Interaction, current: str):
-        player = active_player(interaction.guild)
+        player = caller_player(interaction)
         if player is None:
             return []
 
@@ -627,7 +671,7 @@ class Music(SessionMixin, commands.Cog):
         else:
             description = f"Moved **{len(moving)}** tracks to positions **{span}**."
 
-        await self._reply(interaction, await guild_embed(interaction.guild_id, description), await self._elsewhere(interaction))
+        await self._reply(interaction, await guild_embed(interaction.guild_id, description), await self._elsewhere(interaction), player)
 
         # A pending track can now be next.
         # Last, since it searches, and the reply shouldn't wait on it.
@@ -635,7 +679,7 @@ class Music(SessionMixin, commands.Cog):
 
     @move.autocomplete("position")
     async def move_autocomplete(self, interaction: discord.Interaction, current: str):
-        player = active_player(interaction.guild)
+        player = caller_player(interaction)
         if player is None:
             return []
 
@@ -653,7 +697,7 @@ class Music(SessionMixin, commands.Cog):
             raise UserError("Nothing is playing.")
 
         await player.pause(True)
-        await self._reply(interaction, await guild_embed(interaction.guild_id, "Paused."), await self._elsewhere(interaction))
+        await self._reply(interaction, await guild_embed(interaction.guild_id, "Paused."), await self._elsewhere(interaction), player)
 
     @app_commands.command(name="resume", description="Resume playback")
     async def resume(self, interaction: discord.Interaction):
@@ -664,7 +708,7 @@ class Music(SessionMixin, commands.Cog):
             raise UserError("Playback isn't paused.")
 
         await player.pause(False)
-        await self._reply(interaction, await guild_embed(interaction.guild_id, "Resumed."), await self._elsewhere(interaction))
+        await self._reply(interaction, await guild_embed(interaction.guild_id, "Resumed."), await self._elsewhere(interaction), player)
 
     @app_commands.command(name="clear", description="Stop playback and clear the queue, without leaving")
     async def clear(self, interaction: discord.Interaction):
@@ -687,7 +731,7 @@ class Music(SessionMixin, commands.Cog):
         await self._reply(
             interaction,
             await guild_embed(interaction.guild_id, "Stopped playback and cleared the queue."),
-            await self._elsewhere(interaction),
+            await self._elsewhere(interaction), player,
         )
 
     @app_commands.command(name="stop", description="Stop playback, clear the queue and leave")
@@ -701,7 +745,7 @@ class Music(SessionMixin, commands.Cog):
         await self._reply(
             interaction,
             await guild_embed(interaction.guild_id, f"Stopped playback and left {channel.mention}."),
-            await self._elsewhere(interaction),
+            await self._elsewhere(interaction), player,
         )
         logger.info(f"Left voice channel {channel.id} in guild {interaction.guild_id}.")
 
@@ -724,7 +768,7 @@ class Music(SessionMixin, commands.Cog):
         await self._reply(
             interaction,
             await guild_embed(interaction.guild_id, f"Volume set to **{percent}%**."),
-            await self._elsewhere(interaction),
+            await self._elsewhere(interaction), player,
         )
 
     @app_commands.command(name="seek", description="Jump to a position in the current track")
@@ -746,7 +790,7 @@ class Music(SessionMixin, commands.Cog):
         await self._reply(
             interaction,
             await guild_embed(interaction.guild_id, f"Jumped to `{position}`."),
-            await self._elsewhere(interaction),
+            await self._elsewhere(interaction), player,
         )
 
     @app_commands.command(name="shuffle", description="Shuffle the queue")
@@ -765,7 +809,7 @@ class Music(SessionMixin, commands.Cog):
         await self._reply(
             interaction,
             await guild_embed(interaction.guild_id, f"Shuffled **{len(tracks)}** tracks."),
-            await self._elsewhere(interaction),
+            await self._elsewhere(interaction), player,
         )
 
         # A pending track can now be next.
@@ -787,13 +831,13 @@ class Music(SessionMixin, commands.Cog):
         await self._reply(
             interaction,
             await guild_embed(interaction.guild_id, f"Loop mode set to **{mode.name}**."),
-            await self._elsewhere(interaction),
+            await self._elsewhere(interaction), player,
         )
 
     @app_commands.command(name="nowplaying", description="Show the track currently playing")
     async def nowplaying(self, interaction: discord.Interaction):
-        player = active_player(interaction.guild)
-        if player is None or not player.current:
+        player = require_player(interaction)
+        if not player.current:
             raise UserError("Nothing is playing.")
 
         # Deferred before the database read, which is otherwise done inside the
@@ -825,9 +869,7 @@ class Music(SessionMixin, commands.Cog):
 
     @app_commands.command(name="queue", description="Show the queue")
     async def queue(self, interaction: discord.Interaction):
-        player = active_player(interaction.guild)
-        if player is None:
-            raise UserError("I'm not playing anything right now.")
+        player = require_player(interaction)
 
         await interaction.response.defer()
 
