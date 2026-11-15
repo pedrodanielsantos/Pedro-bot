@@ -1,3 +1,4 @@
+import aiohttp
 import asyncio
 import discord
 from discord.ext import commands
@@ -162,6 +163,7 @@ class MusicManager(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self._helper_task = None
+        self._sessions: list[aiohttp.ClientSession] = []
 
     async def cog_load(self):
         # bot.py loads cogs before bot.start(), so on first startup the bot has
@@ -235,10 +237,13 @@ class MusicManager(commands.Cog):
                 logger.warning("LAVALINK_URI or LAVALINK_PASSWORD is not set, music is disabled")
             return
 
+        session = aiohttp.ClientSession()
+        self._sessions.append(session)
         node = wavelink.Node(
             uri=uri,
             password=password,
             client=client,
+            session=session,
             # Lavalink keeps the session alive across a bot restart, so a crash
             # and respawn resumes playback instead of dropping the voice call.
             resume_timeout=60,
@@ -265,9 +270,16 @@ class MusicManager(commands.Cog):
             logger.error(f"Could not connect to the Lavalink node at {uri}: {e}")
 
     async def cog_unload(self):
-        # Closing the pool disconnects the players, which the helper's has to
+        # Ejected, or a closed node stays in the pool and _connect_node takes it
+        # for a live one after a reload. Pool.close() doesn't eject.
+        # Closing a node disconnects its players, which the helper's has to
         # still be logged in for.
-        await wavelink.Pool.close()
+        for node in wavelink.Pool.nodes.values():
+            await node.close(eject=True)
+        # Wavelink never closes a node's HTTP session.
+        for session in self._sessions:
+            await session.close()
+        self._sessions.clear()
 
         helper = getattr(self.bot, "music_helper", None)
         if helper is not None:
