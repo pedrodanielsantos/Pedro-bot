@@ -590,8 +590,8 @@ class Music(SessionMixin, commands.Cog):
         # Last, since it searches, and the reply shouldn't wait on it.
         await fill_queue(player)
 
-    def _position_choices(self, queue: TrackQueue, start: int, current: str) -> list:
-        """Autocomplete for a queue position, listing tracks from index start."""
+    def _position_choices(self, queue: TrackQueue, indices, current: str) -> list:
+        """Autocomplete for a queue position, listing the tracks at indices in order."""
         current = current.strip()
         # A range or list is typed by hand, and there is no single position to
         # suggest for one.
@@ -599,15 +599,17 @@ class Music(SessionMixin, commands.Cog):
             return []
 
         choices = []
-        for index, track in enumerate(queue.tracks[start:], start + 1):
-            if current and not str(index).startswith(current):
+        for index in indices:
+            track = queue.tracks[index]
+            number = index + 1
+            if current and not str(number).startswith(current):
                 continue
 
-            label = f"{index}. {track.title} - {track.author}"
+            label = f"{number}. {track.title} - {track.author}"
             # Discord rejects a choice name over 100 characters.
             if len(label) > 100:
                 label = label[:97] + "..."
-            choices.append(app_commands.Choice(name=label, value=str(index)))
+            choices.append(app_commands.Choice(name=label, value=str(number)))
 
             if len(choices) >= MUSIC_AUTOCOMPLETE_LIMIT:
                 break
@@ -621,7 +623,7 @@ class Music(SessionMixin, commands.Cog):
 
         queue = track_queue(player)
         start = queue.cursor if player.current else queue.cursor + 1
-        return self._position_choices(queue, start, current)
+        return self._position_choices(queue, range(start, len(queue.tracks)), current)
 
     @app_commands.command(name="move", description="Move queued tracks to another position")
     @app_commands.describe(
@@ -633,8 +635,7 @@ class Music(SessionMixin, commands.Cog):
         await require_dj(interaction, player)
 
         queue = track_queue(player)
-        upcoming = queue.upcoming
-        if not upcoming:
+        if not queue.tracks:
             raise UserError("The queue is empty, so there's nothing in it to move.")
 
         try:
@@ -644,27 +645,36 @@ class Music(SessionMixin, commands.Cog):
         except ValueError as e:
             raise UserError(str(e))
 
-        # Only what hasn't started can move, on either side of the move.
-        lowest = queue.cursor + 2
-        if positions[0] < lowest:
-            raise UserError(f"Track {positions[0]} has already started, so it can't be moved.")
+        # Played tracks can move too, which queues them again. Only the one
+        # playing stays put.
+        played = queue.cursor if player.current else queue.cursor + 1
+        if player.current and played + 1 in positions:
+            raise UserError(f"Track {played + 1} is playing, so it can't be moved.")
 
+        # Each played track that leaves shifts the rest down a number, the
+        # cursor with them.
+        leaving = sum(index <= played for index in positions)
+        cursor = queue.cursor - leaving
+
+        # Nothing can land before what hasn't started.
+        lowest = cursor + 2
         highest = len(queue.tracks) - len(positions) + 1
         if not lowest <= to <= highest:
             raise UserError(f"That can only go from position {lowest} to {highest}.")
 
         span = number_span(to, len(positions))
-        if positions == list(range(to, to + len(positions))):
+        if not leaving and positions == list(range(to, to + len(positions))):
             raise UserError(f"That's already at position {span}.")
 
         moving = [queue.tracks[index - 1] for index in positions]
         dropping = set(positions)
         order = [
-            track for index, track in enumerate(upcoming, lowest)
+            track for index, track in enumerate(queue.tracks, 1)
             if index not in dropping
         ]
-        order[to - lowest:to - lowest] = moving
-        queue.set_upcoming(order)
+        order[to - 1:to - 1] = moving
+        queue.tracks[:] = order
+        queue.cursor = cursor
 
         if len(moving) == 1:
             description = f"Moved {format_track(moving[0], with_author=False)} to position **{span}**."
@@ -673,8 +683,10 @@ class Music(SessionMixin, commands.Cog):
 
         await self._reply(interaction, await guild_embed(interaction.guild_id, description), await self._elsewhere(interaction), player)
 
+        # A played track moved onto a finished queue starts it again.
+        # Last, since these search, and the reply shouldn't wait on them.
+        await play_next(player)
         # A pending track can now be next.
-        # Last, since it searches, and the reply shouldn't wait on it.
         await fill_queue(player)
 
     @move.autocomplete("position")
@@ -684,7 +696,10 @@ class Music(SessionMixin, commands.Cog):
             return []
 
         queue = track_queue(player)
-        return self._position_choices(queue, queue.cursor + 1, current)
+        # What's next comes first, then what has played. Never the one playing.
+        played = queue.cursor if player.current else queue.cursor + 1
+        indices = [*range(queue.cursor + 1, len(queue.tracks)), *range(played)]
+        return self._position_choices(queue, indices, current)
 
     @app_commands.command(name="pause", description="Pause playback")
     async def pause(self, interaction: discord.Interaction):

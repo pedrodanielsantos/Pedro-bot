@@ -520,9 +520,10 @@ class MusicManager(commands.Cog):
 
     async def _recover(self, player: wavelink.Player, track: wavelink.Playable, detail: str):
         """Plays a stand-in in place of a track that failed, or moves on without one."""
-        # Stays valid through the search, since only what follows the cursor moves.
         queue = track_queue(player)
         index = queue.cursor
+        # Found again after the search, since a /move can shift it meanwhile.
+        entry = queue.tracks[index] if index >= 0 else None
         clears = queue.clears
 
         # Every id that has failed on this player, so a repeated search walks past
@@ -564,6 +565,9 @@ class MusicManager(commands.Cog):
         # A /clear dropped the track, before or during the search, so its index
         # is gone and nothing stands in for it.
         if index < 0 or queue.clears != clears:
+            return
+        index = next((i for i, queued in enumerate(queue.tracks) if queued is entry), None)
+        if index is None:
             return
 
         title, author = _original(track)
