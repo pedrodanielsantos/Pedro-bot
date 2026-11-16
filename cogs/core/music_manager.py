@@ -409,12 +409,18 @@ class MusicManager(commands.Cog):
         next track before a failed one's stand-in is found, and stops for good
         after three failures in a row."""
         player = payload.player
+        track = payload.track
         if player is None:
+            logger.info(f"Track {_track_ref(track)} ended ({payload.reason}), player gone")
             return
 
-        track = payload.track
         _cancel_announcement(player, track)
         failure = _pop_failure(player, track)
+        # Every branch below that does nothing is otherwise silent.
+        logger.info(
+            f"Track {_track_ref(track)} ended ({payload.reason}), "
+            f"failure {'recorded' if failure else 'none'}, connected {bool(player.connected)}"
+        )
 
         # replaced: something else was played over it. cleanup: the player is gone.
         if payload.reason not in ("finished", "stopped", "loadFailed") or not player.connected:
@@ -430,6 +436,37 @@ class MusicManager(commands.Cog):
 
         # A /skip ends a track as stopped, which moves on even in track loop mode.
         await play_next(player, repeat=payload.reason == "finished")
+        await self._announce_queue_end(player)
+
+    async def _announce_queue_end(self, player: wavelink.Player):
+        """Posts that the queue ran out, if play_next found nothing to start."""
+        if not player.connected or player.current is not None:
+            return
+        if track_queue(player).next_index() is not None:
+            return
+
+        channel = await announce_channel(self.bot, player)
+        if channel is None:
+            return
+
+        # Wavelink restarts the idle timer on every track end.
+        minutes, seconds = divmod(MUSIC_IDLE_TIMEOUT, 60)
+        wait = " and ".join(
+            f"{amount} {unit}{'s' if amount != 1 else ''}"
+            for amount, unit in ((minutes, "minute"), (seconds, "second"))
+            if amount
+        )
+        notice = f"The queue has ended. Leaving in {wait} unless something is queued."
+        label = voice_label(self.bot, player)
+        if label is not None:
+            notice += f"\n{label}"
+        try:
+            await channel.send(embed=discord.Embed(
+                description=notice,
+                color=await get_guild_embed_color(channel.guild.id),
+            ))
+        except discord.HTTPException:
+            pass
 
     @commands.Cog.listener()
     async def on_wavelink_track_exception(self, payload: wavelink.TrackExceptionEventPayload):
@@ -566,6 +603,7 @@ class MusicManager(commands.Cog):
                 pass
 
         await play_next(player)
+        await self._announce_queue_end(player)
 
     @commands.Cog.listener()
     async def on_wavelink_inactive_player(self, player: wavelink.Player):

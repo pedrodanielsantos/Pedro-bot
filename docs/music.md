@@ -267,9 +267,9 @@ announcements follow them rather than switch author partway.
 
 While a server has two players, `voice_label()` adds a line linking the voice
 channel to what would otherwise not say which one it is about: "Now playing",
-a skipped track's notice, and a reply's copy in the music channel. It goes in
-the embed's description, since a title or footer shows a mention as plain text.
-With one player nothing is labelled.
+a skipped track's notice, the queue's end, and a reply's copy in the music
+channel. It goes in the embed's description, since a title or footer shows a
+mention as plain text. With one player nothing is labelled.
 
 ## Failed tracks
 
@@ -344,13 +344,14 @@ nothing playable is left after it.
 
 ## Announcements
 
-Three messages are posted without a command asking for them, all from
+Four messages are posted without a command asking for them, all from
 `music_manager`:
 
 | Message | When |
 | --- | --- |
 | Now playing | Once a track's audio starts, see [Now playing](#now-playing) |
 | Couldn't find a playable version of X, skipping. | A failed track has no stand-in |
+| The queue has ended. Leaving in 5 minutes unless something is queued. | A track ended and nothing is left to play |
 | Left #channel after being idle. | Nothing has played for `MUSIC_IDLE_TIMEOUT` seconds |
 
 Leaving because the voice channel emptied is silent.
