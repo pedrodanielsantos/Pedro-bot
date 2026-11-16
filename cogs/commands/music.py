@@ -18,6 +18,7 @@ from config.constants import (
     MUSIC_MAX_VOLUME,
     MUSIC_QUEUE_PAGE_SIZE,
     MUSIC_SPOTIFY_LIMIT,
+    MUSIC_YOUTUBE_LIMIT,
 )
 from db.database import get_guild_embed_color, get_music_volume
 from utils.embeds import guild_embed
@@ -62,6 +63,7 @@ from utils.tidal import (
     fetch_track_api,
     parse_tidal_url,
 )
+from utils.youtube import fetch_playlist, parse_youtube_playlist, youtube_configured
 
 logger = logging.getLogger("music")
 
@@ -256,7 +258,56 @@ class Music(SessionMixin, commands.Cog):
                 player, *tidal, color=color, requester=requester, front=front
             )
 
+        playlist = parse_youtube_playlist(query)
+        if playlist is not None and youtube_configured():
+            embed = await self._queue_youtube(
+                player, *playlist, color=color, requester=requester, front=front
+            )
+            # None if the API couldn't read it, which leaves the node to try.
+            if embed is not None:
+                return embed
+
         return await self._queue_search(player, query, color, requester=requester, front=front)
+
+    async def _queue_youtube(
+        self,
+        player: wavelink.Player,
+        playlist_id: str,
+        music: bool,
+        *,
+        color: int,
+        requester: int,
+        front: bool = False,
+    ) -> discord.Embed | None:
+        """Queues a YouTube playlist listed by the API, or returns None if it
+        couldn't be listed."""
+        playlist = await fetch_playlist(self.session, playlist_id, music=music)
+        if playlist is None or not playlist.tracks:
+            return None
+
+        queue = track_queue(player)
+        first = queue.add_batch([with_requester(track, requester) for track in playlist.tracks], front=front)
+
+        # Only enough to start playing is loaded here, as for a Spotify link.
+        await fill_queue(player)
+        if not player.playing and queue.next_index() is None:
+            raise UserError(f"Couldn't play anything in **{playlist.name}**.")
+
+        count = len(playlist.tracks)
+        description = (
+            f"`{number_span(first, count)}.` **{playlist.name}**\n"
+            f"{count} track{'s' if count != 1 else ''} added."
+        )
+        if count == MUSIC_YOUTUBE_LIMIT and playlist.total > count:
+            description += f"\nThe first {count} of {playlist.total}, which is as many as I take."
+        embed = discord.Embed(
+            title="Playlist up next" if front else "Playlist queued",
+            description=description,
+            color=color,
+        )
+        if playlist.artwork:
+            embed.set_thumbnail(url=playlist.artwork)
+        return embed
 
     async def _queue_search(
         self, player: wavelink.Player, query: str, color: int, *, requester: int, front: bool = False

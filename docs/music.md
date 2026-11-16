@@ -22,6 +22,7 @@ Lavalink handles encryption, DAVE included.
 | [`utils/music.py`](../utils/music.py) | Player lookup, DJ gating, announce channel, the queue, track formatting, track search and its cache |
 | [`utils/spotify.py`](../utils/spotify.py) | Spotify link parsing and metadata |
 | [`utils/tidal.py`](../utils/tidal.py) | Tidal link parsing and metadata, via the API or the page |
+| [`utils/youtube.py`](../utils/youtube.py) | YouTube playlist listing via the API, see [YouTube playlists](#youtube-playlists) |
 
 The node is **optional**. If `LAVALINK_DIR` is unset, or `Lavalink.jar`,
 `application.yml` or `java` is missing, `run.py` logs which and skips the node.
@@ -460,6 +461,32 @@ the result is cached under the link like any other query.
 A link carrying a list loads as a playlist or radio and is left to do that,
 except `LL`, `WL` and `LM`. Those need a signed-in account, so youtube-source
 ignores them and loads the video alone.
+
+## YouTube playlists
+
+The node reads a playlist a page at a time, one request each, and stops after
+`youtubePlaylistLoadLimit` pages. A page held 20 tracks here, so the limit of 15
+in [`application.yml.example`](../config/lavalink/application.yml.example) loads
+300 tracks and `/shuffle` only ever reorders those. The node reports no total,
+so nothing says the playlist was cut short.
+
+With `YOUTUBE_API_KEY` set, [`utils/youtube.py`](../utils/youtube.py) lists the
+playlist through the YouTube Data API instead, 50 tracks a request, up to
+`MUSIC_YOUTUBE_LIMIT`. A second pass reads the lengths, which the listing does
+not carry. Deleted and private videos are left out.
+
+The tracks are queued pending, like a [Spotify](#spotify-links) playlist, and
+each is loaded from the node by its own link as its turn comes, so nothing is
+searched for and the upload played is the one listed. A link the node can't
+load is searched for by title, like a Spotify track. A `music.youtube.com`
+playlist links its tracks there, so each loads with the artist and album art
+as described above.
+
+Radios and mixes (`RD` lists) stay with the node, as does any playlist the API
+can't read, such as a private one, and every playlist when no key is set.
+
+The key comes from a Google Cloud project with "YouTube Data API v3" enabled,
+which needs no billing account. A listing costs one quota unit per request.
 
 ## Spotify links
 

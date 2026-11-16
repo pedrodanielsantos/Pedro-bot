@@ -137,7 +137,9 @@ lavalink:
     resamplingQuality: LOW
     trackStuckThresholdMs: 10000
     useSeekGhosting: true
-    youtubePlaylistLoadLimit: 6
+    # Pages per playlist link, one request each. Read by the youtube plugin.
+    # A page held 20 tracks here: 6 pages loaded 119 and 15 loaded 299.
+    youtubePlaylistLoadLimit: 15
     playerUpdateInterval: 5
     youtubeSearchEnabled: true
     soundcloudSearchEnabled: true

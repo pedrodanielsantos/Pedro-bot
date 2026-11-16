@@ -258,6 +258,8 @@ class PendingTrack:
     Spotify and Tidal links produce these, since such a link carries no audio
     and every track has to be searched for elsewhere. Nothing here is specific
     to either, so another metadata-only source can queue them the same way.
+    A YouTube playlist read through the API produces them with a link, which
+    is loaded instead.
 
     lost marks a track with no source or stand-in. It keeps its number in the
     queue and playback passes over it.
@@ -270,10 +272,13 @@ class PendingTrack:
     is_stream: bool = False
     lost: bool = False
     batch: int | None = None  # which link queued it, for fill_queue's miss limit
+    link: str | None = None  # the track's own URL, loaded in place of a search
 
     # Named after the Playable attributes format_track reads, so a pending track
-    # renders through it unchanged. No uri, so it shows as plain text.
-    uri = None
+    # renders through it unchanged. Without a link it shows as plain text.
+    @property
+    def uri(self) -> str | None:
+        return self.link
 
     @property
     def author(self) -> str:
@@ -658,8 +663,26 @@ async def find_replacement(
     )
 
 
+async def _load_link(link: str) -> wavelink.Playable | None:
+    """The track behind a link, or None if the node can't load it."""
+    try:
+        results = await _load(link)
+    except wavelink.LavalinkLoadException as e:
+        logger.warning(f"Could not load {link}: {e.error}")
+        return None
+    if isinstance(results, wavelink.Playlist) or not results:
+        return None
+    return results[0]
+
+
 async def resolve_pending(track: PendingTrack) -> wavelink.Playable | None:
     """A playable source for a metadata-only track, or None if no source has it."""
+    if track.link is not None:
+        playable = await _load_link(track.link)
+        # Without a length there is nothing to hold a search result to.
+        if playable is not None or not track.duration:
+            return playable
+
     return await search_matching(
         track.query,
         track.duration,

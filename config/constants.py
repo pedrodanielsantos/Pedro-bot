@@ -66,3 +66,5 @@ MUSIC_SPOTIFY_LIMIT = 100  # tracks Spotify's embed page returns for a playlist
 # so 100 is five requests, against a burst of about eight before it starts
 # refusing, which is why raising this runs into the rate limit.
 MUSIC_PLAYLIST_LIMIT = 100
+# Tracks taken from one YouTube playlist read through the API, at 50 a request.
+MUSIC_YOUTUBE_LIMIT = 2000

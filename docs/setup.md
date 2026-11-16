@@ -46,6 +46,7 @@ MUSIC_HELPER_TOKEN=your_helper_token # music; optional, a second account for a s
 
 TIDAL_CLIENT_ID=your_tidal_client_id         # music; optional, Tidal albums and playlists
 TIDAL_CLIENT_SECRET=your_tidal_client_secret # music; optional, pairs with the id
+YOUTUBE_API_KEY=your_youtube_api_key         # music; optional, whole YouTube playlists
 ```
 
 The three `LAVALINK_*` values are printed by `scripts/setup_lavalink.py`. Leave
