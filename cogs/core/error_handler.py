@@ -24,6 +24,11 @@ class ErrorHandler(commands.Cog):
         # Any message starting with the prefix that isn't a real command lands here; ignore.
         if isinstance(error, commands.CommandNotFound):
             return
+        # Already reported by the command's or cog's own error handler.
+        if ctx.command and ctx.command.has_error_handler():
+            return
+        if ctx.cog and ctx.cog.has_error_handler():
+            return
         raise error
 
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
