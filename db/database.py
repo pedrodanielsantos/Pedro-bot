@@ -26,9 +26,14 @@ async def initialize_databases():
     await db.execute("""
         CREATE TABLE IF NOT EXISTS lobbies (
             guild_id   INTEGER NOT NULL,
-            channel_id INTEGER PRIMARY KEY
+            channel_id INTEGER PRIMARY KEY,
+            lockdown   INTEGER NOT NULL DEFAULT 0
         )
     """)
+    try:
+        await db.execute("ALTER TABLE lobbies ADD COLUMN lockdown INTEGER NOT NULL DEFAULT 0")
+    except aiosqlite.OperationalError:
+        pass
 
     # Older databases still have this under its old name; rename before CREATE TABLE
     # IF NOT EXISTS below runs, since ALTER TABLE RENAME fails if the target already exists.
@@ -165,6 +170,21 @@ async def lobbies_all():
 async def lobby_is_tracked(channel_id: int) -> bool:
     async with db.execute("SELECT 1 FROM lobbies WHERE channel_id = ? LIMIT 1", (channel_id,)) as cursor:
         return await cursor.fetchone() is not None
+
+async def lobby_get_lockdown(channel_id: int) -> int:
+    """Lockdown state of a lobby, 0 when off or untracked."""
+    async with db.execute("SELECT lockdown FROM lobbies WHERE channel_id = ?", (channel_id,)) as cursor:
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+
+async def lobby_set_lockdown(channel_id: int, state: int):
+    await db.execute("UPDATE lobbies SET lockdown = ? WHERE channel_id = ?", (state, channel_id))
+    await db.commit()
+
+async def lobby_lockdowns():
+    """(channel_id, state) for every lobby with lockdown on."""
+    async with db.execute("SELECT channel_id, lockdown FROM lobbies WHERE lockdown != 0") as cursor:
+        return await cursor.fetchall()
 
 async def set_embed_color(guild_id: int, hex_code: str, user_id: int):
     await db.execute(
