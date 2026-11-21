@@ -447,8 +447,8 @@ class Moderation(commands.GroupCog, group_name="moderation"):
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="clearwarnings", description="Clears every warning for a member")
-    @app_commands.describe(member="The member whose warnings should be cleared")
-    async def clearwarnings(self, interaction: discord.Interaction, member: discord.Member):
+    @app_commands.describe(member="The member whose warnings should be cleared", reason="Reason for clearing the warnings")
+    async def clearwarnings(self, interaction: discord.Interaction, member: discord.Member, reason: str):
         await self._check_permission(interaction, "clearwarnings")
 
         await interaction.response.defer(ephemeral=True)
@@ -458,7 +458,10 @@ class Moderation(commands.GroupCog, group_name="moderation"):
             raise UserError(f"{member.mention} has no warnings to clear.")
 
         await clear_warnings(interaction.guild_id, member.id)
-        await self._log_case(interaction.guild, "Warnings Cleared", member.id, interaction.user.id, f"Cleared {count} warning(s)", None)
+        await self._log_case(
+            interaction.guild, "Warnings Cleared", member.id, interaction.user.id,
+            f"{reason}\nCleared {count} warning(s).", None,
+        )
 
         embed = success_embed(f"Cleared **{count}** warning(s) for {member.mention}.")
         await interaction.followup.send(embed=embed, ephemeral=True)
