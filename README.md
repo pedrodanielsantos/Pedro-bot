@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/banner.png" alt="Pedro-bot banner" width="100%">
+
 # Pedro-bot
 
 A Discord bot built on discord.py, with a FastAPI + htmx web dashboard.
