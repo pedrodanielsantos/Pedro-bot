@@ -37,6 +37,8 @@ DOG_API_KEY=your_dog_api_key         # /dog
 SYNC_ON_STARTUP=false                # optional; skip the automatic command sync on every restart
 LOG_LEVEL=DEBUG                      # optional; defaults to INFO
 WEB_HOST=0.0.0.0                     # optional; defaults to 127.0.0.1, see Dashboard
+CONFIRM_EMOJI=<:name:id>             # optional; custom emoji on the warn prompt's Escalate button
+CANCEL_EMOJI=<:name:id>              # optional; custom emoji on the warn prompt's Skip button
 
 LAVALINK_DIR=C:\lavalink             # music; where setup_lavalink.py installed the node
 LAVALINK_URI=http://127.0.0.1:2333   # music; the node's address
@@ -69,6 +71,11 @@ button or `ç!sync`.
 `WEB_HOST` defaults to `127.0.0.1`, so the dashboard is reachable from the host
 only. Set it to `0.0.0.0` to serve it on the network, which has no
 authentication in front of it. See [Dashboard](dashboard.md).
+
+`CONFIRM_EMOJI` and `CANCEL_EMOJI` take an emoji the bot can use, such as one
+uploaded under **Emojis** on its application in the
+[Developer Portal](https://discord.com/developers/applications), written as
+`<:name:id>`. Left out, the buttons show their label only.
 
 `MUSIC_AUTOCOMPLETE` defaults to `false`. It is read once at import and decides
 whether `/play` and `/insert` are synced with track suggestions at all, so

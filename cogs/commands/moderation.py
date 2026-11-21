@@ -1,24 +1,32 @@
 import logging
+import os
 from datetime import timedelta
 from typing import Optional
 
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
+from dotenv import load_dotenv
 
-from config.constants import EMBED_COLOR
+from config.constants import EMBED_COLOR, SUCCESS_COLOR
 from db.database import (
     get_guild_embed_color, get_moderation_log_channel,
     next_case_number, add_mod_case,
     temp_ban_add, temp_ban_remove, temp_bans_due,
-    add_warning, get_warnings, count_warnings, count_warnings_since, get_all_warnings, clear_warnings,
+    add_warning, get_warnings, count_warnings, get_all_warnings, clear_warnings,
 )
 from utils.duration import parse_duration
-from utils.embeds import success_embed
+from utils.embeds import send_error, success_embed
 from utils.errors import UserError
 from utils.permissions import require_permission, visibility_gate
 
 logger = logging.getLogger("moderation")
+
+load_dotenv()
+# Optional custom emojis for the warn prompt buttons, as <:name:id>. Unset
+# leaves the buttons text only.
+CONFIRM_EMOJI = os.getenv("CONFIRM_EMOJI") or None
+CANCEL_EMOJI = os.getenv("CANCEL_EMOJI") or None
 
 # Required guild permission for each subcommand. Change the value here to
 # regate a command, no other code needs to change.
@@ -35,16 +43,137 @@ PERMISSIONS = {
 
 MAX_TIMEOUT_DURATION = timedelta(days=28)
 
-# Timeout warn applies, picked by the member's lifetime warning count. Every
-# warning from the third on re-applies the 7d step.
+# Timeout /moderation warn offers, picked by the member's lifetime warning
+# count. Every warning from the third on offers the 7d step.
 WARN_TIMEOUT_THRESHOLD = 2
 WARN_TIMEOUT_DURATION = timedelta(hours=24)
 WARN_ESCALATION_THRESHOLD = 3
 WARN_ESCALATION_DURATION = timedelta(days=7)
 
-# Owner alert threshold, counted over warnings on one member inside the window.
-WARN_BURST_THRESHOLD = 2
-WARN_BURST_WINDOW = timedelta(hours=24)
+# Kept under Discord's 15 minute interaction token lifetime, so the expired
+# prompt can still be edited.
+WARN_PROMPT_TIMEOUT = 600
+
+
+def ordinal(n: int) -> str:
+    if 11 <= n % 100 <= 13:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+class WarnEscalationView(discord.ui.LayoutView):
+    """Warn confirmation that lets the moderator apply or skip the escalation timeout."""
+
+    def __init__(
+        self, cog: "Moderation", member: discord.Member, case_number: int, count: int,
+        reason: str, duration: timedelta, duration_label: str,
+    ):
+        super().__init__(timeout=WARN_PROMPT_TIMEOUT)
+        self.cog = cog
+        self.member = member
+        self.case_number = case_number
+        self.count = count
+        self.reason = reason
+        self.duration = duration
+        self.duration_label = duration_label
+        self.resolved = False
+        self.message: discord.WebhookMessage | None = None
+
+        self.header = f"Warned {member.mention} (`{member.id}`). This is warning **#{count}**."
+        self.text_display = discord.ui.TextDisplay(
+            f"{self.header}\nSince this is their **{ordinal(count)}** warning, "
+            f"you can auto-escalate it to a **{duration_label}** timeout."
+        )
+
+        confirm = discord.ui.Button(label="Escalate", emoji=CONFIRM_EMOJI, style=discord.ButtonStyle.success)
+        confirm.callback = self._confirm
+        skip = discord.ui.Button(label="Skip", emoji=CANCEL_EMOJI, style=discord.ButtonStyle.danger)
+        skip.callback = self._skip
+        self.button_row = discord.ui.ActionRow(confirm, skip)
+
+        self.container = discord.ui.Container(self.text_display, self.button_row, accent_color=SUCCESS_COLOR)
+        self.add_item(self.container)
+
+    def _resolve(self, outcome: str):
+        self.resolved = True
+        self.text_display.content = f"{self.header}\n{outcome}"
+        self.container.remove_item(self.button_row)
+        self.stop()
+
+    async def _confirm(self, interaction: discord.Interaction):
+        if self.resolved:
+            await interaction.response.defer()
+            return
+        try:
+            await self.cog._check_permission(interaction, "warn")
+        except UserError as e:
+            await send_error(interaction, str(e))
+            return
+
+        # Claimed before the first API call, so a double click can't apply it twice.
+        self.resolved = True
+        await interaction.response.defer()
+
+        guild = interaction.guild
+        escalation_reason = f"Auto: {ordinal(self.count)} warning"
+        try:
+            await guild.fetch_member(self.member.id)
+            await self.member.timeout(self.duration, reason=escalation_reason)
+        except discord.NotFound:
+            self._resolve("Auto-escalation failed: member is no longer in the server.")
+        except discord.Forbidden:
+            self._resolve("Auto-escalation failed: I don't have permission to time out that member.")
+        except discord.HTTPException as e:
+            logger.warning(f"Auto-escalation for case #{self.case_number} failed: {e}")
+            self._resolve("Auto-escalation failed: Discord returned an error, no timeout applied.")
+        else:
+            await self.cog._log_case(
+                guild, "Timeout", self.member.id, self.cog.bot.user.id, escalation_reason, self.duration_label,
+            )
+            self._resolve(f"Auto-escalation: member has been **timed out for {self.duration_label}**.")
+            await self._alert_owner(interaction)
+
+        await interaction.edit_original_response(view=self)
+
+    async def _skip(self, interaction: discord.Interaction):
+        if self.resolved:
+            await interaction.response.defer()
+            return
+        self._resolve("Auto-escalation skipped, no timeout applied.")
+        await interaction.response.edit_message(view=self)
+
+    async def _alert_owner(self, interaction: discord.Interaction):
+        guild = interaction.guild
+        # No alert when the owner is the one escalating.
+        if interaction.user.id == guild.owner_id:
+            return
+
+        alert = discord.Embed(
+            title="Warning escalation",
+            description=(
+                f"In **{guild.name}**, {self.member.mention} (`{self.member.id}`) was timed out for "
+                f"**{self.duration_label}** on their **{ordinal(self.count)}** warning."
+            ),
+            color=await get_guild_embed_color(guild.id),
+        )
+        alert.add_field(name=f"Latest warning | Case #{self.case_number}", value=self.reason, inline=False)
+        alert.add_field(name="Responsible Moderator", value=interaction.user.mention, inline=False)
+        alert.timestamp = discord.utils.utcnow()
+        alert.set_footer(text=f"User ID: {self.member.id}")
+        await self.cog._notify_owner(guild, alert)
+
+    async def on_timeout(self):
+        if self.resolved:
+            return
+        self._resolve("Auto-escalation prompt expired, no timeout applied.")
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except discord.HTTPException as e:
+                logger.warning(f"Could not mark the warn prompt for case #{self.case_number} as expired: {e}")
+
 
 @visibility_gate(*PERMISSIONS.values())
 class Moderation(commands.GroupCog, group_name="moderation"):
@@ -264,48 +393,18 @@ class Moderation(commands.GroupCog, group_name="moderation"):
         await add_warning(interaction.guild_id, case_number, member.id, interaction.user.id, reason)
         count = await count_warnings(interaction.guild_id, member.id)
 
-        since = int((discord.utils.utcnow() - WARN_BURST_WINDOW).timestamp())
-        recent = await count_warnings_since(interaction.guild_id, member.id, since)
-
-        description = f"Warned {member.mention} (`{member.id}`). This is warning **#{count}**."
-
         if count >= WARN_ESCALATION_THRESHOLD:
-            escalation = (WARN_ESCALATION_DURATION, "7d", f"Auto: {count} warnings")
+            escalation = (WARN_ESCALATION_DURATION, "7d")
         elif count == WARN_TIMEOUT_THRESHOLD:
-            escalation = (WARN_TIMEOUT_DURATION, "24h", "Auto: 2nd warning")
+            escalation = (WARN_TIMEOUT_DURATION, "24h")
         else:
-            escalation = None
+            embed = success_embed(f"Warned {member.mention} (`{member.id}`). This is warning **#{count}**.")
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
 
-        if escalation:
-            duration, duration_label, escalation_reason = escalation
-            try:
-                await member.timeout(duration, reason=escalation_reason)
-                await self._log_case(interaction.guild, "Timeout", member.id, self.bot.user.id, escalation_reason, duration_label)
-                description += f"\nAuto-escalation: member has been **timed out for {duration_label}**."
-            except discord.Forbidden:
-                description += "\nAuto-escalation failed: I don't have permission to time out that member."
-
-        alerts = []
-        if count >= WARN_ESCALATION_THRESHOLD:
-            alerts.append(f"has reached **{count}** total warnings")
-        if recent >= WARN_BURST_THRESHOLD:
-            alerts.append(f"has received **{recent}** warnings in the last 24 hours")
-
-        # No alert when the owner is the one issuing the warning.
-        if alerts and interaction.user.id != interaction.guild.owner_id:
-            alert = discord.Embed(
-                title="Warning escalation",
-                description=f"In **{interaction.guild.name}**, {member.mention} (`{member.id}`) {' and '.join(alerts)}.",
-                color=await get_guild_embed_color(interaction.guild_id),
-            )
-            alert.add_field(name=f"Latest warning | Case #{case_number}", value=reason, inline=False)
-            alert.add_field(name="Responsible Moderator", value=interaction.user.mention, inline=False)
-            alert.timestamp = discord.utils.utcnow()
-            alert.set_footer(text=f"User ID: {member.id}")
-            await self._notify_owner(interaction.guild, alert)
-
-        embed = success_embed(description)
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        duration, duration_label = escalation
+        view = WarnEscalationView(self, member, case_number, count, reason, duration, duration_label)
+        view.message = await interaction.followup.send(view=view, ephemeral=True)
 
     @app_commands.command(name="warnings", description="Lists warnings for a member, or every member currently in the server")
     @app_commands.describe(member="Leave empty to list warnings for every member currently in the server")
