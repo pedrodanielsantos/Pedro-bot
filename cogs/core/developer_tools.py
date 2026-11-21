@@ -10,6 +10,7 @@ from db.database import get_guild_embed_color, delete_mod_cases, reset_case_coun
 from utils.cogs import reload_shared_modules
 from utils.embeds import error_embed, success_embed
 from utils.parsing import parse_number_spec
+from utils.text import plural
 
 logger = logging.getLogger("dev")
 WEB_DASHBOARD = "http://127.0.0.1:8000"
@@ -404,9 +405,9 @@ class DeveloperTools(commands.Cog):
             await ctx.reply(embed=embed)
             return
 
-        description = f"Deleted **{cases_deleted}** case(s) for guild `{target_guild_id}`."
+        description = f"Deleted **{cases_deleted}** {plural(cases_deleted, 'case')} for guild `{target_guild_id}`."
         if warnings_deleted:
-            description += f"\nAlso removed **{warnings_deleted}** linked warning(s)."
+            description += f"\nAlso removed **{warnings_deleted}** linked {plural(warnings_deleted, 'warning')}."
         description += f"\nThe next case will be **#{new_counter + 1}**."
 
         embed = success_embed(description)

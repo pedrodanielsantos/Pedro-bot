@@ -19,6 +19,7 @@ from utils.duration import parse_duration
 from utils.embeds import send_error, success_embed
 from utils.errors import UserError
 from utils.permissions import require_permission, visibility_gate
+from utils.text import plural
 
 logger = logging.getLogger("moderation")
 
@@ -438,7 +439,10 @@ class Moderation(commands.GroupCog, group_name="moderation"):
         if not grouped:
             raise UserError("No members currently in the server have any warnings.")
 
-        lines = [f"<@{target_id}>: **{len(entries)}** warning(s)" for target_id, entries in grouped.items()]
+        lines = [
+            f"<@{target_id}>: **{len(entries)}** {plural(len(entries), 'warning')}"
+            for target_id, entries in grouped.items()
+        ]
         embed = discord.Embed(
             title="Warnings",
             description="\n".join(lines),
@@ -460,10 +464,10 @@ class Moderation(commands.GroupCog, group_name="moderation"):
         await clear_warnings(interaction.guild_id, member.id)
         await self._log_case(
             interaction.guild, "Warnings Cleared", member.id, interaction.user.id,
-            f"{reason}\nCleared {count} warning(s).", None,
+            f"{reason}\nCleared {count} {plural(count, 'warning')}.", None,
         )
 
-        embed = success_embed(f"Cleared **{count}** warning(s) for {member.mention}.")
+        embed = success_embed(f"Cleared **{count}** {plural(count, 'warning')} for {member.mention}.")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @tasks.loop(seconds=60)
