@@ -1,20 +1,19 @@
 import logging
-import os
 from datetime import timedelta
 from typing import Optional
 
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
-from dotenv import load_dotenv
 
-from config.constants import EMBED_COLOR, SUCCESS_COLOR
+from config.constants import EMBED_COLOR
 from db.database import (
     get_guild_embed_color, get_moderation_log_channel,
     next_case_number, add_mod_case,
     temp_ban_add, temp_ban_remove, temp_bans_due,
     add_warning, get_warnings, count_warnings, get_all_warnings, clear_warnings,
 )
+from utils.confirm import ConfirmView
 from utils.duration import parse_duration
 from utils.embeds import send_error, success_embed
 from utils.errors import UserError
@@ -22,12 +21,6 @@ from utils.permissions import require_permission, visibility_gate
 from utils.text import plural
 
 logger = logging.getLogger("moderation")
-
-load_dotenv()
-# Optional custom emojis for the warn prompt buttons, as <:name:id>. Unset
-# leaves the buttons text only.
-CONFIRM_EMOJI = os.getenv("CONFIRM_EMOJI") or None
-CANCEL_EMOJI = os.getenv("CANCEL_EMOJI") or None
 
 # Required guild permission for each subcommand. Change the value here to
 # regate a command, no other code needs to change.
@@ -64,14 +57,22 @@ def ordinal(n: int) -> str:
     return f"{n}{suffix}"
 
 
-class WarnEscalationView(discord.ui.LayoutView):
+class WarnEscalationView(ConfirmView):
     """Warn confirmation that lets the moderator apply or skip the escalation timeout."""
 
     def __init__(
         self, cog: "Moderation", member: discord.Member, case_number: int, count: int,
         reason: str, duration: timedelta, duration_label: str,
     ):
-        super().__init__(timeout=WARN_PROMPT_TIMEOUT)
+        super().__init__(
+            f"Warned {member.mention} (`{member.id}`). This is warning **#{count}**.",
+            f"Since this is their **{ordinal(count)}** warning, "
+            f"you can auto-escalate it to a **{duration_label}** timeout.",
+            confirm_label="Escalate",
+            cancel_label="Skip",
+            expired_outcome="Auto-escalation prompt expired, no timeout applied.",
+            timeout=WARN_PROMPT_TIMEOUT,
+        )
         self.cog = cog
         self.member = member
         self.case_number = case_number
@@ -79,34 +80,8 @@ class WarnEscalationView(discord.ui.LayoutView):
         self.reason = reason
         self.duration = duration
         self.duration_label = duration_label
-        self.resolved = False
-        self.message: discord.WebhookMessage | None = None
 
-        self.header = f"Warned {member.mention} (`{member.id}`). This is warning **#{count}**."
-        self.text_display = discord.ui.TextDisplay(
-            f"{self.header}\nSince this is their **{ordinal(count)}** warning, "
-            f"you can auto-escalate it to a **{duration_label}** timeout."
-        )
-
-        confirm = discord.ui.Button(label="Escalate", emoji=CONFIRM_EMOJI, style=discord.ButtonStyle.success)
-        confirm.callback = self._confirm
-        skip = discord.ui.Button(label="Skip", emoji=CANCEL_EMOJI, style=discord.ButtonStyle.danger)
-        skip.callback = self._skip
-        self.button_row = discord.ui.ActionRow(confirm, skip)
-
-        self.container = discord.ui.Container(self.text_display, self.button_row, accent_color=SUCCESS_COLOR)
-        self.add_item(self.container)
-
-    def _resolve(self, outcome: str):
-        self.resolved = True
-        self.text_display.content = f"{self.header}\n{outcome}"
-        self.container.remove_item(self.button_row)
-        self.stop()
-
-    async def _confirm(self, interaction: discord.Interaction):
-        if self.resolved:
-            await interaction.response.defer()
-            return
+    async def on_confirm(self, interaction: discord.Interaction):
         try:
             await self.cog._check_permission(interaction, "warn")
         except UserError as e:
@@ -123,26 +98,23 @@ class WarnEscalationView(discord.ui.LayoutView):
             await guild.fetch_member(self.member.id)
             await self.member.timeout(self.duration, reason=escalation_reason)
         except discord.NotFound:
-            self._resolve("Auto-escalation failed: member is no longer in the server.")
+            self.resolve("Auto-escalation failed: member is no longer in the server.")
         except discord.Forbidden:
-            self._resolve("Auto-escalation failed: I don't have permission to time out that member.")
+            self.resolve("Auto-escalation failed: I don't have permission to time out that member.")
         except discord.HTTPException as e:
             logger.warning(f"Auto-escalation for case #{self.case_number} failed: {e}")
-            self._resolve("Auto-escalation failed: Discord returned an error, no timeout applied.")
+            self.resolve("Auto-escalation failed: Discord returned an error, no timeout applied.")
         else:
             await self.cog._log_case(
                 guild, "Timeout", self.member.id, self.cog.bot.user.id, escalation_reason, self.duration_label,
             )
-            self._resolve(f"Auto-escalation: member has been **timed out for {self.duration_label}**.")
+            self.resolve(f"Auto-escalation: member has been **timed out for {self.duration_label}**.")
             await self._alert_owner(interaction)
 
         await interaction.edit_original_response(view=self)
 
-    async def _skip(self, interaction: discord.Interaction):
-        if self.resolved:
-            await interaction.response.defer()
-            return
-        self._resolve("Auto-escalation skipped, no timeout applied.")
+    async def on_cancel(self, interaction: discord.Interaction):
+        self.resolve("Auto-escalation skipped, no timeout applied.")
         await interaction.response.edit_message(view=self)
 
     async def _alert_owner(self, interaction: discord.Interaction):
@@ -164,16 +136,6 @@ class WarnEscalationView(discord.ui.LayoutView):
         alert.timestamp = discord.utils.utcnow()
         alert.set_footer(text=f"User ID: {self.member.id}")
         await self.cog._notify_owner(guild, alert)
-
-    async def on_timeout(self):
-        if self.resolved:
-            return
-        self._resolve("Auto-escalation prompt expired, no timeout applied.")
-        if self.message:
-            try:
-                await self.message.edit(view=self)
-            except discord.HTTPException as e:
-                logger.warning(f"Could not mark the warn prompt for case #{self.case_number} as expired: {e}")
 
 
 @visibility_gate(*PERMISSIONS.values())

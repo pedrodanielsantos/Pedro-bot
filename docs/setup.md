@@ -37,8 +37,8 @@ DOG_API_KEY=your_dog_api_key         # /dog
 SYNC_ON_STARTUP=false                # optional; skip the automatic command sync on every restart
 LOG_LEVEL=DEBUG                      # optional; defaults to INFO
 WEB_HOST=0.0.0.0                     # optional; defaults to 127.0.0.1, see Dashboard
-CONFIRM_EMOJI=<:name:id>             # optional; custom emoji on the warn prompt's Escalate button
-CANCEL_EMOJI=<:name:id>              # optional; custom emoji on the warn prompt's Skip button
+CONFIRM_EMOJI=<:name:id>             # optional; custom emoji on confirm prompts' confirm button
+CANCEL_EMOJI=<:name:id>              # optional; custom emoji on confirm prompts' cancel button
 
 LAVALINK_DIR=C:\lavalink             # music; where setup_lavalink.py installed the node
 LAVALINK_URI=http://127.0.0.1:2333   # music; the node's address
