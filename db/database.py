@@ -147,7 +147,7 @@ async def initialize_databases():
     """)
 
     # AUTOINCREMENT so a deleted reminder's id is never handed to a new one,
-    # since ids are shown to users and typed back into /reminder delete.
+    # since ids are shown to users and typed back into /reminder cancel.
     # timezone is set by /reminder at.
     await db.execute("""
         CREATE TABLE IF NOT EXISTS reminders (

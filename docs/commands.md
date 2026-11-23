@@ -48,8 +48,8 @@
 | `/avatar` | Displays the avatar of a user |
 | `/help` | Displays the help message with all available commands |
 | `/reminder at` | Set a reminder for a specific date and time |
+| `/reminder cancel` | Cancel one of your reminders |
 | `/reminder clear` | Delete all your reminders in this server |
-| `/reminder delete` | Delete one of your reminders |
 | `/reminder in` | Set a reminder for an amount of time from now |
 | `/reminder list` | List your reminders in this server |
 | `/reminder repeat` | Make one of your reminders repeat |

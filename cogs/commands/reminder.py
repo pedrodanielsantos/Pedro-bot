@@ -361,13 +361,13 @@ class Reminder(commands.GroupCog, group_name="reminder"):
         embed = await _upcoming_embed(found, "is due")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(name="delete", description="Delete one of your reminders")
-    @app_commands.describe(reminder="The reminder to delete")
+    @app_commands.command(name="cancel", description="Cancel one of your reminders")
+    @app_commands.describe(reminder="The reminder to cancel")
     @app_commands.autocomplete(reminder=_reminder_autocomplete)
-    async def delete(self, interaction: discord.Interaction, reminder: str):
+    async def cancel(self, interaction: discord.Interaction, reminder: str):
         found = await self._get_owned(interaction, reminder)
         await reminder_delete(found["id"], interaction.guild_id, interaction.user.id)
-        embed = await guild_embed(interaction.guild_id, f"Deleted reminder **#{found['id']}**.\n{_short(found['content'], 200)}")
+        embed = await guild_embed(interaction.guild_id, f"Cancelled reminder **#{found['id']}**.\n{_short(found['content'], 200)}")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="clear", description="Delete all your reminders in this server")
