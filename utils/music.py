@@ -190,7 +190,7 @@ async def require_dj(interaction: discord.Interaction, player: wavelink.Player):
 def format_track_length(milliseconds: int) -> str:
     """Formats a playback time as m:ss, or h:mm:ss past an hour.
 
-    Separate from utils.duration.format_duration(), which renders "3m 42s"
+    Separate from utils.chrono.format_duration(), which renders "3m 42s"
     where music conventionally reads "3:42". Lavalink works in milliseconds.
     """
     total_seconds = max(0, milliseconds) // 1000
@@ -232,7 +232,7 @@ def number_span(first: int, count: int) -> str:
 def parse_position(value: str) -> int:
     """Parses a seek position like "90", "1:30" or "1:02:15" into milliseconds.
 
-    Deliberately not utils.duration.parse_duration: that reads "1m30s" style
+    Deliberately not utils.chrono.parse_duration: that reads "1m30s" style
     input, where a seek is conventionally typed as a timestamp.
     """
     parts = value.strip().split(":")

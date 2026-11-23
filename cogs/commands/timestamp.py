@@ -3,8 +3,8 @@ from discord import app_commands
 from discord.ext import commands
 from datetime import datetime, timedelta, timezone
 from db.database import get_guild_embed_color
+from utils.chrono import UNIT_CHOICES, parse_local_datetime, parse_zone, timezone_autocomplete
 from utils.errors import UserError
-from utils.timeinput import UNIT_CHOICES, parse_local_datetime, parse_zone, timezone_autocomplete
 
 STYLE_CHOICES = [
     app_commands.Choice(name="11/21/2024 (d)", value="d"),

@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from db.database import get_guild_embed_color
-from utils.uptime import format_uptime
+from utils.chrono import format_uptime
 
 class Stats(commands.Cog):
     def __init__(self, bot):

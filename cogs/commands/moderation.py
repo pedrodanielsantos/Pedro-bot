@@ -13,8 +13,8 @@ from db.database import (
     temp_ban_add, temp_ban_remove, temp_bans_due,
     add_warning, get_warnings, count_warnings, get_all_warnings, clear_warnings,
 )
+from utils.chrono import parse_duration
 from utils.confirm import ConfirmView
-from utils.duration import parse_duration
 from utils.embeds import send_error, success_embed
 from utils.errors import UserError
 from utils.permissions import require_permission, visibility_gate

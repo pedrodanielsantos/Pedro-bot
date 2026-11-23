@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from db.database import initialize_databases, close_all_databases
 from utils.log import quiet_duplicate_loggers, setup_logging
 from utils.cogs import discover_cog_paths
-from utils.uptime import format_uptime
+from utils.chrono import format_uptime
 import asyncio
 import internal_api
 

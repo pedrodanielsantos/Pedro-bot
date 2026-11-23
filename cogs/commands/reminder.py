@@ -13,13 +13,14 @@ from db.database import (
     reminder_next_due, reminders_due, reminder_reschedule, reminder_set_repeat,
     reminder_delete, reminders_clear,
 )
+from utils.chrono import (
+    UNIT_CHOICES, format_duration, format_duration_long, parse_local_datetime, parse_zone, timezone_autocomplete,
+)
 from utils.confirm import ConfirmView
-from utils.duration import format_duration, format_duration_long
 from utils.embeds import guild_embed
 from utils.errors import UserError
 from utils.paginator import TEXT_DISPLAY_LIMIT, PaginatorView, chunk_text
 from utils.text import plural
-from utils.timeinput import UNIT_CHOICES, parse_local_datetime, parse_zone, timezone_autocomplete
 
 logger = logging.getLogger("reminder")
 

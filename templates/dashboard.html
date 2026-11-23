@@ -177,8 +177,8 @@
             const el = document.getElementById('uptime-value');
 
             // Demotes the units the way the latency card does, so the digits carry the
-            // value. Mirrors utils/uptime.py, which stays plain text because the bot
-            // log and /stats share it.
+            // value. Mirrors format_uptime() in utils/chrono.py, which stays plain text
+            // because the bot log and /stats share it.
             function formatUptime(totalSeconds) {
                 const parts = [
                     [Math.floor(totalSeconds / 86400), 'd'],
