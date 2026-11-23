@@ -106,8 +106,9 @@ client still gets a direct URL. Each reason is a full Java stack trace, printed
 by the node, Wavelink and the bot. Only the bot's one-line summary reaches the
 console: the other two are filtered by `_QUIET_NODE_LOGGERS` in
 [`run.py`](../run.py) and `quiet_duplicate_loggers()` in
-[`utils/log.py`](../utils/log.py). Set `LOG_LEVEL=DEBUG` in `.env` to get the
-per-client reasons back. The node's own `logs/` keep the full trace either way.
+[`utils/runtime/log.py`](../utils/runtime/log.py). Set `LOG_LEVEL=DEBUG` in
+`.env` to get the per-client reasons back. The node's own `logs/` keep the full
+trace either way.
 
 Any other warning or error from the node keeps its line and loses only its
 stack frames, which leaves the exception and each `Caused by:` under it. For a

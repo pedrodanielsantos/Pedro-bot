@@ -9,8 +9,8 @@ from fastapi import FastAPI, Body
 from fastapi.responses import StreamingResponse
 
 from utils.chrono import format_uptime
-from utils.cogs import discover_cog_paths, reload_shared_modules
-from utils.log import quiet_uvicorn_logging
+from utils.runtime.extensions import discover_cog_paths, reload_shared_modules
+from utils.runtime.log import quiet_uvicorn_logging
 
 COGS_DIR = os.path.join(os.path.dirname(__file__), "cogs")
 

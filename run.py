@@ -12,8 +12,8 @@ from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 import web
-from utils.log import RawConsoleSink, color_log_line, setup_logging
-from utils.vendor import check_for_updates
+from utils.runtime.log import RawConsoleSink, color_log_line, setup_logging
+from utils.runtime.vendor import check_for_updates
 
 # run.py needs LAVALINK_* to decide whether to supervise a node. bot.py loads
 # this again in its own process, which is a no-op the second time.

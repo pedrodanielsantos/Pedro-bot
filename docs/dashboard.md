@@ -27,7 +27,7 @@ both processes read as one log.
 
 Restarting `run.py` itself starts the page empty. The previous run's output is
 kept as `logs/console.raw.1`, with older runs shifted up to `.5`. The file also
-rolls over at 50 MB mid-run. Both limits are set in `utils/log.py`.
+rolls over at 50 MB mid-run. Both limits are set in `utils/runtime/log.py`.
 
 ## Internal API
 

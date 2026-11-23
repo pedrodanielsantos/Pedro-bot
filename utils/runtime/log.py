@@ -15,7 +15,7 @@ _LOG_LINE_RE = re.compile(
     re.DOTALL,
 )
 
-LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs")
 LOG_FILE = os.path.join(LOG_DIR, "bot.log")
 CONSOLE_RAW_FILE = os.path.join(LOG_DIR, "console.raw")
 # Rolls over to console.raw.1 when hit, so the Console page loses its scrollback but

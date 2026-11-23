@@ -12,9 +12,9 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from utils.cogs import discover_cog_paths, reload_shared_modules
-from utils.log import CONSOLE_RAW_FILE, log_file_size, quiet_uvicorn_logging, tail_log_file, tail_log_lines
-from utils.vendor import static_urls
+from utils.runtime.extensions import discover_cog_paths, reload_shared_modules
+from utils.runtime.log import CONSOLE_RAW_FILE, log_file_size, quiet_uvicorn_logging, tail_log_file, tail_log_lines
+from utils.runtime.vendor import static_urls
 
 COGS_DIR = os.path.join(os.path.dirname(__file__), "cogs")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")

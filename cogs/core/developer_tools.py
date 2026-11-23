@@ -7,9 +7,9 @@ from discord.ext import commands
 import os
 import wavelink
 from db.database import get_guild_embed_color, delete_mod_cases, reset_case_counter
-from utils.cogs import reload_shared_modules
 from utils.embeds import error_embed, success_embed
 from utils.parsing import parse_number_spec
+from utils.runtime.extensions import reload_shared_modules
 from utils.text import plural
 
 logger = logging.getLogger("dev")

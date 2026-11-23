@@ -1,6 +1,6 @@
 """Downloads the browser libraries the dashboard serves from static/vendor/.
 
-Run after changing a pinned version in utils/vendor.py:
+Run after changing a pinned version in utils/runtime/vendor.py:
 
     python scripts/update_vendor.py
 
@@ -18,7 +18,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from utils.vendor import VENDORED
+from utils.runtime.vendor import VENDORED
 
 VENDOR_DIR = REPO_ROOT / "static" / "vendor"
 

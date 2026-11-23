@@ -57,7 +57,7 @@ separate "docs" commits.
 
 The dashboard serves htmx and ansi_up from `static/vendor/` rather than a CDN,
 so it still works with no internet and so an upstream release can't change what
-runs without a commit. Versions are pinned in `utils/vendor.py`.
+runs without a commit. Versions are pinned in `utils/runtime/vendor.py`.
 
 On startup, `run.py` checks npm in the background and logs a line in the console
 when a newer release exists. Nothing updates on its own. To take one:
@@ -66,9 +66,9 @@ when a newer release exists. Nothing updates on its own. To take one:
 py -3.13 scripts/update_vendor.py
 ```
 
-Bump the version in `utils/vendor.py` first. The filename carries the version,
-so the new file lands alongside the old one, which the script names for you to
-delete in the same commit.
+Bump the version in `utils/runtime/vendor.py` first. The filename carries the
+version, so the new file lands alongside the old one, which the script names for
+you to delete in the same commit.
 
 Each library's upstream license is fetched next to it and must stay there.
 ansi_up is MIT, whose notice has to travel with the code, and its built file
