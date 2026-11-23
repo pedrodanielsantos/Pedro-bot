@@ -15,7 +15,7 @@ from dataclasses import dataclass
 import aiohttp
 import certifi
 
-from utils.music import PendingTrack
+from utils.music.playback import PendingTrack
 
 logger = logging.getLogger("music")
 

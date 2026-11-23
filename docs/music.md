@@ -19,10 +19,10 @@ Lavalink handles encryption, DAVE included.
 | [`LavaSrc`](https://github.com/topi314/LavaSrc) | Installed but all sources off, see [Spotify links](#spotify-links) and [Tidal links](#tidal-links) |
 | [`cogs/core/music_manager.py`](../cogs/core/music_manager.py) | Owns the node connection and playback lifecycle |
 | [`cogs/commands/music.py`](../cogs/commands/music.py) | The slash commands |
-| [`utils/music.py`](../utils/music.py) | Player lookup, DJ gating, announce channel, the queue, track formatting, track search and its cache |
-| [`utils/spotify.py`](../utils/spotify.py) | Spotify link parsing and metadata |
-| [`utils/tidal.py`](../utils/tidal.py) | Tidal link parsing and metadata, via the API or the page |
-| [`utils/youtube.py`](../utils/youtube.py) | YouTube playlist listing via the API, see [YouTube playlists](#youtube-playlists) |
+| [`utils/music/playback.py`](../utils/music/playback.py) | Player lookup, DJ gating, announce channel, the queue, track formatting, track search and its cache |
+| [`utils/music/spotify.py`](../utils/music/spotify.py) | Spotify link parsing and metadata |
+| [`utils/music/tidal.py`](../utils/music/tidal.py) | Tidal link parsing and metadata, via the API or the page |
+| [`utils/music/youtube.py`](../utils/music/youtube.py) | YouTube playlist listing via the API, see [YouTube playlists](#youtube-playlists) |
 
 The node is **optional**. If `LAVALINK_DIR` is unset, or `Lavalink.jar`,
 `application.yml` or `java` is missing, `run.py` logs which and skips the node.
@@ -169,11 +169,11 @@ one, where the script the plugin fetches is the embed variant.
 
 ## The queue
 
-`TrackQueue` in [`utils/music.py`](../utils/music.py) holds every track of a
-session in play order, played ones included, with a cursor on the current or
-last played track. A track's number is its index + 1, so playback never changes
-it, and only the commands below do. The queue lives on the player, so numbers
-only reset on `/clear` or when the bot leaves.
+`TrackQueue` in [`utils/music/playback.py`](../utils/music/playback.py) holds
+every track of a session in play order, played ones included, with a cursor on
+the current or last played track. A track's number is its index + 1, so
+playback never changes it, and only the commands below do. The queue lives on
+the player, so numbers only reset on `/clear` or when the bot leaves.
 
 Wavelink's own `Queue` goes unused. `player.queue` stays empty and every track is
 played with `add_history=False`. Its queue and history can't hold a
@@ -256,9 +256,10 @@ helper has no cogs, so `music_manager` attaches its own handlers to it
 (`HELPER_EVENTS`), and one set of handlers serves both accounts.
 
 Each account holds its own copy of a server. The lookups in
-[`utils/music.py`](../utils/music.py) take the bot and ask each account for its
-voice client, and anything about members (who is listening, who queued a track)
-is read from the bot's copy, since the helper is given no member list.
+[`utils/music/playback.py`](../utils/music/playback.py) take the bot and ask
+each account for its voice client, and anything about members (who is
+listening, who queued a track) is read from the bot's copy, since the helper is
+given no member list.
 
 ### Who posts
 
@@ -359,8 +360,8 @@ Leaving because the voice channel emptied is silent.
 
 ### Where they go
 
-`announce_channel()` in [`utils/music.py`](../utils/music.py) picks the channel
-each time one is sent:
+`announce_channel()` in [`utils/music/playback.py`](../utils/music/playback.py)
+picks the channel each time one is sent:
 
 1. The guild's music channel, set with `/set musicchannel`.
 2. Otherwise `player.home`, the channel `/play` or `/insert` last ran in. Both
@@ -383,10 +384,11 @@ first, or has no audio after `MUSIC_ANNOUNCE_TIMEOUT` seconds (extended while
 paused), is not announced.
 
 The announcement's footer names who queued the track, from a `requester_id` in
-its `extras`. `with_requester()` in [`utils/music.py`](../utils/music.py) sets
-it on a copy, since search results are cached and shared. Spotify and Tidal
-tracks left pending carry it on their `PendingTrack` until `fill_queue` resolves
-them. A requester who has since left the guild gets no footer.
+its `extras`. `with_requester()` in
+[`utils/music/playback.py`](../utils/music/playback.py) sets it on a copy, since
+search results are cached and shared. Spotify and Tidal tracks left pending
+carry it on their `PendingTrack` until `fill_queue` resolves them. A requester
+who has since left the guild gets no footer.
 
 A stand-in's announcement adds a line naming the track it replaces. The
 original's title and author ride on the stand-in's `extras` next to its fallback
@@ -470,10 +472,11 @@ in [`application.yml.example`](../config/lavalink/application.yml.example) loads
 300 tracks and `/shuffle` only ever reorders those. The node reports no total,
 so nothing says the playlist was cut short.
 
-With `YOUTUBE_API_KEY` set, [`utils/youtube.py`](../utils/youtube.py) lists the
-playlist through the YouTube Data API instead, 50 tracks a request, up to
-`MUSIC_YOUTUBE_LIMIT`. A second pass reads the lengths, which the listing does
-not carry. Deleted and private videos are left out.
+With `YOUTUBE_API_KEY` set,
+[`utils/music/youtube.py`](../utils/music/youtube.py) lists the playlist through
+the YouTube Data API instead, 50 tracks a request, up to `MUSIC_YOUTUBE_LIMIT`.
+A second pass reads the lengths, which the listing does not carry. Deleted and
+private videos are left out.
 
 The tracks are queued pending, like a [Spotify](#spotify-links) playlist, and
 each is loaded from the node by its own link as its turn comes, so nothing is
@@ -510,8 +513,8 @@ number and can still be moved or skipped.
 
 A track can end while the track start's `fill_queue` is still searching, e.g.
 on a quick `/skip`, and find the next track still pending. `play_next()` in
-[`utils/music.py`](../utils/music.py) then waits on that search through
-`fill_queue`'s lock before starting it.
+[`utils/music/playback.py`](../utils/music/playback.py) then waits on that
+search through `fill_queue`'s lock before starting it.
 
 The metadata arrives in one request, so `/queue` lists the whole playlist right
 away, with tracks not yet looked up carrying no link.
@@ -527,7 +530,8 @@ the same way, so inserting one costs no more searches than `/play` does.
 Handled the same way and for the same reason: Tidal serves no audio here, so
 `/play` reads the metadata and finds the recording elsewhere. LavaSrc's Tidal
 source needs an undocumented token and throws at startup without one, so it
-stays off and [`utils/tidal.py`](../utils/tidal.py) reads Tidal directly.
+stays off and [`utils/music/tidal.py`](../utils/music/tidal.py) reads Tidal
+directly.
 
 `listen.tidal.com`, `www.tidal.com` and `tidal.com` all match, with `/browse/`
 optional. An artist link is deliberately not matched: there is no one recording
@@ -572,9 +576,9 @@ straight into the rate limit.
 
 Everything is read up front rather than a page at a time, because `/queue`,
 `/skip`, `/move` and `/shuffle` all work from the whole
-[queue](../utils/music.py). Paging lazily would leave them acting on whatever
-happened to be loaded, so a shuffle would reorder the first 20 and leave the
-rest in order. Within the cap,
+[queue](../utils/music/playback.py). Paging lazily would leave them acting on
+whatever happened to be loaded, so a shuffle would reorder the first 20 and
+leave the rest in order. Within the cap,
 a Tidal collection behaves exactly like a Spotify one, except that its count is
 exact: where Spotify can only hint that it was cut short, a Tidal collection
 says which 100 of how many were taken.

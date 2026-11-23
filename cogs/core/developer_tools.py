@@ -338,8 +338,8 @@ class DeveloperTools(commands.Cog):
                 await existing.move_to(channel)
             else:
                 # Neither a wavelink player nor discord.py's audio client: needs
-                # no Lavalink node, and utils.music.active_player() ignores
-                # anything that isn't a player.
+                # no Lavalink node, and utils.music.playback.guild_players()
+                # ignores anything that isn't a player.
                 await channel.connect(cls=TestVoiceClient, self_deaf=True)
         except (discord.ClientException, discord.HTTPException, asyncio.TimeoutError) as e:
             await ctx.reply(embed=error_embed(f"Could not join {channel.mention}: {e}"))

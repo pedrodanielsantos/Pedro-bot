@@ -24,7 +24,7 @@ from db.database import get_guild_embed_color, get_music_volume
 from utils.embeds import guild_embed
 from utils.errors import UserError
 from utils.mixins import SessionMixin
-from utils.music import (
+from utils.music.playback import (
     TrackQueue,
     backspaced_search,
     cached_or_search,
@@ -53,17 +53,17 @@ from utils.music import (
     voice_label,
     with_requester,
 )
-from utils.paginator import PaginatorView
-from utils.parsing import parse_number_spec
-from utils.spotify import fetch_entity, parse_spotify_url
-from utils.tidal import (
+from utils.music.spotify import fetch_entity, parse_spotify_url
+from utils.music.tidal import (
     api_configured,
     fetch_collection,
     fetch_track,
     fetch_track_api,
     parse_tidal_url,
 )
-from utils.youtube import fetch_playlist, parse_youtube_playlist, youtube_configured
+from utils.music.youtube import fetch_playlist, parse_youtube_playlist, youtube_configured
+from utils.paginator import PaginatorView
+from utils.parsing import parse_number_spec
 
 logger = logging.getLogger("music")
 

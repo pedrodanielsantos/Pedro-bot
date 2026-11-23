@@ -77,9 +77,9 @@ plugins:
       - "ytsearch:%QUERY%"
       - "scsearch:%QUERY%"
     sources:
-      # Spotify stays off: utils/spotify.py resolves those links instead, since
-      # LavaSrc can no longer obtain a token without a Premium account. Apple
-      # Music needs credentials below, Deezer a decryption key.
+      # Spotify stays off: utils/music/spotify.py resolves those links instead,
+      # since LavaSrc can no longer obtain a token without a Premium account.
+      # Apple Music needs credentials below, Deezer a decryption key.
       spotify: false
       applemusic: false
       deezer: false

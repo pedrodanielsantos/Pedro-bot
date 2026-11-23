@@ -26,7 +26,7 @@ import aiohttp
 from dotenv import load_dotenv
 
 from config.constants import MUSIC_PLAYLIST_LIMIT
-from utils.music import PendingTrack
+from utils.music.playback import PendingTrack
 
 load_dotenv()
 

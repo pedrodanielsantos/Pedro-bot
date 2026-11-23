@@ -19,7 +19,7 @@ import certifi
 from dotenv import load_dotenv
 
 from config.constants import MUSIC_YOUTUBE_LIMIT
-from utils.music import PendingTrack
+from utils.music.playback import PendingTrack
 
 load_dotenv()
 
@@ -27,7 +27,7 @@ logger = logging.getLogger("music")
 
 _API = "https://www.googleapis.com/youtube/v3"
 _HOSTS = ("youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be")
-# Left to the node: radios and mixes, and the lists utils/music.py also reads past.
+# Left to the node: radios and mixes, and the lists utils/music/playback.py also reads past.
 _NODE_LISTS = ("RD", "LL", "WL", "LM")
 _PAGE_SIZE = 50  # the most either endpoint returns per request
 _CONCURRENCY = 5  # duration requests in flight at once
@@ -35,7 +35,7 @@ _CONCURRENCY = 5  # duration requests in flight at once
 _DURATION_RE = re.compile(r"^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$")
 _TIMEOUT = aiohttp.ClientTimeout(total=10)
 
-# certifi's bundle, as utils/spotify.py uses, so the host's store isn't relied on.
+# certifi's bundle, as utils/music/spotify.py uses, so the host's store isn't relied on.
 _SSL = ssl.create_default_context(cafile=certifi.where())
 
 
@@ -136,7 +136,7 @@ async def fetch_playlist(
     node instead. Stops at MUSIC_YOUTUBE_LIMIT, with the playlist's own count
     reported separately so the caller can say what was left behind.
 
-    music links each track to music.youtube.com, which utils/music.py loads
+    music links each track to music.youtube.com, which utils/music/playback.py loads
     with the YouTube Music listing's artist and art.
     """
     header = await _get(session, "playlists", {"part": "snippet", "id": playlist_id})
