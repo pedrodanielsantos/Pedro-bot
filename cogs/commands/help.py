@@ -41,6 +41,7 @@ COMMAND_CATEGORIES = {
     "serverinfo": "Utility",
     "stats": "Utility",
     "timestamp": "Utility",
+    "reminder": "Utility",
 
     "image": "Image",
 

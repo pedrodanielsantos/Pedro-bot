@@ -2,11 +2,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo, available_timezones
 from db.database import get_guild_embed_color
 from utils.errors import UserError
-
-ALL_TIMEZONES = sorted(available_timezones())
+from utils.timeinput import UNIT_CHOICES, parse_local_datetime, parse_zone, timezone_autocomplete
 
 STYLE_CHOICES = [
     app_commands.Choice(name="11/21/2024 (d)", value="d"),
@@ -16,13 +14,6 @@ STYLE_CHOICES = [
     app_commands.Choice(name="November 21, 2024 18:36 (f)", value="f"),
     app_commands.Choice(name="Thursday, November 21, 2024 18:36 (F)", value="F"),
     app_commands.Choice(name="in 3 hours (R)", value="R"),
-]
-
-UNIT_CHOICES = [
-    app_commands.Choice(name="Minutes", value="minutes"),
-    app_commands.Choice(name="Hours", value="hours"),
-    app_commands.Choice(name="Days", value="days"),
-    app_commands.Choice(name="Weeks", value="weeks"),
 ]
 
 class TimestampResultView(discord.ui.LayoutView):
@@ -43,11 +34,6 @@ class Timestamp(commands.GroupCog, group_name="timestamp"):
         color = await get_guild_embed_color(interaction.guild_id)
         await interaction.response.send_message(view=TimestampResultView(tag, color))
 
-    async def _timezone_autocomplete(self, interaction: discord.Interaction, current: str):
-        current = current.lower()
-        matches = [tz for tz in ALL_TIMEZONES if current in tz.lower()]
-        return [app_commands.Choice(name=tz, value=tz) for tz in matches[:25]]
-
     @app_commands.command(name="at", description="Generate a timestamp tag for a specific date and time")
     @app_commands.describe(
         date="Date as YYYY-MM-DD",
@@ -56,25 +42,14 @@ class Timestamp(commands.GroupCog, group_name="timestamp"):
         style="Display style",
     )
     @app_commands.choices(style=STYLE_CHOICES)
-    @app_commands.autocomplete(timezone=_timezone_autocomplete)
+    @app_commands.autocomplete(timezone=timezone_autocomplete)
     async def at(self, interaction: discord.Interaction, date: str, time: str, timezone: str, style: str):
         try:
-            zone = ZoneInfo(timezone)
-        except (ValueError, KeyError):
-            raise UserError("Unknown timezone. Pick one from the autocomplete list.")
+            moment = parse_local_datetime(date, time, parse_zone(timezone))
+        except ValueError as e:
+            raise UserError(str(e))
 
-        naive = None
-        for time_format in ("%H:%M:%S", "%H:%M"):
-            try:
-                naive = datetime.strptime(f"{date} {time}", f"%Y-%m-%d {time_format}")
-                break
-            except ValueError:
-                continue
-
-        if naive is None:
-            raise UserError("Invalid date/time. Use YYYY-MM-DD for the date and HH:MM or HH:MM:SS (24h) for the time.")
-
-        epoch = int(naive.replace(tzinfo=zone).timestamp())
+        epoch = int(moment.timestamp())
         await self._reply_with_tag(interaction, epoch, style)
 
     @app_commands.command(name="in", description="Generate a timestamp tag relative to now")

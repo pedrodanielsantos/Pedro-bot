@@ -47,6 +47,13 @@
 | --- | --- |
 | `/avatar` | Displays the avatar of a user |
 | `/help` | Displays the help message with all available commands |
+| `/reminder at` | Set a reminder for a specific date and time |
+| `/reminder clear` | Delete all your reminders in this server |
+| `/reminder delete` | Delete one of your reminders |
+| `/reminder in` | Set a reminder for an amount of time from now |
+| `/reminder list` | List your reminders in this server |
+| `/reminder repeat` | Make one of your reminders repeat |
+| `/reminder when` | Show one of your reminders |
 | `/rules` | Displays the server rules |
 | `/serverinfo` | Displays server statistics |
 | `/settings` | View your personal settings |

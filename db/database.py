@@ -146,6 +146,25 @@ async def initialize_databases():
         )
     """)
 
+    # AUTOINCREMENT so a deleted reminder's id is never handed to a new one,
+    # since ids are shown to users and typed back into /reminder delete.
+    # timezone is set by /reminder at.
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS reminders (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id         INTEGER NOT NULL,
+            guild_id        INTEGER NOT NULL,
+            channel_id      INTEGER NOT NULL,
+            content         TEXT NOT NULL,
+            due_at          INTEGER NOT NULL,
+            created_at      INTEGER NOT NULL,
+            timezone        TEXT,
+            repeat_interval INTEGER
+        )
+    """)
+    await db.execute("CREATE INDEX IF NOT EXISTS reminders_due ON reminders (due_at)")
+    await db.execute("CREATE INDEX IF NOT EXISTS reminders_owner ON reminders (guild_id, user_id)")
+
     await db.commit()
 
 async def close_all_databases():
@@ -484,6 +503,97 @@ async def get_music_announce_channel(guild_id: int) -> int | None:
     async with db.execute("SELECT music_announce_channel_id FROM guild_data WHERE guild_id = ?", (guild_id,)) as cursor:
         result = await cursor.fetchone()
         return result[0] if result else None
+
+REMINDER_FIELDS = (
+    "id", "user_id", "guild_id", "channel_id", "content",
+    "due_at", "created_at", "timezone", "repeat_interval",
+)
+_REMINDER_COLUMNS = ", ".join(REMINDER_FIELDS)
+
+def _reminder_row(row) -> dict | None:
+    return dict(zip(REMINDER_FIELDS, row)) if row else None
+
+async def reminder_add(
+    user_id: int, guild_id: int, channel_id: int, content: str, due_at: int,
+    timezone: str | None,
+) -> int:
+    async with db.execute(
+        """
+        INSERT INTO reminders (user_id, guild_id, channel_id, content, due_at, created_at, timezone)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        RETURNING id
+        """,
+        (user_id, guild_id, channel_id, content, due_at, int(time.time()), timezone)
+    ) as cursor:
+        result = await cursor.fetchone()
+    await db.commit()
+    return result[0]
+
+async def reminder_get(reminder_id: int, guild_id: int, user_id: int) -> dict | None:
+    """One reminder, only if it belongs to user_id in guild_id."""
+    async with db.execute(
+        f"SELECT {_REMINDER_COLUMNS} FROM reminders WHERE id = ? AND guild_id = ? AND user_id = ?",
+        (reminder_id, guild_id, user_id)
+    ) as cursor:
+        return _reminder_row(await cursor.fetchone())
+
+async def reminders_for_user(guild_id: int, user_id: int) -> list[dict]:
+    async with db.execute(
+        f"SELECT {_REMINDER_COLUMNS} FROM reminders WHERE guild_id = ? AND user_id = ? ORDER BY due_at, id",
+        (guild_id, user_id)
+    ) as cursor:
+        return [_reminder_row(row) for row in await cursor.fetchall()]
+
+async def reminder_count(guild_id: int, user_id: int) -> int:
+    async with db.execute(
+        "SELECT COUNT(*) FROM reminders WHERE guild_id = ? AND user_id = ?", (guild_id, user_id)
+    ) as cursor:
+        return (await cursor.fetchone())[0]
+
+async def reminder_next_due() -> int | None:
+    """Earliest due_at across all reminders, None when there are none."""
+    async with db.execute("SELECT MIN(due_at) FROM reminders") as cursor:
+        return (await cursor.fetchone())[0]
+
+async def reminders_due(now_ts: int) -> list[dict]:
+    async with db.execute(
+        f"SELECT {_REMINDER_COLUMNS} FROM reminders WHERE due_at <= ? ORDER BY due_at, id", (now_ts,)
+    ) as cursor:
+        return [_reminder_row(row) for row in await cursor.fetchall()]
+
+async def reminder_reschedule(reminder_id: int, due_at: int) -> bool:
+    """False when the reminder no longer exists."""
+    async with db.execute("UPDATE reminders SET due_at = ? WHERE id = ?", (due_at, reminder_id)) as cursor:
+        updated = cursor.rowcount
+    await db.commit()
+    return updated > 0
+
+async def reminder_set_repeat(reminder_id: int, interval: int):
+    await db.execute("UPDATE reminders SET repeat_interval = ? WHERE id = ?", (interval, reminder_id))
+    await db.commit()
+
+async def reminder_delete(reminder_id: int, guild_id: int | None = None, user_id: int | None = None) -> bool:
+    """Deletes by id. guild_id and user_id, when given, scope it to that owner."""
+    query = "DELETE FROM reminders WHERE id = ?"
+    params = [reminder_id]
+    if guild_id is not None:
+        query += " AND guild_id = ?"
+        params.append(guild_id)
+    if user_id is not None:
+        query += " AND user_id = ?"
+        params.append(user_id)
+    async with db.execute(query, params) as cursor:
+        deleted = cursor.rowcount
+    await db.commit()
+    return deleted > 0
+
+async def reminders_clear(guild_id: int, user_id: int) -> int:
+    async with db.execute(
+        "DELETE FROM reminders WHERE guild_id = ? AND user_id = ?", (guild_id, user_id)
+    ) as cursor:
+        deleted = cursor.rowcount
+    await db.commit()
+    return deleted
 
 async def add_autorole(guild_id: int, role_id: int):
     await db.execute(
