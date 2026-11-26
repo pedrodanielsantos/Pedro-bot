@@ -164,6 +164,8 @@ class MusicManager(commands.Cog):
         self.bot = bot
         self._helper_task = None
         self._sessions: list[aiohttp.ClientSession] = []
+        # Per voice channel, so the music and lobby listeners leave it only once.
+        self._leave_locks: dict[int, asyncio.Lock] = {}
 
     async def cog_load(self):
         # bot.py loads cogs before bot.start(), so on first startup the bot has
@@ -626,30 +628,49 @@ class MusicManager(commands.Cog):
         await player.disconnect()
         logger.info(f"Left voice channel {voice_channel.id} in guild {voice_channel.guild.id} (idle timeout).")
 
+    async def leave_empty(self, channel: discord.abc.GuildChannel):
+        """Announces and disconnects the player in channel once no human is left.
+
+        Also called by lobby_manager before it deletes an empty lobby, so the
+        announcement goes out while the lobby still exists. A second caller
+        waits for the first and then finds no player.
+        """
+        async with self._leave_locks.setdefault(channel.id, asyncio.Lock()):
+            player = channel_player(self.bot, channel)
+            if player is None or listeners(self.bot, player):
+                return
+
+            target = await announce_channel(self.bot, player)
+            if target is not None:
+                # Named, not mentioned: a deleted lobby's mention no longer resolves.
+                name = discord.utils.escape_markdown(player.channel.name)
+                try:
+                    await target.send(embed=discord.Embed(
+                        description=f"Left **{name}** since everyone left.",
+                        color=await get_guild_embed_color(target.guild.id),
+                    ))
+                except discord.HTTPException:
+                    pass
+
+            voice_channel = player.channel
+            await player.disconnect()
+            logger.info(f"Left voice channel {voice_channel.id} in guild {voice_channel.guild.id} (channel empty).")
+
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
-        """Leaves once the last human does, rather than playing to an empty channel.
-
-        Also matters for lobbies: lobby_manager only deletes a lobby that has no
-        human left in it, so a player sitting in one would keep it alive forever.
-        """
-        # Only react to someone leaving a channel a player is actually in. Seen
-        # by the bot for either account's player, as both are in the guild.
+        """Leaves once the last human does, rather than playing to an empty channel."""
+        # Only react to someone leaving a channel. Seen by the bot for either
+        # account's player, as both are in the guild.
         if not before.channel:
             return
         if after.channel and after.channel.id == before.channel.id:
             return
 
-        player = channel_player(self.bot, before.channel)
-        if player is None:
-            return
+        await self.leave_empty(before.channel)
 
-        if listeners(self.bot, player):
-            return
-
-        voice_channel = player.channel
-        await player.disconnect()
-        logger.info(f"Left voice channel {voice_channel.id} in guild {voice_channel.guild.id} (channel empty).")
+    @commands.Cog.listener()
+    async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel):
+        self._leave_locks.pop(channel.id, None)
 
 
 async def setup(bot: commands.Bot):

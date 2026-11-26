@@ -347,7 +347,7 @@ nothing playable is left after it.
 
 ## Announcements
 
-Four messages are posted without a command asking for them, all from
+Five messages are posted without a command asking for them, all from
 `music_manager`:
 
 | Message | When |
@@ -356,8 +356,11 @@ Four messages are posted without a command asking for them, all from
 | Couldn't find a playable version of X, skipping. | A failed track has no stand-in |
 | The queue has ended. Leaving in 5 minutes unless something is queued. | A track ended and nothing is left to play |
 | Left #channel after being idle. | Nothing has played for `MUSIC_IDLE_TIMEOUT` seconds |
+| Left **channel** since everyone left. | The last human left the player's voice channel |
 
-Leaving because the voice channel emptied is silent.
+The last one names the channel instead of mentioning it, since an empty lobby is
+deleted right after. `lobby_manager` calls `leave_empty()` before deleting one,
+so the player announces and leaves first.
 
 ### Where they go
 
