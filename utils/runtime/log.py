@@ -132,6 +132,10 @@ class RawConsoleSink:
         if not data:
             return
         with self._lock:
+            # Closed means shutdown: output printed after close() still reaches the
+            # console through the tee, it just isn't kept.
+            if self._fh.closed:
+                return
             if self._size + len(data) > self.max_bytes:
                 error = self._roll_over()
                 self._fh.seek(0)

@@ -424,7 +424,6 @@ async def main():
         # streaming through goes away.
         await supervisor.stop()
         await lavalink.stop()
-        _console_sink.close()
 
 
 if __name__ == "__main__":
@@ -432,3 +431,6 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Stopped.")
+    finally:
+        # Closed last, so the line above still reaches console.raw.
+        _console_sink.close()
