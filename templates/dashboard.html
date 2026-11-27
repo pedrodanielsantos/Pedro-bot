@@ -3,20 +3,24 @@
 
 <header>
     <div class="header-left">
-        <div id="header-status-dot" class="dot {{ 'dot-online' if is_ready else 'dot-offline' }}"></div>
-        <span class="header-title">{{ bot_name }}</span>
-        <span class="header-sub">/ Dashboard</span>
-        <button class="icon-btn" style="margin-left: -8px;"
-            title="Reload web.py"
-            hx-post="/web/reload"
-            hx-target="#web-reload-status"
-            hx-swap="outerHTML"
-            hx-disabled-elt="this">
-            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2v3.5H10" />
-            </svg>
-        </button>
-        <span id="web-reload-status"></span>
+        <div class="header-name">
+            <div id="header-status-dot" class="dot {{ 'dot-online' if is_ready else 'dot-offline' }}"></div>
+            <span class="header-title">{{ bot_name }}</span>
+        </div>
+        <div class="header-trail">
+            <span class="header-sub">/ Dashboard</span>
+            <button class="icon-btn" style="margin-left: -8px;"
+                title="Reload web.py"
+                hx-post="/web/reload"
+                hx-target="#web-reload-status"
+                hx-swap="outerHTML"
+                hx-disabled-elt="this">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2v3.5H10" />
+                </svg>
+            </button>
+            <span id="web-reload-status"></span>
+        </div>
     </div>
     <a href="/console" class="btn btn-fixed-width">Console</a>
 </header>
@@ -66,15 +70,20 @@
     <div>
         <div id="cogs-form" data-online="{{ 'true' if is_ready else 'false' }}" data-control="{{ status }}">
             <table>
+                <colgroup>
+                    <col class="col-select">
+                    <col>
+                    <col class="col-actions">
+                </colgroup>
                 <thead>
                     <tr id="cogs-header-row">
-                        <th style="width: 32px;">
+                        <th>
                             <input type="checkbox" id="cogs-select-all" style="display: none;">
                         </th>
                         <th>
                             <span id="cogs-header-label" style="margin-left: -32px;">Cogs</span>
                         </th>
-                        <th id="cogs-actions-cell" style="text-align: right; width: 220px;">
+                        <th id="cogs-actions-cell" style="text-align: right;">
                             <span id="cogs-actions-label"></span>
                             <div id="cogs-bulk-actions" class="actions" style="display: none; justify-content: flex-end; flex-wrap: wrap; row-gap: 4px;">
                                 <button type="button" id="cogs-bulk-reload" class="btn btn-fixed-width"

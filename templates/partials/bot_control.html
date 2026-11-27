@@ -19,7 +19,7 @@
         {% endif %}
         {% include "partials/sync_result.html" %}
     </div>
-    <div style="display: flex; gap: 8px;">
+    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
         <button class="btn btn-primary btn-fixed-width"
             hx-post="/commands/sync"
             hx-target="#sync-status"

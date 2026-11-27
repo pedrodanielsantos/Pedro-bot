@@ -78,14 +78,13 @@
 
         /* Spans the window and so do its contents: the title and the button sit against
            the page edges on both pages, independent of how wide main is allowed to be. */
+        /* Baseline, so the nav button stays level with the title line when the
+           left side wraps to two. */
         header {
             background: var(--surface);
             padding: 14px var(--pad);
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            row-gap: 8px;
+            align-items: baseline;
             gap: 10px;
         }
 
@@ -96,12 +95,31 @@
 
         /* Baseline, not centre: the title, subtitle and icon button are different
            heights, so centring each box leaves their glyphs at different levels. The
-           dot is a shape with no baseline, so it opts back out. */
+           dot is a shape with no baseline, so it opts back out.
+           Shrinks instead of pushing the nav button down, so a narrow screen wraps the
+           trail instead. The padding, cancelled on the name, indents a wrapped trail
+           past the dot (its width plus the gap). */
         .header-left {
+            --name-indent: calc(9px + 10px);
             display: flex;
             align-items: baseline;
             flex-wrap: wrap;
-            row-gap: 8px;
+            gap: 0 10px;
+            flex: 1 1 0;
+            min-width: 0;
+            padding-left: var(--name-indent);
+        }
+
+        .header-name {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            margin-left: calc(-1 * var(--name-indent));
+        }
+
+        .header-trail {
+            display: flex;
+            align-items: baseline;
             gap: 10px;
         }
 
@@ -244,9 +262,11 @@
             justify-content: center;
         }
 
+        /* minmax(0, ...) lets a column shrink below its value's width, so a long
+           uptime wraps in its card instead of widening the page. */
         .stat-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: var(--pad);
         }
 
@@ -283,16 +303,19 @@
             border-top: 1px solid var(--border);
         }
 
+        /* Wraps the meta under the name once both don't fit on one line. */
         .guild-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            column-gap: 10px;
             padding: 9px 0;
             border-bottom: 1px solid var(--border);
         }
 
         .guild-item:last-child { border-bottom: none; }
-        .guild-name { font-size: 13px; }
+        .guild-name { font-size: 13px; overflow-wrap: anywhere; }
         .guild-meta { font-size: 11px; color: var(--muted); }
 
         table {
@@ -303,6 +326,10 @@
             border-radius: var(--radius);
             overflow: hidden;
         }
+
+        /* In the colgroup, not on the cells, so the narrow layout below can drop them. */
+        .col-select  { width: 32px; }
+        .col-actions { width: 220px; }
 
         table input[type="checkbox"] {
             appearance: none;
@@ -426,11 +453,62 @@
         .badge-error   { background: rgba(237, 66, 69, 0.12);  color: var(--red); }
         .badge-warning { background: rgba(250, 166, 26, 0.12); color: var(--yellow); }
 
+        /* Messages carry long unbroken tokens (module paths, endpoints). */
         .error-msg {
             font-size: 11px;
             color: var(--red);
             display: block;
             margin-top: 3px;
+            overflow-wrap: anywhere;
+        }
+
+        /* Phones, down to 320px. Below 480px the 220px actions column leaves the
+           longest cog name less room than it needs, and three stat cards leave
+           "Offline" too little. */
+        @media (max-width: 479px) {
+            /* Uptime is the widest value, so it gets the full row. */
+            .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .stat-grid > :last-child { grid-column: 1 / -1; }
+
+            /* Rows become flex lines that wrap one by one: the actions drop under
+               the name only where both don't fit side by side. Padding and the
+               separator move from the cells to the row, so a wrapped row reads as one. */
+            table, thead, tbody { display: block; }
+            colgroup { display: none; }
+
+            tr {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                row-gap: 6px;
+                min-height: 48px;
+                padding: 10px 16px;
+                border-bottom: 1px solid var(--border);
+            }
+
+            tbody tr:last-child { border-bottom: none; }
+
+            th, td {
+                height: auto;
+                padding: 0;
+                border-bottom: none;
+            }
+
+            /* 32px, the column width it has in the table, keeps the names where they were. */
+            :is(th, td):first-child { flex: 0 0 32px; }
+
+            :is(th, td):nth-child(2) {
+                flex: 1 1 auto;
+                min-width: 0;
+                padding-right: 16px;
+                overflow-wrap: anywhere;
+            }
+
+            /* An error would size the cell to the whole message and wrap it off the
+               checkbox's line; claiming the rest of the line keeps it there. */
+            td:nth-child(2):has(.error-msg) { flex-basis: calc(100% - 32px); }
+
+            :is(th, td):last-child { margin-left: auto; }
         }
 
     </style>

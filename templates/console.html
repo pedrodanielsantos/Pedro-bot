@@ -6,16 +6,20 @@
 
 <header>
     <div class="header-left">
-        <div id="header-status-dot" class="dot {{ 'dot-online' if is_ready else 'dot-offline' }}"></div>
-        <span class="header-title">{{ bot_name }}</span>
-        <span class="header-sub">/ Console</span>
-        <button type="button" id="console-wrap" class="icon-btn" style="margin-left: -8px;"
-            title="Toggle line wrapping"
-            aria-pressed="false">
-            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M2 4h12M2 8h10a2.25 2.25 0 0 1 0 4.5H7M9 10.5l-2 2 2 2" />
-            </svg>
-        </button>
+        <div class="header-name">
+            <div id="header-status-dot" class="dot {{ 'dot-online' if is_ready else 'dot-offline' }}"></div>
+            <span class="header-title">{{ bot_name }}</span>
+        </div>
+        <div class="header-trail">
+            <span class="header-sub">/ Console</span>
+            <button type="button" id="console-wrap" class="icon-btn" style="margin-left: -8px;"
+                title="Toggle line wrapping"
+                aria-pressed="false">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 4h12M2 8h10a2.25 2.25 0 0 1 0 4.5H7M9 10.5l-2 2 2 2" />
+                </svg>
+            </button>
+        </div>
     </div>
     <a href="/" class="btn btn-fixed-width">Dashboard</a>
 </header>
