@@ -112,6 +112,13 @@
 | `/moderation unban` | Unbans a user from the server |
 | `/moderation warn` | Warns a member |
 | `/moderation warnings` | Lists warnings for a member, or every member currently in the server |
+| `/rule add` | Adds a server rule |
+| `/rule color` | Set or reset the rules message color |
+| `/rule delete` | Deletes a server rule |
+| `/rule edit` | Edits a server rule's title, description, or both |
+| `/rule footer` | Sets the rules footer text, or turns it on or off |
+| `/rule move` | Moves a server rule to another position |
+| `/rule post` | Posts the rules message, which then updates on every rule change |
 | `/serverconfig` | View the server's current bot settings |
 | `/set djrole` | Set or reset the role required to control music playback |
 | `/set embedcolor` | Set or reset the server's embed color |

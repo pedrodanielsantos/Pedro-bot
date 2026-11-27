@@ -54,7 +54,12 @@ async def initialize_databases():
             lobby_region TEXT,
             music_dj_role_id INTEGER,
             music_default_volume INTEGER,
-            music_announce_channel_id INTEGER
+            music_announce_channel_id INTEGER,
+            rules_footer TEXT,
+            rules_footer_enabled INTEGER NOT NULL DEFAULT 0,
+            rules_channel_id INTEGER,
+            rules_message_id INTEGER,
+            rules_color TEXT
         )
     """)
 
@@ -92,6 +97,17 @@ async def initialize_databases():
         await db.execute("ALTER TABLE guild_data ADD COLUMN music_announce_channel_id INTEGER")
     except aiosqlite.OperationalError:
         pass
+    for column in (
+        "rules_footer TEXT",
+        "rules_footer_enabled INTEGER NOT NULL DEFAULT 0",
+        "rules_channel_id INTEGER",
+        "rules_message_id INTEGER",
+        "rules_color TEXT",
+    ):
+        try:
+            await db.execute(f"ALTER TABLE guild_data ADD COLUMN {column}")
+        except aiosqlite.OperationalError:
+            pass
 
     # Per-user preferences, global rather than per-guild: a default here applies
     # in every guild the user creates a lobby in.
@@ -164,6 +180,19 @@ async def initialize_databases():
     """)
     await db.execute("CREATE INDEX IF NOT EXISTS reminders_due ON reminders (due_at)")
     await db.execute("CREATE INDEX IF NOT EXISTS reminders_owner ON reminders (guild_id, user_id)")
+
+    # position is 1-based and contiguous per guild, it's the number shown on the rule.
+    # Not unique, so shifting positions in one UPDATE can't collide mid-statement.
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS rules (
+            id          INTEGER PRIMARY KEY,
+            guild_id    INTEGER NOT NULL,
+            position    INTEGER NOT NULL,
+            title       TEXT NOT NULL,
+            description TEXT NOT NULL
+        )
+    """)
+    await db.execute("CREATE INDEX IF NOT EXISTS rules_guild ON rules (guild_id, position)")
 
     await db.commit()
 
@@ -594,6 +623,108 @@ async def reminders_clear(guild_id: int, user_id: int) -> int:
         deleted = cursor.rowcount
     await db.commit()
     return deleted
+
+async def rules_get(guild_id: int) -> list[dict]:
+    async with db.execute(
+        "SELECT title, description FROM rules WHERE guild_id = ? ORDER BY position", (guild_id,)
+    ) as cursor:
+        return [{"title": title, "description": description} for title, description in await cursor.fetchall()]
+
+async def rule_add(guild_id: int, position: int, title: str, description: str):
+    """Inserts at position, shifting that rule and the ones after it down."""
+    await db.execute(
+        "UPDATE rules SET position = position + 1 WHERE guild_id = ? AND position >= ?", (guild_id, position)
+    )
+    await db.execute(
+        "INSERT INTO rules (guild_id, position, title, description) VALUES (?, ?, ?, ?)",
+        (guild_id, position, title, description)
+    )
+    await db.commit()
+
+async def rule_update(guild_id: int, position: int, title: str | None, description: str | None):
+    """None leaves that field unchanged."""
+    await db.execute(
+        """
+        UPDATE rules SET title = COALESCE(?, title), description = COALESCE(?, description)
+        WHERE guild_id = ? AND position = ?
+        """,
+        (title, description, guild_id, position)
+    )
+    await db.commit()
+
+async def rule_delete(guild_id: int, position: int):
+    """Deletes and moves the rules after it up one."""
+    await db.execute("DELETE FROM rules WHERE guild_id = ? AND position = ?", (guild_id, position))
+    await db.execute(
+        "UPDATE rules SET position = position - 1 WHERE guild_id = ? AND position > ?", (guild_id, position)
+    )
+    await db.commit()
+
+async def rule_move(guild_id: int, old: int, new: int):
+    """Both positions must exist. The rules between them shift by one to close the gap."""
+    async with db.execute("SELECT id FROM rules WHERE guild_id = ? AND position = ?", (guild_id, old)) as cursor:
+        rule_id = (await cursor.fetchone())[0]
+    if new < old:
+        await db.execute(
+            "UPDATE rules SET position = position + 1 WHERE guild_id = ? AND position >= ? AND position < ?",
+            (guild_id, new, old)
+        )
+    else:
+        await db.execute(
+            "UPDATE rules SET position = position - 1 WHERE guild_id = ? AND position > ? AND position <= ?",
+            (guild_id, old, new)
+        )
+    await db.execute("UPDATE rules SET position = ? WHERE id = ?", (new, rule_id))
+    await db.commit()
+
+async def get_rules_settings(guild_id: int) -> dict:
+    """Footer, color and posted message location. A guild with no row reads as unset."""
+    async with db.execute(
+        """
+        SELECT rules_footer, rules_footer_enabled, rules_channel_id, rules_message_id, rules_color
+        FROM guild_data WHERE guild_id = ?
+        """,
+        (guild_id,)
+    ) as cursor:
+        row = await cursor.fetchone()
+    footer, enabled, channel_id, message_id, color = row or (None, 0, None, None, None)
+    return {
+        "footer": footer, "footer_enabled": bool(enabled),
+        "channel_id": channel_id, "message_id": message_id, "color": color,
+    }
+
+async def set_rules_color(guild_id: int, hex_code: str | None):
+    """Hex without the #. None falls back to the guild's embed color."""
+    await db.execute(
+        """
+        INSERT INTO guild_data (guild_id, rules_color) VALUES (?, ?)
+        ON CONFLICT(guild_id) DO UPDATE SET rules_color=excluded.rules_color
+        """,
+        (guild_id, hex_code)
+    )
+    await db.commit()
+
+async def set_rules_footer(guild_id: int, footer: str | None, enabled: bool):
+    await db.execute(
+        """
+        INSERT INTO guild_data (guild_id, rules_footer, rules_footer_enabled) VALUES (?, ?, ?)
+        ON CONFLICT(guild_id) DO UPDATE SET
+            rules_footer=excluded.rules_footer, rules_footer_enabled=excluded.rules_footer_enabled
+        """,
+        (guild_id, footer, int(enabled))
+    )
+    await db.commit()
+
+async def set_rules_message(guild_id: int, channel_id: int | None, message_id: int | None):
+    await db.execute(
+        """
+        INSERT INTO guild_data (guild_id, rules_channel_id, rules_message_id) VALUES (?, ?, ?)
+        ON CONFLICT(guild_id) DO UPDATE SET
+            rules_channel_id=excluded.rules_channel_id, rules_message_id=excluded.rules_message_id
+        """,
+        (guild_id, channel_id, message_id)
+    )
+    await db.commit()
 
 async def add_autorole(guild_id: int, role_id: int):
     await db.execute(

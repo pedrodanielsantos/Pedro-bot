@@ -53,6 +53,7 @@ COMMAND_CATEGORIES = {
     "welcome": "Administration",
     "log": "Administration",
     "moderation": "Administration",
+    "rule": "Administration",
 }
 
 # Render order; categories not listed here (including DEFAULT_CATEGORY) are appended after.
