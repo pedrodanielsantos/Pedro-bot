@@ -195,6 +195,9 @@
             white-space: pre;
             overflow: auto;
             overscroll-behavior: contain;
+            /* Prepending history adjusts scrollTop by hand; the browser's own
+               anchoring would move it a second time. */
+            overflow-anchor: none;
             padding-block: var(--pad);
             flex: 1;
             min-height: 0;
@@ -213,6 +216,28 @@
         .console-line:hover { background: rgba(255, 255, 255, 0.025); }
         .console-empty      { color: var(--muted); }
 
+        /* Day boundaries and the start of history. Sticky on the left and as wide
+           as the box, not the longest line, so it stays in view scrolled sideways. */
+        .console-sep {
+            position: sticky;
+            left: 0;
+            width: auto;
+            display: flex;
+            align-items: center;
+            gap: 1ch;
+            color: var(--muted);
+            padding-block: 0.5lh;
+        }
+
+        .console-sep::before,
+        .console-sep::after {
+            content: "";
+            flex: 1;
+            border-top: 1px solid var(--border);
+        }
+
+        .console-sep:hover { background: none; }
+
         /* Wrapped mode indents continuations so a split record still reads as one. */
         .console.is-wrapped { white-space: pre-wrap; }
 
@@ -221,6 +246,53 @@
             padding-left: calc(var(--pad) + 4ch);
             text-indent: -4ch;
         }
+
+        .console.is-wrapped .console-sep {
+            padding-left: var(--pad);
+            text-indent: 0;
+        }
+
+        /* A popover menu, placed under its button by the page's script. */
+        .menu {
+            position: fixed;
+            inset: auto;
+            margin: 0;
+            width: min(280px, calc(100vw - 16px));
+            max-height: min(60vh, 420px);
+            overflow-y: auto;
+            padding: 6px;
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            font-size: 12px;
+        }
+
+        .menu-label {
+            padding: 6px 8px 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--muted);
+        }
+
+        .menu-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 6px 8px;
+            border-radius: 4px;
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .menu-item:hover,
+        .menu-item:focus-visible { background: var(--border); outline: none; }
+
+        .menu-meta  { color: var(--muted); }
+        .menu-empty { padding: 6px 8px; color: var(--muted); }
 
         /* Scrolled up means the tail is paused, so this doubles as that indicator. The
            compound selector outweighs the .btn rules further down. Offsets are measured

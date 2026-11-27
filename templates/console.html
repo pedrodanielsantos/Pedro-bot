@@ -19,13 +19,25 @@
                     <path d="M2 4h12M2 8h10a2.25 2.25 0 0 1 0 4.5H7M9 10.5l-2 2 2 2" />
                 </svg>
             </button>
+            <button type="button" id="console-downloads-toggle" class="icon-btn" style="margin-left: -6px;"
+                title="Download logs"
+                popovertarget="console-downloads">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M8 2v8.5M4.5 7 8 10.5 11.5 7M3 13.5h10" />
+                </svg>
+            </button>
         </div>
     </div>
+    {# Fetched on every open, so today's size is current. #}
+    <div id="console-downloads" class="menu" popover
+        hx-get="/console/logs/files"
+        hx-trigger="toggle[newState=='open']"
+        hx-swap="innerHTML"></div>
     <a href="/" class="btn btn-fixed-width">Dashboard</a>
 </header>
 
 <main class="main-bleed">
-    <pre id="console-log" class="console" data-log-pos="{{ log_pos }}"><span id="console-empty" class="console-line console-empty">Waiting for output...</span></pre>
+    <pre id="console-log" class="console"><span id="console-empty" class="console-line console-empty">Waiting for output...</span></pre>
     <button type="button" id="console-jump" class="btn console-jump">Scroll to bottom</button>
 </main>
 {% include "partials/console_log.html" %}
@@ -64,28 +76,135 @@
             mainEl.style.setProperty("--scrollbar-h", `${consoleLog.offsetHeight - consoleLog.clientHeight}px`);
         }).observe(consoleLog);
 
+        // Lines kept on the page while following the tail. Older ones are dropped
+        // from the top and load back in when scrolled to.
+        const maxLines = 10000;
+        // How close to the top, in px, scrolling has to get to load older history.
+        const loadThreshold = 400;
+
         // Placeholder for a log with nothing in it yet; the first line clears it.
         let emptyState = document.getElementById("console-empty");
 
-        // Shared by the initial static tail and every live SSE line. One element per
-        // line, so wrap, padding and hover apply per record.
-        function appendLine(rawLine) {
+        // Every line carries its cursor, "<day>.<part>:<offset>", so the oldest
+        // one on the page is where the next history request starts.
+        const dayOf = (cursor) => cursor.slice(0, 10);
+        const dayFormat = new Intl.DateTimeFormat("en-GB", {
+            weekday: "short", day: "numeric", month: "short", year: "numeric",
+        });
+
+        function separator(text) {
+            const el = document.createElement("span");
+            el.className = "console-line console-sep";
+            el.textContent = text;
+            return el;
+        }
+
+        // "Wed 25 Nov 2026", matching the downloads menu; en-GB puts a comma after the weekday.
+        const dayLabel = (day) => dayFormat.format(new Date(`${day}T00:00`)).replace(",", "");
+        const daySeparator = (day) => separator(dayLabel(day));
+
+        // One element per line, so wrap, padding and hover apply per record. The
+        // converter is passed in because ansi_up carries color state from line to
+        // line: older history gets a fresh one, so the live tail's state can't leak in.
+        function renderLines(lines, converter, prevDay) {
+            const frag = document.createDocumentFragment();
+            for (const [cursor, text] of lines) {
+                const day = dayOf(cursor);
+                if (prevDay && day !== prevDay) frag.append(daySeparator(day));
+                prevDay = day;
+                const el = document.createElement("span");
+                el.className = "console-line";
+                el.dataset.cursor = cursor;
+                el.innerHTML = converter.ansi_to_html(text);
+                frag.append(el);
+            }
+            return frag;
+        }
+
+        function clearEmptyState() {
             if (emptyState) {
                 emptyState.remove();
                 emptyState = null;
             }
-            consoleLog.insertAdjacentHTML(
-                "beforeend", `<span class="console-line">${ansiUp.ansi_to_html(rawLine)}</span>`
-            );
         }
 
-        const initialData = document.getElementById("console-log-initial");
-        if (initialData) {
-            for (const line of JSON.parse(initialData.textContent)) appendLine(line);
+        const firstLine = () => consoleLog.querySelector(".console-line[data-cursor]");
+
+        const initial = JSON.parse(document.getElementById("console-log-initial").textContent);
+        let hasMore = initial.more;
+        let loadingOlder = false;
+        // Counted rather than queried: a burst of output appends many lines a second.
+        let lineCount = initial.lines.length;
+        let lastDay = initial.lines.length ? dayOf(initial.lines.at(-1)[0]) : null;
+
+        // Labels the oldest day too, which has no boundary above it to get one.
+        function markStart() {
+            const first = firstLine();
+            if (!hasMore && first) {
+                consoleLog.prepend(separator(`${dayLabel(dayOf(first.dataset.cursor))} · start of history`));
+            }
+        }
+
+        if (initial.lines.length) {
+            clearEmptyState();
+            consoleLog.append(renderLines(initial.lines, ansiUp, null));
+            markStart();
+        }
+
+        // Content that doesn't fill the box can't scroll, so it never asks for more.
+        async function fillViewport() {
+            while (hasMore && consoleLog.scrollHeight <= consoleLog.clientHeight + loadThreshold) {
+                const before = lineCount;
+                await loadOlder();
+                if (lineCount === before) break;
+            }
+        }
+
+        async function loadOlder() {
+            const first = firstLine();
+            if (loadingOlder || !hasMore || !first) return;
+            loadingOlder = true;
+            try {
+                const resp = await fetch(`/console/logs/before?cursor=${encodeURIComponent(first.dataset.cursor)}`);
+                const data = await resp.json();
+                const converter = new AnsiUp();
+                converter.use_classes = false;
+                const frag = renderLines(data.lines, converter, null);
+                const lastOlder = data.lines.at(-1);
+                if (lastOlder && dayOf(lastOlder[0]) !== dayOf(first.dataset.cursor)) {
+                    frag.append(daySeparator(dayOf(first.dataset.cursor)));
+                }
+                // Prepending grows the content above the viewport, so the scroll
+                // position moves by the same amount to keep the same lines in view.
+                const before = consoleLog.scrollHeight;
+                consoleLog.prepend(frag);
+                consoleLog.scrollTop += consoleLog.scrollHeight - before;
+                lineCount += data.lines.length;
+                hasMore = data.more;
+                markStart();
+            } finally {
+                loadingOlder = false;
+            }
+        }
+
+        // Runs only while following the tail, so nothing being read moves.
+        function trimToCap() {
+            if (lineCount <= maxLines) return;
+            while (lineCount > maxLines && consoleLog.firstElementChild) {
+                const el = consoleLog.firstElementChild;
+                if (el.dataset.cursor) lineCount--;
+                el.remove();
+            }
+            // A separator left first labels nothing above it.
+            while (consoleLog.firstElementChild && !consoleLog.firstElementChild.dataset.cursor) {
+                consoleLog.firstElementChild.remove();
+            }
+            hasMore = true;
         }
 
         consoleLog.addEventListener("scroll", () => {
             setStick(consoleLog.scrollHeight - consoleLog.scrollTop - consoleLog.clientHeight < stickThreshold);
+            if (consoleLog.scrollTop < loadThreshold) loadOlder();
         });
 
         jumpBtn.addEventListener("click", pinToBottom);
@@ -107,6 +226,7 @@
         setWrap(localStorage.getItem("console-wrap") === "1");
 
         pinToBottom();
+        fillViewport();
 
         // The box flexes to fill main, so resizing the window changes clientHeight
         // without firing a scroll event. Only re-pins if already stuck to the bottom,
@@ -115,18 +235,38 @@
             if (stickToBottom) pinToBottom();
         });
 
-        // Starts at the byte offset the static render above already covers, so a
-        // reconnect with nothing received live yet still resumes from there instead
-        // of jumping to "now" and skipping whatever was logged in the gap (e.g. a
-        // web.py reload's own log lines). After the first message, EventSource tracks
-        // Last-Event-ID itself and resends it automatically on every reconnect, so
-        // nothing further needs to be done here for that.
-        const logPos = consoleLog.dataset.logPos;
-        const logSource = new EventSource(logPos ? `/console/logs/stream?last_id=${logPos}` : "/console/logs/stream");
+        // Starts at the cursor the static render ends on, so a reconnect with nothing
+        // received live yet still resumes from there instead of jumping to "now" and
+        // skipping whatever was logged in the gap (e.g. a web.py reload's own log
+        // lines). After the first message, EventSource resends Last-Event-ID itself
+        // on every reconnect.
+        const logSource = new EventSource(
+            initial.end ? `/console/logs/stream?cursor=${encodeURIComponent(initial.end)}` : "/console/logs/stream"
+        );
         logSource.onmessage = (e) => {
-            appendLine(e.data);
-            if (stickToBottom) pinToBottom();
+            const line = JSON.parse(e.data);
+            clearEmptyState();
+            consoleLog.append(renderLines([line], ansiUp, lastDay));
+            lastDay = dayOf(line[0]);
+            lineCount++;
+            if (stickToBottom) {
+                trimToCap();
+                pinToBottom();
+            }
         };
+
+        // A popover sits in the top layer, so it's placed by hand under its button,
+        // kept inside the window on a narrow screen.
+        const downloadsBtn = document.getElementById("console-downloads-toggle");
+        const downloadsMenu = document.getElementById("console-downloads");
+        downloadsMenu.addEventListener("toggle", (e) => {
+            if (e.newState !== "open") return;
+            const rect = downloadsBtn.getBoundingClientRect();
+            const gutter = 8;
+            const width = downloadsMenu.offsetWidth;
+            downloadsMenu.style.top = `${rect.bottom + 6}px`;
+            downloadsMenu.style.left = `${Math.max(gutter, Math.min(rect.left, window.innerWidth - width - gutter))}px`;
+        });
 
         // Mirrors the header dot across tabs.
         const statusDot = document.getElementById('header-status-dot');

@@ -1,30 +1,12 @@
-import asyncio
 import logging
-import os
 import re
-import shutil
 import sys
 import threading
-from collections import deque
-from logging.handlers import RotatingFileHandler
-
-LOG_BUFFER = deque(maxlen=100_000)
 
 _LOG_LINE_RE = re.compile(
     r"^\[(?P<ts>[^\]]+)\] (?P<level>[A-Z]+) (?P<logger>[^:]+): (?P<msg>.*)$",
     re.DOTALL,
 )
-
-LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs")
-LOG_FILE = os.path.join(LOG_DIR, "bot.log")
-CONSOLE_RAW_FILE = os.path.join(LOG_DIR, "console.raw")
-# Rolls over to console.raw.1 when hit, so the Console page loses its scrollback but
-# the file keeps it. Sized for a long uptime's worth of history: tail_log_file() scans
-# backward from the end, so a larger cap costs nothing at read time.
-CONSOLE_RAW_MAX_BYTES = 50_000_000
-# Older files kept as console.raw.1 (newest) to .N. Each start and each hit of the
-# cap rolls one over.
-CONSOLE_RAW_BACKUPS = 5
 
 _MUTED = "\x1b[38;2;114;118;125m"
 _ACCENT = "\x1b[38;2;88;101;242m"
@@ -80,76 +62,6 @@ class ColorFormatter(logging.Formatter):
         return color_log_line(match["ts"], match["level"], match["logger"], match["msg"])
 
 
-class BufferHandler(logging.Handler):
-    """Keeps formatted log lines in memory so the web console can display them."""
-
-    def emit(self, record):
-        LOG_BUFFER.append(self.format(record))
-
-
-class RawConsoleSink:
-    """Writer for logs/console.raw, the raw stdout/stderr tee for the web console's
-    live view. Separate from bot.log. Rolls the file over to console.raw.1..N on
-    construction and past max_bytes, then starts it empty."""
-
-    def __init__(self, path=CONSOLE_RAW_FILE, max_bytes=CONSOLE_RAW_MAX_BYTES,
-                 backup_count=CONSOLE_RAW_BACKUPS):
-        self.path = path
-        self.max_bytes = max_bytes
-        self.backup_count = backup_count
-        self._lock = threading.Lock()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        error = self._roll_over() if os.path.exists(path) and os.path.getsize(path) else None
-        self._fh = open(path, "wb", buffering=0)
-        self._size = 0
-        self._note_failure(error)
-
-    def _roll_over(self) -> str | None:
-        """Copies the file to .1, shifting older copies up. Copied rather than renamed:
-        the Console page holds console.raw open, and Windows refuses to rename an open
-        file. Returns the error instead of raising, since a failure here must not stop
-        the console; the file is truncated either way."""
-        if self.backup_count < 1:
-            return None
-        try:
-            for i in range(self.backup_count - 1, 0, -1):
-                older = f"{self.path}.{i}"
-                if os.path.exists(older):
-                    os.replace(older, f"{self.path}.{i + 1}")
-            shutil.copyfile(self.path, f"{self.path}.1")
-        except OSError as e:
-            return str(e)
-        return None
-
-    def _note_failure(self, error: str | None):
-        # Written to the file directly: logging would route back through this sink.
-        if error:
-            line = f"Could not keep the previous console.raw: {error}\n".encode("utf-8", errors="replace")
-            self._fh.write(line)
-            self._size += len(line)
-
-    def write(self, data: bytes):
-        if not data:
-            return
-        with self._lock:
-            # Closed means shutdown: output printed after close() still reaches the
-            # console through the tee, it just isn't kept.
-            if self._fh.closed:
-                return
-            if self._size + len(data) > self.max_bytes:
-                error = self._roll_over()
-                self._fh.seek(0)
-                self._fh.truncate(0)
-                self._size = 0
-                self._note_failure(error)
-            self._fh.write(data)
-            self._size += len(data)
-
-    def close(self):
-        with self._lock:
-            self._fh.close()
-
-
 def _install_excepthooks():
     """Routes exceptions that reach the top of the process (main thread or a raw
     thread) into the logger instead of only the terminal. Doesn't affect asyncio task
@@ -175,32 +87,23 @@ def _install_excepthooks():
 
 
 def setup_logging(level=logging.INFO):
+    """Logs to stderr only. Under run.py that reaches the log files: its own stderr
+    through the tee, bot.py's through the pipe run.py pumps."""
     # Accepts a level name so LOG_LEVEL can be set in .env. An unknown one falls
     # back to INFO rather than failing startup over a typo.
     if isinstance(level, str):
         level = logging.getLevelNamesMapping().get(level.upper(), logging.INFO)
 
-    fmt = logging.Formatter(
-        "[%(asctime)s] %(levelname)s %(name)s: %(message)s",
-        datefmt="%d/%m/%Y %H:%M:%S",
-    )
-
     _enable_windows_vt()
     stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(ColorFormatter(fmt._fmt, datefmt=fmt.datefmt))
-
-    buffer_handler = BufferHandler()
-    buffer_handler.setFormatter(fmt)
-
-    os.makedirs(LOG_DIR, exist_ok=True)
-    file_handler = RotatingFileHandler(LOG_FILE, maxBytes=5_000_000, backupCount=3, encoding="utf-8")
-    file_handler.setFormatter(fmt)
+    stream_handler.setFormatter(ColorFormatter(
+        "[%(asctime)s] %(levelname)s %(name)s: %(message)s",
+        datefmt="%d/%m/%Y %H:%M:%S",
+    ))
 
     root = logging.getLogger()
     root.setLevel(level)
     root.addHandler(stream_handler)
-    root.addHandler(buffer_handler)
-    root.addHandler(file_handler)
 
     _install_excepthooks()
 
@@ -229,93 +132,3 @@ def quiet_uvicorn_logging():
     handler. Mutes the resulting per-request uvicorn.access noise."""
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
-
-def log_file_size(path=LOG_FILE) -> int:
-    """Current size of the log file, used as the initial resume point for a live
-    tail so it starts exactly where a static render of tail_log_file() left off,
-    instead of jumping to "now" and risking a gap for whatever gets logged in
-    between."""
-    return os.path.getsize(path) if os.path.exists(path) else 0
-
-
-def tail_log_file(path=LOG_FILE, lines=500, chunk_size=8192):
-    """Reads only the tail of the log file by scanning backward in chunks, instead
-    of the whole file. Matters once the file approaches its rotation size."""
-    if not os.path.exists(path):
-        return []
-
-    with open(path, "rb") as f:
-        f.seek(0, os.SEEK_END)
-        pos = f.tell()
-        data = b""
-        newline_count = 0
-
-        while pos > 0 and newline_count <= lines:
-            read_size = min(chunk_size, pos)
-            pos -= read_size
-            f.seek(pos)
-            chunk = f.read(read_size)
-            data = chunk + data
-            newline_count += chunk.count(b"\n")
-
-    text = data.decode("utf-8", errors="replace")
-    return text.splitlines()[-lines:]
-
-
-async def tail_log_lines(path=LOG_FILE, poll_interval=0.5, start_pos=None):
-    """Yields (pos, line) as the log file grows, or (pos, None) on an idle poll. pos
-    is the byte offset just after the most recently consumed line, so a
-    reconnecting SSE client can resume from there via Last-Event-ID instead of
-    jumping to "now" and silently missing whatever was logged while it was
-    disconnected. Tails the file (not LOG_BUFFER) since bot.py is a separate
-    process from web.py's. Reopens on rotation/truncation, detected by the file
-    shrinking."""
-    while not os.path.exists(path):
-        yield None, None
-        await asyncio.sleep(poll_interval)
-
-    f = open(path, "rb")
-    size = os.path.getsize(path)
-    # A stale offset from before a rotation could point past the new file's end,
-    # or into a stale earlier generation entirely. Safest fallback is "now".
-    if start_pos is None or start_pos > size:
-        f.seek(0, os.SEEK_END)
-    else:
-        f.seek(start_pos)
-    buf = b""
-    buf_pos = f.tell()
-
-    try:
-        while True:
-            await asyncio.sleep(poll_interval)
-            try:
-                size = os.path.getsize(path)
-            except OSError:
-                yield buf_pos + len(buf), None
-                continue
-
-            pos = f.tell()
-            if size < pos:
-                f.close()
-                f = open(path, "rb")
-                pos = 0
-                buf = b""
-                buf_pos = 0
-
-            if size <= pos:
-                yield buf_pos + len(buf), None
-                continue
-
-            f.seek(pos)
-            buf += f.read(size - pos)
-            *complete, buf = buf.split(b"\n")
-
-            if not complete:
-                yield buf_pos + len(buf), None
-            for raw_line in complete:
-                buf_pos += len(raw_line) + 1
-                text = raw_line.decode("utf-8", errors="replace").rstrip("\r")
-                if text:
-                    yield buf_pos, text
-    finally:
-        f.close()

@@ -1,0 +1,9 @@
+<div class="menu-label">Download logs</div>
+{% for entry in days %}
+<a class="menu-item" href="/console/logs/download/{{ entry.day }}" download>
+    <span>{{ entry.label }}</span>
+    <span class="menu-meta">{{ entry.size }}</span>
+</a>
+{% else %}
+<div class="menu-empty">No logs yet</div>
+{% endfor %}

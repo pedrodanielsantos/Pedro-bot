@@ -12,7 +12,8 @@ from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 import web
-from utils.runtime.log import RawConsoleSink, color_log_line, setup_logging
+from utils.runtime.log import color_log_line, setup_logging
+from utils.runtime.console_log import ConsoleSink
 from utils.runtime.vendor import check_for_updates
 
 # run.py needs LAVALINK_* to decide whether to supervise a node. bot.py loads
@@ -42,7 +43,7 @@ class _TeeStream:
         return getattr(self._original, name)
 
 
-_console_sink = RawConsoleSink()  # Rolls the last run's logs/console.raw over to .1.
+_console_sink = ConsoleSink()  # Continues today's log files; see utils/runtime/console_log.py.
 _real_stdout = sys.stdout  # pre-wrap, used by the bot.py output pump
 sys.stdout = _TeeStream(sys.stdout, _console_sink)
 sys.stderr = _TeeStream(sys.stderr, _console_sink)
@@ -432,5 +433,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("Stopped.")
     finally:
-        # Closed last, so the line above still reaches console.raw.
+        # Closed last, so the line above still reaches the log files.
         _console_sink.close()

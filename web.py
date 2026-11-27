@@ -1,5 +1,7 @@
 import asyncio
+import datetime as dt
 import importlib
+import json
 import logging
 import os
 import sys
@@ -8,12 +10,13 @@ import time
 import aiohttp
 import uvicorn
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from utils.runtime import console_log
 from utils.runtime.extensions import discover_cog_paths, reload_shared_modules
-from utils.runtime.log import CONSOLE_RAW_FILE, log_file_size, quiet_uvicorn_logging, tail_log_file, tail_log_lines
+from utils.runtime.log import quiet_uvicorn_logging
 from utils.runtime.vendor import static_urls
 
 COGS_DIR = os.path.join(os.path.dirname(__file__), "cogs")
@@ -71,6 +74,22 @@ async def _internal_post(path: str, json=None):
                 return await resp.json()
     except (aiohttp.ClientError, asyncio.TimeoutError):
         return None
+
+
+def _day_label(day: dt.date, today: dt.date) -> str:
+    if day == today:
+        return "Today"
+    if day == today - dt.timedelta(days=1):
+        return "Yesterday"
+    return f"{day:%a} {day.day} {day:%b %Y}"
+
+
+def _format_size(size: int) -> str:
+    for unit in ("B", "KB", "MB"):
+        if size < 1024:
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} GB"
 
 
 def _remaining(deadline):
@@ -401,41 +420,63 @@ def create_app(supervisor, web_state):
     @app.get("/console", response_class=HTMLResponse)
     async def console(request: Request):
         status = await _status()
-        # Read the size first, then the tail, so the live stream's resume point can
-        # never be ahead of what the static render actually shows.
-        log_pos = await asyncio.to_thread(log_file_size, CONSOLE_RAW_FILE)
-        logs = await asyncio.to_thread(tail_log_file, CONSOLE_RAW_FILE)
+        # "end" is the cursor just past the last line rendered, so the live stream
+        # starts exactly where the render stops.
+        logs = await asyncio.to_thread(console_log.read_tail, console_log.CONSOLE_LOG)
         return templates.TemplateResponse(request=request, name="console.html", context={
             "bot_name": status.get("bot_name") or "Bot",
             "is_ready": bool(status.get("ready")),
             "logs": logs,
-            "log_pos": log_pos,
             "supervisor_status": supervisor.status,
         })
+
+    @app.get("/console/logs/before")
+    async def console_logs_before(cursor: str):
+        """Older history for the Console page, as it scrolls up."""
+        return JSONResponse(await asyncio.to_thread(console_log.read_before, console_log.CONSOLE_LOG, cursor))
 
     @app.get("/console/logs/stream")
     async def console_logs_stream(request: Request):
         server = web_state.web_server
-        # EventSource remembers the last "id:" it saw and resends it as this header on
-        # every reconnect, so we can resume the tail instead of jumping to "now" and
-        # dropping whatever was logged in the gap. The very first connection has no id
-        # to send yet, so console.html passes one as a query param instead, seeded from
-        # the byte offset its own static render already covers.
-        last_id = request.headers.get("last-event-id") or request.query_params.get("last_id")
-        start_pos = int(last_id) if last_id and last_id.isdigit() else None
+        # EventSource resends the last "id:" it saw as this header on every
+        # reconnect, so the tail resumes instead of skipping the gap. The first
+        # connection has none yet, so console.html passes the render's end cursor.
+        cursor = request.headers.get("last-event-id") or request.query_params.get("cursor")
 
         async def event_stream():
-            async for pos, line in tail_log_lines(CONSOLE_RAW_FILE, start_pos=start_pos):
+            async for start, end, line in console_log.follow(console_log.CONSOLE_LOG, cursor):
                 if await request.is_disconnected() or (server and server.should_exit):
                     break
                 if line is None:
                     yield ": keepalive\n\n"
                 else:
-                    yield f"id: {pos}\ndata: {line}\n\n"
+                    # JSON, since an event with an empty data field isn't
+                    # dispatched, which would drop blank lines.
+                    yield f"id: {end}\ndata: {json.dumps([start, line])}\n\n"
 
         return StreamingResponse(event_stream(), media_type="text/event-stream", headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
+        })
+
+    @app.get("/console/logs/files", response_class=HTMLResponse)
+    async def console_log_files(request: Request):
+        days = await asyncio.to_thread(console_log.list_days, console_log.CONSOLE_LOG)
+        today = dt.date.today()
+        return templates.TemplateResponse(request=request, name="partials/console_downloads.html", context={
+            "days": [
+                {"day": day.isoformat(), "label": _day_label(day, today), "size": _format_size(size)}
+                for day, size in days
+            ],
+        })
+
+    @app.get("/console/logs/download/{day}")
+    async def console_log_download(day: str):
+        parsed = console_log.parse_day(day)
+        if parsed is None or not any(d == parsed for d, _ in console_log.list_days(console_log.CONSOLE_LOG)):
+            return PlainTextResponse("No log for that day.", status_code=404)
+        return StreamingResponse(console_log.iter_day_plain(console_log.CONSOLE_LOG, parsed), media_type="text/plain; charset=utf-8", headers={
+            "Content-Disposition": f'attachment; filename="console.{parsed.isoformat()}.log"',
         })
 
     @app.post("/web/reload", response_class=HTMLResponse)
