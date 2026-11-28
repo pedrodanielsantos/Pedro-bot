@@ -668,8 +668,11 @@
                 } else {
                     el.innerHTML = "";
                 }
+                if (!down.size && !expired) return;
                 const dot = document.getElementById("header-status-dot");
-                if (dot && (down.size || expired)) dot.className = "dot dot-unknown";
+                if (dot) dot.className = "dot dot-unknown";
+                // For page parts that show the bot's state, until the next ready event.
+                document.dispatchEvent(new Event("connection:unknown"));
             }
 
             return {

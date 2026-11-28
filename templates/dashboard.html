@@ -268,6 +268,13 @@
                 },
             });
 
+            // Follows the header dot to grey in an outage. The ready event every
+            // connect resends sets it back.
+            document.addEventListener('connection:unknown', () => {
+                statusEl.textContent = 'Unknown';
+                statusEl.style.color = 'var(--muted)';
+            });
+
             function attachStatusHandlers(source) {
                 source.onmessage = (e) => {
                     const value = e.data.trim();
