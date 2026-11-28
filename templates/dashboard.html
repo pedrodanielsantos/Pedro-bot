@@ -20,6 +20,7 @@
                 </svg>
             </button>
             <span id="web-reload-status"></span>
+            <span id="connection-status"></span>
         </div>
     </div>
     <a href="/console" class="btn btn-fixed-width">Console</a>
@@ -255,73 +256,86 @@
                     });
             }
 
-            const source = new EventSource('/status/stream');
-            source.onmessage = (e) => {
-                const value = e.data.trim();
-                latencyEl.innerHTML = value ? `${value}<span class="stat-unit">ms</span>` : '—';
-            };
-
-            source.addEventListener('guilds', (e) => {
-                const value = e.data.trim();
-                guildCountEl.textContent = value || '—';
-
-                // Only re-fetch the expandable guild list if it's currently open.
-                const guildList = document.getElementById('guild-list');
-                if (guildList && guildList.children.length > 0) {
-                    htmx.ajax('GET', '/guilds', { target: '#guild-list', swap: 'innerHTML' });
-                }
-            });
-
-            // Fires when the bot's ready state flips, from any tab. Handles everything
-            // derived from is_ready that latency/guilds above don't already cover.
-            source.addEventListener('ready', (e) => {
-                const data = JSON.parse(e.data);
-
-                statusEl.textContent = data.ready ? 'Online' : 'Offline';
-                statusEl.style.color = data.ready ? 'var(--green)' : 'var(--red)';
-
-                uptimeEl.dataset.launch = data.launch_time || '';
-                // Looked up fresh each time, not cached: /guilds swaps this button for a
-                // new node (View <-> Hide) via hx-swap-oob, which would make a cached
-                // reference go stale.
-                document.getElementById('guild-toggle').style.display = data.ready ? '' : 'none';
-                if (!data.ready) {
-                    uptimeEl.textContent = '—';
-                    latencyEl.innerHTML = '—';
-                    guildCountEl.textContent = '—';
-                    document.getElementById('guild-list').innerHTML = '';
-                }
-
-                // Refresh either way: coming online loads the configured cogs, going
-                // offline drops everything back to "not loaded". Only on a real flip
-                // though: while offline the stream ends and reconnects every few
-                // seconds, re-announcing the same state each time.
-                cogsForm.dataset.online = data.ready ? 'true' : 'false';
-                if (data.ready !== lastReady) {
-                    lastReady = data.ready;
+            // Every connect resends ready, latency and guilds. Cog changes and the
+            // control buttons are only sent as they change, so an outage refetches them.
+            liveStream({
+                url: () => '/status/stream',
+                setup: attachStatusHandlers,
+                onOpen: (reopened) => {
+                    if (!reopened) return;
                     refreshCogs();
-                }
-                document.body.dispatchEvent(new Event('cogs:sync'));
-
-                refreshBotStatus();
+                    refreshBotStatus();
+                },
             });
 
-            // Fires when any tab loads, unloads, or reloads a cog, keeping every tab in sync.
-            source.addEventListener('cogs', () => {
-                refreshCogs();
-            });
+            function attachStatusHandlers(source) {
+                source.onmessage = (e) => {
+                    const value = e.data.trim();
+                    latencyEl.innerHTML = value ? `${value}<span class="stat-unit">ms</span>` : '—';
+                };
 
-            // supervisor.status (start/stop/crash-retry) lives in web.py, separate from
-            // the bot's ready state, so it gets its own event for the same button refresh.
-            // Also nudges the cog table: a fresh spawn loads extensions before the gateway
-            // handshake completes, so this can pick up real state sooner than 'ready' would.
-            source.addEventListener('control', (e) => {
-                refreshBotStatus();
-                if (e.data !== lastControl) {
-                    lastControl = e.data;
+                source.addEventListener('guilds', (e) => {
+                    const value = e.data.trim();
+                    guildCountEl.textContent = value || '—';
+
+                    // Only re-fetch the expandable guild list if it's currently open.
+                    const guildList = document.getElementById('guild-list');
+                    if (guildList && guildList.children.length > 0) {
+                        htmx.ajax('GET', '/guilds', { target: '#guild-list', swap: 'innerHTML' });
+                    }
+                });
+
+                // Fires when the bot's ready state flips, from any tab. Handles everything
+                // derived from is_ready that latency/guilds above don't already cover.
+                source.addEventListener('ready', (e) => {
+                    const data = JSON.parse(e.data);
+
+                    statusEl.textContent = data.ready ? 'Online' : 'Offline';
+                    statusEl.style.color = data.ready ? 'var(--green)' : 'var(--red)';
+
+                    uptimeEl.dataset.launch = data.launch_time || '';
+                    // Looked up fresh each time, not cached: /guilds swaps this button for a
+                    // new node (View <-> Hide) via hx-swap-oob, which would make a cached
+                    // reference go stale.
+                    document.getElementById('guild-toggle').style.display = data.ready ? '' : 'none';
+                    if (!data.ready) {
+                        uptimeEl.textContent = '—';
+                        latencyEl.innerHTML = '—';
+                        guildCountEl.textContent = '—';
+                        document.getElementById('guild-list').innerHTML = '';
+                    }
+
+                    // Refresh either way: coming online loads the configured cogs, going
+                    // offline drops everything back to "not loaded". Only on a real flip
+                    // though: while offline the stream ends and reconnects every few
+                    // seconds, re-announcing the same state each time.
+                    cogsForm.dataset.online = data.ready ? 'true' : 'false';
+                    if (data.ready !== lastReady) {
+                        lastReady = data.ready;
+                        refreshCogs();
+                    }
+                    document.body.dispatchEvent(new Event('cogs:sync'));
+
+                    refreshBotStatus();
+                });
+
+                // Fires when any tab loads, unloads, or reloads a cog, keeping every tab in sync.
+                source.addEventListener('cogs', () => {
                     refreshCogs();
-                }
-            });
+                });
+
+                // supervisor.status (start/stop/crash-retry) lives in web.py, separate from
+                // the bot's ready state, so it gets its own event for the same button refresh.
+                // Also nudges the cog table: a fresh spawn loads extensions before the gateway
+                // handshake completes, so this can pick up real state sooner than 'ready' would.
+                source.addEventListener('control', (e) => {
+                    refreshBotStatus();
+                    if (e.data !== lastControl) {
+                        lastControl = e.data;
+                        refreshCogs();
+                    }
+                });
+            }
         })();
     </script>
 

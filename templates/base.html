@@ -133,6 +133,8 @@
 
         .dot-online  { background: var(--green); }
         .dot-offline { background: var(--red); }
+        /* Not connected, so the bot's state isn't known. */
+        .dot-unknown { background: var(--muted); }
 
         .header-title { font-weight: 600; font-size: 15px; white-space: nowrap; }
         .header-sub   { color: var(--muted); font-size: 13px; white-space: nowrap; }
@@ -521,6 +523,12 @@
             vertical-align: middle;
         }
 
+        .badge-btn {
+            border: none;
+            font-family: inherit;
+            cursor: pointer;
+        }
+
         .badge-ok      { background: rgba(87, 242, 135, 0.12); color: var(--green); }
         .badge-error   { background: rgba(237, 66, 69, 0.12);  color: var(--red); }
         .badge-warning { background: rgba(250, 166, 26, 0.12); color: var(--yellow); }
@@ -585,6 +593,115 @@
 
     </style>
     <script src="{{ vendor['htmx.org'] }}" defer></script>
+    <script>
+        // An EventSource retries by itself only after a network error. Through a
+        // proxy (Cloudflare's tunnel) a server that is down answers with an error
+        // page instead, and any non-200 reply closes the source for good. This
+        // reopens it, backing off, and reports the connection in the header.
+        //
+        // url() is called on every connect, so a page can resume from a cursor.
+        // setup(source) attaches the handlers to each new source. onOpen(reopened)
+        // runs on every connect; reopened is true after an outage, when the page may
+        // have missed events that aren't resent on connect.
+        //
+        // An outage is a gap longer than OUTAGE_MS, or one the browser gave up on.
+        // Shorter gaps are routine: the status stream ends on purpose while the bot
+        // is stopped, and the browser reconnects about 3s later.
+        const OUTAGE_MS = 5000;
+
+        window.liveStream = function ({ url, setup, onOpen }) {
+            let attempts = 0;
+            let opened = false;
+            let lostAt = null;
+            let gaveUp = false;
+            function connect() {
+                const source = new EventSource(url());
+                setup(source);
+                source.addEventListener("open", () => {
+                    attempts = 0;
+                    const outage = lostAt !== null && (gaveUp || Date.now() - lostAt > OUTAGE_MS);
+                    if (lostAt !== null) connection.restored(source);
+                    const reopened = opened && outage;
+                    opened = true;
+                    lostAt = null;
+                    gaveUp = false;
+                    if (onOpen) onOpen(reopened);
+                });
+                source.addEventListener("error", () => {
+                    if (lostAt === null) {
+                        lostAt = Date.now();
+                        connection.lost(source);
+                    }
+                    // A redirect to another origin is a network error, so the
+                    // browser keeps retrying it; the session check runs either way.
+                    const closed = source.readyState === EventSource.CLOSED;
+                    if (closed || Date.now() - lostAt > OUTAGE_MS) connection.check();
+                    // CONNECTING means the browser is already retrying.
+                    if (!closed) return;
+                    gaveUp = true;
+                    setTimeout(connect, Math.min(2000 * 2 ** attempts++, 15000));
+                });
+            }
+            connect();
+        };
+
+        // One status for every stream on the page: shown in the header while any
+        // is down, and the status dot goes grey, since the bot's state is unknown.
+        // Each source reports itself, so a replaced source still clears its slot.
+        window.connection = (() => {
+            const down = new Set();
+            let expired = false;
+            let shownAfter = null;
+
+            function badge() {
+                return document.getElementById("connection-status");
+            }
+
+            function render() {
+                const el = badge();
+                if (!el) return;
+                if (expired) {
+                    el.innerHTML = '<button type="button" class="badge badge-error badge-btn">Session expired · Reload</button>';
+                    el.firstChild.addEventListener("click", () => location.reload());
+                } else if (down.size) {
+                    el.innerHTML = '<span class="badge badge-warning">Reconnecting…</span>';
+                } else {
+                    el.innerHTML = "";
+                }
+                const dot = document.getElementById("header-status-dot");
+                if (dot && (down.size || expired)) dot.className = "dot dot-unknown";
+            }
+
+            return {
+                // Shown only once the gap counts as an outage, so a routine
+                // reconnect doesn't flash it.
+                lost(source) {
+                    down.add(source.url.split("?")[0]);
+                    clearTimeout(shownAfter);
+                    shownAfter = setTimeout(render, OUTAGE_MS);
+                },
+                restored(source) {
+                    down.delete(source.url.split("?")[0]);
+                    if (!down.size) {
+                        clearTimeout(shownAfter);
+                        render();
+                    }
+                },
+                // Cloudflare Access answers an expired session with a redirect to its
+                // login page, which a stream can't follow. Retrying can't fix that;
+                // a reload goes through the login.
+                async check() {
+                    try {
+                        const resp = await fetch("/static/favicon-gear.svg", { cache: "no-store", redirect: "manual" });
+                        expired = resp.type === "opaqueredirect";
+                    } catch {
+                        expired = false;
+                    }
+                    if (expired) render();
+                },
+            };
+        })();
+    </script>
 </head>
 <body class="{% block body_class %}{% endblock %}">
     {% block content %}{% endblock %}

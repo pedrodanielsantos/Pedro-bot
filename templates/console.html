@@ -26,6 +26,7 @@
                     <path d="M8 2v8.5M4.5 7 8 10.5 11.5 7M3 13.5h10" />
                 </svg>
             </button>
+            <span id="connection-status"></span>
         </div>
     </div>
     {# Fetched on every open, so today's size is current. #}
@@ -235,25 +236,30 @@
             if (stickToBottom) pinToBottom();
         });
 
-        // Starts at the cursor the static render ends on, so a reconnect with nothing
-        // received live yet still resumes from there instead of jumping to "now" and
-        // skipping whatever was logged in the gap (e.g. a web.py reload's own log
-        // lines). After the first message, EventSource resends Last-Event-ID itself
-        // on every reconnect.
-        const logSource = new EventSource(
-            initial.end ? `/console/logs/stream?cursor=${encodeURIComponent(initial.end)}` : "/console/logs/stream"
-        );
-        logSource.onmessage = (e) => {
-            const line = JSON.parse(e.data);
-            clearEmptyState();
-            consoleLog.append(renderLines([line], ansiUp, lastDay));
-            lastDay = dayOf(line[0]);
-            lineCount++;
-            if (stickToBottom) {
-                trimToCap();
-                pinToBottom();
-            }
-        };
+        // The cursor just past the last line received, starting where the static
+        // render ends. Every connect resumes from it, so nothing logged during a
+        // gap (e.g. a restart's own log lines) is skipped or repeated. The browser's
+        // own retries send it as Last-Event-ID; a reopened source sends it in the URL.
+        let streamCursor = initial.end;
+        liveStream({
+            url: () => streamCursor
+                ? `/console/logs/stream?cursor=${encodeURIComponent(streamCursor)}`
+                : "/console/logs/stream",
+            setup: (source) => {
+                source.onmessage = (e) => {
+                    const line = JSON.parse(e.data);
+                    streamCursor = e.lastEventId;
+                    clearEmptyState();
+                    consoleLog.append(renderLines([line], ansiUp, lastDay));
+                    lastDay = dayOf(line[0]);
+                    lineCount++;
+                    if (stickToBottom) {
+                        trimToCap();
+                        pinToBottom();
+                    }
+                };
+            },
+        });
 
         // A popover sits in the top layer, so it's placed by hand under its button,
         // kept inside the window on a narrow screen.
@@ -268,12 +274,16 @@
             downloadsMenu.style.left = `${Math.max(gutter, Math.min(rect.left, window.innerWidth - width - gutter))}px`;
         });
 
-        // Mirrors the header dot across tabs.
+        // Mirrors the header dot across tabs. Every connect resends ready.
         const statusDot = document.getElementById('header-status-dot');
-        const statusSource = new EventSource('/status/stream');
-        statusSource.addEventListener('ready', (e) => {
-            const data = JSON.parse(e.data);
-            statusDot.className = `dot ${data.ready ? 'dot-online' : 'dot-offline'}`;
+        liveStream({
+            url: () => '/status/stream',
+            setup: (source) => {
+                source.addEventListener('ready', (e) => {
+                    const data = JSON.parse(e.data);
+                    statusDot.className = `dot ${data.ready ? 'dot-online' : 'dot-offline'}`;
+                });
+            },
         });
     });
 </script>
